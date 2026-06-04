@@ -2,3 +2,7 @@ PyQt6
 zstandard
 PyQt6-WebEngine
 websockets>=12.0
+sudachipy>=0.6
+sudachidict-core>=20240409
+yt-dlp>=2024.10.7
+imageio-ffmpeg>=0.5.1

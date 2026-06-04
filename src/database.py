@@ -745,7 +745,7 @@ def get_due_cards(deck_id=None, deck_ids=None):
 
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
     "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
-    "WHERE Due_Date <= ? AND Due_Date IS NOT NULL"
+    "WHERE Due_Date <= ? AND Due_Date IS NOT NULL AND Learning_Step IS NULL"
 
     query_params = [todays_date]
 
@@ -765,6 +765,25 @@ def get_due_cards(deck_id=None, deck_ids=None):
         card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
         cards.append(card)
 
+    con.close()
+    return cards
+
+def get_learning_cards(deck_ids=None):
+    """Return cards currently in a learning or relearning step (Learning_Step IS NOT NULL)."""
+    con = create_db_connection()
+    cur = con.cursor()
+    cards = []
+    query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
+    "WHERE Learning_Step IS NOT NULL"
+    query_params = []
+    if deck_ids is not None:
+        placeholders = ','.join('?' * len(deck_ids))
+        query_string += f" AND Deck_ID IN ({placeholders})"
+        query_params.extend(deck_ids)
+    cur.execute(query_string, query_params)
+    for row in cur.fetchall():
+        cards.append(models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13]))
     con.close()
     return cards
 
@@ -896,9 +915,17 @@ def update_card_learning_step(card_id: int, learning_step: int):
     today = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
+    cur.execute("SELECT Is_New, Learning_Step FROM Card WHERE ID = ?", (card_id,))
+    row = cur.fetchone()
+    first_introduction = row and row[0] == 1 and row[1] is None
     cur.execute("""
         UPDATE Card SET Learning_Step = ?, Due_Date = ? WHERE ID = ?
     """, (learning_step, today, card_id))
+    if first_introduction:
+        cur.execute("""
+            INSERT INTO Review (Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After)
+            VALUES (?, ?, 0, 0, 2.5)
+        """, (card_id, today))
     con.commit()
     con.close()
 
@@ -1106,6 +1133,8 @@ def export_all_data() -> dict:
 def get_daily_review_counts(deck_id=None) -> dict:
     today = get_srs_today()
     start = today - timedelta(days=364)
+    tomorrow = today + timedelta(days=1)
+    forecast_end = today + timedelta(days=60)
 
     con = create_db_connection()
     cur = con.cursor()
@@ -1129,6 +1158,29 @@ def get_daily_review_counts(deck_id=None) -> dict:
         """, (start.isoformat(), today.isoformat()))
 
     counts = {row[0]: row[1] for row in cur.fetchall()}
+
+    if deck_id is not None:
+        all_ids = get_deck_and_descendant_ids(deck_id)
+        placeholders = ','.join('?' * len(all_ids))
+        cur.execute(f"""
+            SELECT Due_Date, COUNT(*)
+            FROM Card
+            WHERE Deck_ID IN ({placeholders}) AND Is_New = 0 AND Learning_Step IS NULL
+                AND Due_Date > ? AND Due_Date <= ?
+            GROUP BY Due_Date
+        """, all_ids + [today.isoformat(), forecast_end.isoformat()])
+    else:
+        cur.execute("""
+            SELECT Due_Date, COUNT(*)
+            FROM Card
+            WHERE Is_New = 0 AND Learning_Step IS NULL
+                AND Due_Date > ? AND Due_Date <= ?
+            GROUP BY Due_Date
+        """, (today.isoformat(), forecast_end.isoformat()))
+
+    forecast = {row[0]: row[1] for row in cur.fetchall()}
+    due_tomorrow = forecast.get(tomorrow.isoformat(), 0)
+
     con.close()
 
     # Current streak: consecutive days ending today (or yesterday if no reviews today)
@@ -1148,10 +1200,13 @@ def get_daily_review_counts(deck_id=None) -> dict:
             run = 0
 
     return {
+        'today': today.isoformat(),
         'counts': counts,
         'current_streak': current_streak,
         'longest_streak': longest_streak,
         'year_total': sum(counts.values()),
+        'forecast': forecast,
+        'due_tomorrow': due_tomorrow,
     }
 
 

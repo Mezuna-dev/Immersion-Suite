@@ -387,7 +387,9 @@ function updateHeatmap(data) {
     document.getElementById('heatmap-longest-streak').textContent = data.longest_streak;
     document.getElementById('heatmap-year-total').textContent = data.year_total.toLocaleString();
 
-    var today = new Date();
+    // Use the SRS today the backend computed (honors day_start_hour) instead of
+    // new Date(), so the heatmap and KPI cards agree with the forecast keys.
+    var today = data.today ? new Date(data.today + 'T00:00:00') : new Date();
     today.setHours(0, 0, 0, 0);
     function toDS(d) {
         return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
@@ -411,15 +413,21 @@ function updateHeatmap(data) {
     var elYA = document.getElementById('dash-year-avg');
     if (elYA) elYA.textContent = yearAvg + ' / day';
 
-    renderHeatmapSVG(data.counts);
+    var elTomorrow = document.getElementById('due-tomorrow-cards');
+    if (elTomorrow) elTomorrow.textContent = (data.due_tomorrow || 0).toLocaleString();
+
+    renderHeatmapSVG(data.counts, data.forecast || {}, today);
 }
 
-function renderHeatmapSVG(counts) {
+function renderHeatmapSVG(counts, forecast, today) {
+    forecast = forecast || {};
     var CELL = 11, GAP = 3, WEEKS = 53;
     var DAY_LABEL_W = 26, MONTH_LABEL_H = 18;
 
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
+    if (!today) {
+        today = new Date();
+        today.setHours(0, 0, 0, 0);
+    }
     
     // Calculate the start date for the current year
     var startDay = new Date(today.getFullYear(), 0, 1); // January 1 of current year
@@ -496,7 +504,8 @@ function renderHeatmapSVG(counts) {
             day.setDate(weekStart.getDate() + d);
 
             var dStr = toDateStr(day);
-            var cnt = counts[dStr] || 0;
+            var isFuture = day > today;
+            var cnt = isFuture ? (forecast[dStr] || 0) : (counts[dStr] || 0);
 
             var rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', weekX);
@@ -505,8 +514,16 @@ function renderHeatmapSVG(counts) {
             rect.setAttribute('height', CELL);
             rect.setAttribute('rx', 2);
             rect.setAttribute('fill', cellColor(cnt));
+            if (isFuture) {
+                rect.setAttribute('opacity', '0.55');
+                if (cnt > 0) {
+                    rect.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+                    rect.setAttribute('stroke-width', '1');
+                }
+            }
             rect.dataset.date = dStr;
             rect.dataset.count = cnt;
+            rect.dataset.future = isFuture ? '1' : '0';
 
             frag.appendChild(rect);
         }
@@ -519,7 +536,14 @@ function renderHeatmapSVG(counts) {
         if (e.target.tagName === 'rect' && e.target.dataset.date) {
             var tip = document.getElementById('heatmap-tooltip');
             var count = parseInt(e.target.dataset.count, 10);
-            if (tip) tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' review' : ' reviews');
+            var isFuture = e.target.dataset.future === '1';
+            if (tip) {
+                if (isFuture) {
+                    tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' card due' : ' cards due');
+                } else {
+                    tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' review' : ' reviews');
+                }
+            }
         }
     }, true);
     svg.addEventListener('mouseleave', function(e) {
@@ -1065,7 +1089,9 @@ function updateReviewQueue(data) {
     studyOrder = data.study_order || 'mix';
     newQueue = data.new_cards || [];
     dueQueue = data.due_cards || [];
-    learningQueue = [];
+    learningQueue = (data.learning_cards || []).map(function(card) {
+        return { card: card, showAfter: Date.now() };
+    });
     newCardIndex = 0;
     dueCardIndex = 0;
     currentCardSource = null;
@@ -1246,6 +1272,80 @@ function showNextCard() {
     updateReviewCounts();
 }
 
+function sm2Interval(reps, easeFactor, currentInterval, rating) {
+    if (rating < 3) return 1;
+    var r = reps || 0;
+    if (r === 0) return 1;
+    if (r === 1) return 6;
+    return Math.ceil((currentInterval || 1) * (easeFactor || 2.5));
+}
+
+function formatIntervalLabel(minutes) {
+    if (!minutes || minutes < 1) return '1m';
+    if (minutes < 60) return minutes + 'm';
+    var hours = minutes / 60;
+    if (hours < 24) return Math.round(hours) + 'h';
+    return Math.round(minutes / 1440) + 'd';
+}
+
+function formatDays(days) {
+    if (!days || isNaN(days) || days < 1) return '1d';
+    if (days < 31) return days + 'd';
+    return Math.round(days / 30.5) + 'mo';
+}
+
+function updateRatingButtonLabels() {
+    var card = currentCard;
+    if (!card) return;
+
+    var steps = currentDeckLearningSteps;
+    var relearnSteps = currentDeckRelearnSteps;
+    var again, hard, good, easy;
+
+    if (card.is_new && steps.length > 0) {
+        var curStep = (card.learning_step !== null && card.learning_step !== undefined)
+            ? card.learning_step : -1;
+        again = formatIntervalLabel(steps[0]);
+        hard = formatIntervalLabel(steps[Math.max(0, curStep)]);
+        var goodStep = curStep + 1;
+        good = goodStep >= steps.length
+            ? formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4))
+            : formatIntervalLabel(steps[goodStep]);
+        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+    } else if (card.is_relearning && relearnSteps.length > 0) {
+        var curStep = (card.learning_step !== null && card.learning_step !== undefined)
+            ? card.learning_step : 0;
+        again = formatIntervalLabel(relearnSteps[0]);
+        hard = formatIntervalLabel(relearnSteps[Math.min(curStep, relearnSteps.length - 1)]);
+        var goodStep = curStep + 1;
+        good = goodStep >= relearnSteps.length
+            ? formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4))
+            : formatIntervalLabel(relearnSteps[goodStep]);
+        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+    } else {
+        again = relearnSteps.length > 0 ? formatIntervalLabel(relearnSteps[0]) : '1d';
+        hard = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 3));
+        good = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4));
+        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+    }
+
+    function setBtn(id, name, interval) {
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        btn.innerHTML = name + '<br><span style="font-size:0.7em;opacity:0.65;">' + interval + '</span>';
+        btn.style.height = 'auto';
+        btn.style.minHeight = '2.75rem';
+        btn.style.paddingTop = '0.35rem';
+        btn.style.paddingBottom = '0.35rem';
+        btn.style.lineHeight = '1.3';
+    }
+
+    setBtn('btn-rate-again', 'Again', again);
+    setBtn('btn-rate-hard', 'Hard', hard);
+    setBtn('btn-rate-good', 'Good', good);
+    setBtn('btn-rate-easy', 'Easy', easy);
+}
+
 function revealAnswer() {
     var frontEl = document.getElementById('review-front-text');
     var backEl = document.getElementById('review-back-text');
@@ -1278,6 +1378,7 @@ function revealAnswer() {
     }
     document.getElementById('review-rating-buttons').style.display = 'flex';
     document.getElementById('review-show-answer-btn').style.display = 'none';
+    updateRatingButtonLabels();
 }
 
 function rateCard(rating) {

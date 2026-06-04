@@ -53,6 +53,11 @@
                             <div class="dash-kpi-label">New Cards</div>
                         </div>
 
+                        <div class="dash-kpi-card dash-kpi-tomorrow">
+                            <div class="dash-kpi-value" id="due-tomorrow-cards">—</div>
+                            <div class="dash-kpi-label">Due Tomorrow</div>
+                        </div>
+
                         <div class="dash-kpi-card dash-kpi-streak">
                             <div class="dash-kpi-value" id="heatmap-current-streak">—</div>
                             <div class="dash-kpi-label">Day Streak</div>
@@ -548,10 +553,10 @@
                         <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0;">
                             <button id="review-show-answer-btn" class="btn btn-dark btn-accent btn-action" onclick="revealAnswer()" style="animation: fadeIn 0.6s ease;">Show Answer</button>
                             <div id="review-rating-buttons" style="display: none; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                                <button class="btn btn-dark btn-action" onclick="rateCard(1)">Again</button>
-                                <button class="btn btn-dark btn-action" onclick="rateCard(3)">Hard</button>
-                                <button class="btn btn-dark btn-action" onclick="rateCard(4)">Good</button>
-                                <button class="btn btn-dark btn-action" onclick="rateCard(5)">Easy</button>
+                                <button id="btn-rate-again" class="btn btn-dark btn-action" onclick="rateCard(1)">Again</button>
+                                <button id="btn-rate-hard" class="btn btn-dark btn-action" onclick="rateCard(3)">Hard</button>
+                                <button id="btn-rate-good" class="btn btn-dark btn-action" onclick="rateCard(4)">Good</button>
+                                <button id="btn-rate-easy" class="btn btn-dark btn-action" onclick="rateCard(5)">Easy</button>
                             </div>
                         </div>
                         <!-- Complete Section -->

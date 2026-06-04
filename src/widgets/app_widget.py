@@ -356,6 +356,7 @@ class AppBridge(QObject):
         introduced_today = database.get_new_cards_introduced_today(deck_ids=all_deck_ids)
         remaining_new = max(0, new_limit - introduced_today)
         due_cards = database.get_due_cards(deck_ids=all_deck_ids)
+        learning_cards = database.get_learning_cards(deck_ids=all_deck_ids)
         new_cards = []
         for sub_id in ordered_ids:
             if remaining_new <= 0:
@@ -405,6 +406,9 @@ class AppBridge(QObject):
                     'is_new': bool(card.is_new),
                     'is_relearning': not bool(card.is_new) and card.learning_step is not None,
                     'learning_step': card.learning_step,
+                    'reps': card.reps,
+                    'interval': card.interval,
+                    'ease_factor': card.ease_factor,
                 })
             return result
 
@@ -416,6 +420,7 @@ class AppBridge(QObject):
             'relearning_steps': relearning_steps,
             'new_cards': build_card_dicts(new_cards),
             'due_cards': build_card_dicts(due_cards),
+            'learning_cards': build_card_dicts(learning_cards),
             'study_order': study_order,
             'media_base_url': media_base_url,
             'answer_display': answer_display,

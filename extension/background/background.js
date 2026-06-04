@@ -1,5 +1,6 @@
 const WS_URL = 'ws://127.0.0.1:8765';
-const LOOKUP_TIMEOUT_MS = 5000;
+const DEFAULT_TIMEOUT_MS = 5000;
+const LONG_TIMEOUT_MS = 90000;  // for media downloads
 
 // Live WebSocket instance, or null when disconnected.
 let ws = null;
@@ -22,7 +23,7 @@ function onClose() {
   ws = null;
   connecting = null;
   for (const [id, resolve] of pending) {
-    resolve({ id, error: 'Connection to Immersion Suite was lost.', matched: null, entries: [] });
+    resolve({ id, error: 'Connection to Immersion Suite was lost.' });
   }
   pending.clear();
 }
@@ -52,34 +53,56 @@ async function ensureConnected() {
   return connect();
 }
 
-async function lookup(text) {
+// One generic request/response pipe. Callers pass { action, ...payload };
+// `timeoutMs` is per-action so media downloads can wait longer than lookups.
+async function request(payload, { timeoutMs } = {}) {
   let socket;
   try {
     socket = await ensureConnected();
   } catch (e) {
-    return { error: e.message, matched: null, entries: [] };
+    return { error: e.message };
   }
 
   const id = crypto.randomUUID();
+  const t = timeoutMs || DEFAULT_TIMEOUT_MS;
 
   return new Promise((resolve) => {
     const timer = setTimeout(() => {
       pending.delete(id);
-      resolve({ id, error: 'Lookup timed out.', matched: null, entries: [] });
-    }, LOOKUP_TIMEOUT_MS);
+      resolve({ id, error: 'Request timed out.' });
+    }, t);
 
     pending.set(id, (result) => {
       clearTimeout(timer);
       resolve(result);
     });
 
-    socket.send(JSON.stringify({ id, action: 'lookup', text }));
+    socket.send(JSON.stringify({ id, ...payload }));
   });
 }
 
+// Some actions can be heavy (downloading + clipping audio). Bump the timeout
+// on those so the WS request doesn't get killed before yt-dlp finishes.
+const LONG_ACTIONS = new Set(['create_card_with_media']);
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (!msg || typeof msg !== 'object' || !msg.action) return;
+
+  // Legacy popup-lookup path: { action: 'lookup', text }
   if (msg.action === 'lookup') {
-    lookup(msg.text).then(sendResponse);
-    return true; // keep the message channel open for the async reply
+    request({ action: 'lookup', text: msg.text }).then((r) => {
+      if (r && !('matched' in r) && !('entries' in r) && !r.error) {
+        sendResponse({ ...r, matched: null, entries: [] });
+      } else {
+        sendResponse(r);
+      }
+    });
+    return true;
   }
+
+  // Generic pass-through for YouTube-integration actions.
+  const { action, ...rest } = msg;
+  const opts = LONG_ACTIONS.has(action) ? { timeoutMs: LONG_TIMEOUT_MS } : {};
+  request({ action, ...rest }, opts).then(sendResponse);
+  return true; // keep the message channel open for the async reply
 });

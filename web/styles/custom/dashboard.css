@@ -926,11 +926,15 @@ code {
 /* ── Dashboard KPI Grid ──────────────────────────────────────── */
 .dash-kpi-grid {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 1rem;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1100px) {
+    .dash-kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 700px) {
     .dash-kpi-grid { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -967,6 +971,7 @@ code {
 .dash-kpi-card:nth-child(2) { animation-delay: 0.10s; }
 .dash-kpi-card:nth-child(3) { animation-delay: 0.15s; }
 .dash-kpi-card:nth-child(4) { animation-delay: 0.20s; }
+.dash-kpi-card:nth-child(5) { animation-delay: 0.25s; }
 
 .dash-kpi-value {
     font-size: 2.75rem;
@@ -1002,6 +1007,9 @@ code {
 
 .dash-kpi-year::before { background: linear-gradient(90deg, var(--green), var(--green-light)); }
 .dash-kpi-year .dash-kpi-value { color: var(--green); }
+
+.dash-kpi-tomorrow::before { background: linear-gradient(90deg, var(--orange), #fb923c); }
+.dash-kpi-tomorrow .dash-kpi-value { color: var(--orange); }
 
 /* ── Retention Rings ─────────────────────────────────────────── */
 .dash-retention-rings {

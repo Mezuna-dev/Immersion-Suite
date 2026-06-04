@@ -15,8 +15,7 @@ def calculate_next_review(reps, ease_factor, interval, rating, reference_date=No
         elif reps == 1:
             new_interval = 6
         elif reps > 1:
-            new_interval = interval * ease_factor
-            new_interval = math.ceil(new_interval)
+            new_interval = max(1, math.ceil(interval * ease_factor))
         
         new_reps = reps + 1
 

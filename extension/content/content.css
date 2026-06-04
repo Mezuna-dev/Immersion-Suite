@@ -2,3 +2,229 @@
   background-color: rgba(150, 150, 150, 0.30);
   border-radius: 2px;
 }
+
+/* ── YouTube subtitle overlay ──────────────────────────────────────────── */
+
+/* Hide YouTube's native captions when our overlay is in use. */
+.imm-yt-active .ytp-caption-window-container,
+#movie_player:has(#__imm_yt_subbar) .ytp-caption-window-container {
+  display: none !important;
+}
+
+.imm-yt-subbar {
+  position: absolute;
+  left: 50%;
+  bottom: 16%;
+  transform: translateX(-50%);
+  max-width: 86%;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 60;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.imm-yt-subbar-text {
+  display: inline-block;
+  padding: 8px 18px 10px;
+  background: rgba(8, 8, 12, 0.78);
+  color: #ffffff;
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  border-radius: 8px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  user-select: text;
+  white-space: pre-wrap;
+  text-align: center;
+}
+
+/* Match YouTube's fullscreen — the player container becomes the viewport. */
+.ytp-fullscreen .imm-yt-subbar { bottom: 12%; }
+.ytp-fullscreen .imm-yt-subbar-text { font-size: 36px; }
+
+/* Theater / mini-player tweaks — subbar tracks the player's own size. */
+.ytp-miniplayer-active .imm-yt-subbar-text { font-size: 18px; padding: 5px 10px; }
+
+/* ── Furigana (ruby annotations) ───────────────────────────────────────── */
+
+.imm-yt-subbar-text ruby {
+  ruby-position: over;
+  ruby-align: center;
+}
+
+.imm-yt-subbar-text rt {
+  font-size: 0.5em;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+  /* Pull the reading slightly closer to the kanji so the bar stays compact. */
+  margin-bottom: -0.15em;
+  user-select: none;
+}
+
+/* Stop the reading from being copied when the user grabs the sentence. */
+.imm-yt-subbar-text rt::selection,
+.imm-yt-subbar-text rp::selection { background: transparent; }
+
+/* ── Toolbar ────────────────────────────────────────────────────────────── */
+
+.imm-yt-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+  background: rgba(8, 8, 12, 0.72);
+  border-radius: 6px;
+  pointer-events: auto;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.imm-yt-subbar:hover .imm-yt-toolbar,
+.imm-yt-subbar:focus-within .imm-yt-toolbar,
+#movie_player.ytp-autohide-active ~ * .imm-yt-toolbar { /* fallback no-op */ }
+
+#movie_player:not(.ytp-autohide) .imm-yt-subbar .imm-yt-toolbar,
+.imm-yt-subbar:hover .imm-yt-toolbar,
+.imm-yt-subbar:focus-within .imm-yt-toolbar {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.imm-yt-btn {
+  appearance: none;
+  background: transparent;
+  color: #fff;
+  border: none;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  width: 30px;
+  height: 30px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.imm-yt-btn:hover { background: rgba(255, 255, 255, 0.12); }
+.imm-yt-btn:active { background: rgba(255, 255, 255, 0.18); }
+.imm-yt-btn.is-on { background: rgba(144, 103, 198, 0.55); color: #fff; }
+.imm-yt-btn.is-on:hover { background: rgba(144, 103, 198, 0.70); }
+.imm-yt-btn.is-unavailable { color: rgba(255, 255, 255, 0.45); }
+.imm-yt-btn.is-unavailable.is-on { background: rgba(120, 50, 50, 0.55); }
+
+/* ── Card creation panel ───────────────────────────────────────────────── */
+
+.imm-yt-card-panel {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  background: rgba(18, 18, 24, 0.94);
+  color: #fff;
+  border-radius: 8px;
+  min-width: 360px;
+  max-width: 520px;
+  pointer-events: auto;
+  font-size: 13px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+}
+
+.imm-yt-card-panel.is-open { display: flex; }
+
+.imm-yt-card-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.imm-yt-fieldmap {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.imm-yt-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.imm-yt-field-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.imm-yt-select {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  min-width: 0;
+  width: 100%;
+}
+
+.imm-yt-select option { background: #1a1a22; color: #fff; }
+.imm-yt-select-sm { font-size: 12px; padding: 4px 6px; }
+
+.imm-yt-card-actions {
+  justify-content: flex-end;
+  gap: 8px;
+  align-items: center;
+}
+
+.imm-yt-status {
+  flex: 1;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+}
+.imm-yt-status[data-level="ok"]    { color: #7bd88f; }
+.imm-yt-status[data-level="warn"]  { color: #ffd166; }
+.imm-yt-status[data-level="error"] { color: #ff8585; }
+
+.imm-yt-btn-text {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  border-radius: 4px;
+}
+.imm-yt-btn-text:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+
+.imm-yt-btn-primary {
+  background: #9067C6;
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+.imm-yt-btn-primary:hover { background: #a079d6; }
