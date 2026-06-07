@@ -41,6 +41,9 @@ jobs:
       - name: Fetch bundled binaries (yt-dlp + ffmpeg)
         run: python scripts/fetch_binaries.py
 
+      - name: Build dictionary (Jitendex)
+        run: python scripts/build_jitendex.py --file data/dicts/jitendex-yomitan.zip
+
       - name: Build executable with PyInstaller
         run: pyinstaller ImmersionSuite.spec --noconfirm
 

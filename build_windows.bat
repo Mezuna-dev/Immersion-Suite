@@ -29,6 +29,20 @@ if errorlevel 1 (
     exit /b 1
 )
 
+:: Step 1b - fetch bundled binaries and build the dictionary
+echo.
+echo [1b/3] Fetching binaries and building dictionary...
+python scripts\fetch_binaries.py
+if errorlevel 1 (
+    echo ERROR: fetch_binaries failed.
+    exit /b 1
+)
+python scripts\build_jitendex.py --file data\dicts\jitendex-yomitan.zip
+if errorlevel 1 (
+    echo ERROR: build_jitendex failed.
+    exit /b 1
+)
+
 :: Step 2 - build the executable bundle with PyInstaller
 echo.
 echo [2/3] Building executable with PyInstaller...

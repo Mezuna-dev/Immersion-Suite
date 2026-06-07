@@ -39,6 +39,20 @@ for _pkg in ('sudachipy', 'sudachidict_core'):
     _pkg_hidden += _h
 _pkg_hidden += collect_submodules('websockets')
 
+# Prebuilt dictionary databases. jitendex.sqlite is REQUIRED for the popup
+# dictionary; build it with scripts/build_jitendex.py. The 37MB build-source zip
+# (jitendex-yomitan.zip) is not needed at runtime, so it is excluded.
+_dict_src = _Path('data') / 'dicts'
+_dict_datas = []
+if _dict_src.is_dir():
+    for _p in sorted(_dict_src.glob('*.sqlite')) + sorted(_dict_src.glob('*.zip')):
+        if _p.name == 'jitendex-yomitan.zip':
+            continue
+        _dict_datas.append((str(_p), str(_dict_src)))
+if not any(_p[0].endswith('jitendex.sqlite') for _p in _dict_datas):
+    print('[spec] WARNING: data/dicts/jitendex.sqlite missing - run '
+          'scripts/build_jitendex.py so the popup dictionary works in the build.')
+
 a = Analysis(
     ['src/gui.py'],
     pathex=['src'],
@@ -48,6 +62,7 @@ a = Analysis(
         ('installer/icon.ico', '.'),
         *_bin_datas,
         *_pkg_datas,
+        *_dict_datas,
     ],
     hiddenimports=[
         'zstandard',

@@ -22,6 +22,12 @@ echo "[1/4] Installing Python dependencies..."
 pip install -r requirements.txt
 pip install pyinstaller pillow
 
+# Step 1b - fetch bundled binaries and build the dictionary
+echo
+echo "[1b/4] Fetching binaries and building dictionary..."
+python scripts/fetch_binaries.py
+python scripts/build_jitendex.py --file data/dicts/jitendex-yomitan.zip
+
 # Step 2 - build the executable bundle with PyInstaller
 echo
 echo "[2/4] Building executable with PyInstaller..."

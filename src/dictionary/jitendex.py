@@ -20,7 +20,26 @@ if getattr(sys, 'frozen', False):
 else:
     _BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
-DB_PATH: Path = _BASE_DIR / 'data' / 'dicts' / 'jitendex.sqlite'
+# data/dicts can live in two places: the user/runtime dir (_BASE_DIR, where a
+# user-rebuilt dictionary lands) and, in frozen builds, the copy bundled under
+# PyInstaller's _MEIPASS. Prefer the user dir so a rebuild overrides the bundle.
+def _dicts_dirs() -> list[Path]:
+    dirs = [_BASE_DIR / 'data' / 'dicts']
+    meipass = getattr(sys, '_MEIPASS', None)
+    if meipass:
+        dirs.append(Path(meipass) / 'data' / 'dicts')
+    return dirs
+
+
+def _resolve_db_path() -> Path:
+    for d in _dicts_dirs():
+        candidate = d / 'jitendex.sqlite'
+        if candidate.exists():
+            return candidate
+    return _dicts_dirs()[0] / 'jitendex.sqlite'
+
+
+DB_PATH: Path = _resolve_db_path()
 _MAX_SCAN_LEN = 20
 _CACHE_SIZE   = 256
 
@@ -36,34 +55,38 @@ def _load_freq_dicts() -> dict[str, int]:
     dictionary. Multiple dicts are merged; the lowest (best) rank wins for each term.
     """
     freq: dict[str, int] = {}
-    dicts_dir = _BASE_DIR / 'data' / 'dicts'
-    if not dicts_dir.exists():
-        return freq
-    for zip_path in sorted(dicts_dir.glob('*.zip')):
-        try:
-            with zipfile.ZipFile(str(zip_path)) as zf:
-                bank_names = sorted(
-                    n for n in zf.namelist()
-                    if re.match(r'term_meta_bank_\d+\.json', n.split('/')[-1])
-                )
-                if not bank_names:
-                    continue
-                for name in bank_names:
-                    with zf.open(name) as f:
-                        rows = json.loads(f.read())
-                    for row in rows:
-                        if not isinstance(row, list) or len(row) < 3 or row[1] != 'freq':
-                            continue
-                        term = row[0]
-                        val  = row[2]
-                        rank = val.get('value') if isinstance(val, dict) else val
-                        if not isinstance(rank, (int, float)):
-                            continue
-                        rank = int(rank)
-                        if term not in freq or rank < freq[term]:
-                            freq[term] = rank
-        except Exception:
+    seen: set[str] = set()
+    for dicts_dir in _dicts_dirs():
+        if not dicts_dir.exists():
             continue
+        for zip_path in sorted(dicts_dir.glob('*.zip')):
+            if zip_path.name in seen:  # user dir wins over the bundled copy
+                continue
+            seen.add(zip_path.name)
+            try:
+                with zipfile.ZipFile(str(zip_path)) as zf:
+                    bank_names = sorted(
+                        n for n in zf.namelist()
+                        if re.match(r'term_meta_bank_\d+\.json', n.split('/')[-1])
+                    )
+                    if not bank_names:
+                        continue
+                    for name in bank_names:
+                        with zf.open(name) as f:
+                            rows = json.loads(f.read())
+                        for row in rows:
+                            if not isinstance(row, list) or len(row) < 3 or row[1] != 'freq':
+                                continue
+                            term = row[0]
+                            val  = row[2]
+                            rank = val.get('value') if isinstance(val, dict) else val
+                            if not isinstance(rank, (int, float)):
+                                continue
+                            rank = int(rank)
+                            if term not in freq or rank < freq[term]:
+                                freq[term] = rank
+            except Exception:
+                continue
     return freq
 
 
