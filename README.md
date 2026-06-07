@@ -149,20 +149,38 @@ without any extra setup. See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
 ## Browser Extension
 
-The extension is installed alongside the desktop app; you load it into your browser once.
+The browser extension (popup dictionary + YouTube tools) is **installed alongside the desktop app**. You load it into your browser once; after that it reconnects automatically.
 
-**Find the extension folder:**
-- **Windows (installed):** Start Menu → **Immersion Suite → "Browser Extension (load unpacked)"** (opens the folder), or the `extension` folder inside the install directory.
-- **Linux (installed):** `~/.local/share/ImmersionSuite/app/extension`
-- **From source:** the `extension/` folder in this repo.
+> **Before you start:** open the Immersion Suite desktop app and leave it running. The extension talks to it and does nothing on its own.
 
-**Load it:**
+### Step 1 - Find the extension folder
 
-**Chrome / Edge:** `chrome://extensions` → enable Developer Mode → Load Unpacked → select the extension folder.
+| How you installed | Where the folder is |
+|---|---|
+| **Windows installer** | Start Menu → **Immersion Suite → "Browser Extension (load unpacked)"** (this opens the folder). It also lives in the `extension` folder inside the install directory. |
+| **Linux installer** | `~/.local/share/ImmersionSuite/app/extension` |
+| **From source** | the `extension` folder in this repo |
 
-**Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json` inside that folder.
+### Step 2 - Load it into your browser
 
-The desktop app must be running for lookups to work. The extension connects automatically over `ws://127.0.0.1:8765`.
+**Chrome / Edge / Brave**
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (toggle, top-right).
+3. Click **Load unpacked**.
+4. Select the extension folder from Step 1.
+
+**Firefox**
+1. Open `about:debugging#/runtime/this-firefox`.
+2. Click **Load Temporary Add-on…**.
+3. Select the **`manifest.json`** file inside the extension folder.
+   > Firefox removes temporary add-ons when it closes, so you reload it the same way next session.
+
+### Step 3 - Use it
+
+- Hold **Shift** and hover over Japanese text on any page for an instant definition.
+- On YouTube, a subtitle bar appears with click-to-look-up, line navigation, furigana, and one-click sentence mining.
+
+If a lookup ever says it can't connect, the desktop app isn't running - open it and try again.
 
 ---
 
