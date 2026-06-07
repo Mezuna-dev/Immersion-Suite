@@ -94,7 +94,6 @@
       gap: 0.4rem;
       background: var(--bg);
       border: 1.5px solid var(--border-md);
-      border-bottom: 3px solid var(--border-md);
       border-radius: 10px;
       padding: 0.32rem 0.85rem;
       font-size: 0.85rem;
@@ -128,7 +127,6 @@
       gap: 0.4rem;
       background: var(--accent-dim);
       border: 1.5px solid rgba(170, 0, 255, 0.25);
-      border-bottom: 3px solid rgba(170, 0, 255, 0.25);
       border-radius: 100px;
       padding: 0.3rem 0.9rem;
       font-size: 0.8rem;
@@ -258,19 +256,18 @@
     }
 
     .preview-toggle {
-      background: #ffffff;
-      border: 1.5px solid rgba(0,0,0,0.12);
-      border-bottom: 3px solid rgba(0,0,0,0.18);
-      border-radius: 50px;
-      color: #6b5f8a;
-      font-size: 0.85rem;
+      background: transparent;
+      border: none;
+      border-radius: 12px;
+      color: #a898c8;
+      font-size: 1rem;
       font-weight: 700;
-      padding: 0.42rem 1rem;
-      margin: 0.6rem 1rem 0.1rem;
+      padding: 0.5rem 0.9rem;
+      margin: 0.5rem 0.75rem 0.1rem;
       cursor: default;
-      text-align: center;
+      text-align: left;
       display: block;
-      line-height: 1.4;
+      line-height: 1.2;
     }
 
     .preview-brand {
@@ -291,23 +288,20 @@
     }
 
     .preview-nav-item {
-      border-radius: 50px;
-      padding: 0.52rem 0.9rem;
+      border-radius: 12px;
+      padding: 0.55rem 0.9rem;
       font-size: 0.8rem;
-      font-weight: 700;
+      font-weight: 600;
       color: #6b5f8a;
-      background: #ffffff;
-      border: 1.5px solid rgba(0,0,0,0.12);
-      border-bottom: 3px solid rgba(0,0,0,0.18);
+      background: transparent;
+      border: none;
       cursor: default;
       text-align: left;
       display: block;
     }
     .preview-nav-item.active {
-      background: rgba(170,0,255,0.08);
+      background: rgba(170, 0, 255, 0.1);
       color: #aa00ff;
-      border-color: rgba(170,0,255,0.18);
-      border-bottom-color: rgba(170,0,255,0.28);
     }
 
     /* Main content area */
@@ -327,18 +321,18 @@
       margin-bottom: 0.1rem;
     }
 
-    /* 3D pill button matching the real app's .btn-accent */
+    /* Gradient button matching the real app's .btn-accent */
     .preview-btn {
       display: inline-flex;
       align-items: center;
       gap: 0.4rem;
-      background: #aa00ff;
+      background: linear-gradient(135deg, #aa00ff, #cc66ff);
       color: #fff;
       font-size: 0.75rem;
       font-weight: 700;
-      border-radius: 100px;
+      border-radius: 11px;
       padding: 0.38rem 0.9rem;
-      border-bottom: 3px solid #7f00bf;
+      box-shadow: 0 2px 8px rgba(170, 0, 255, 0.30);
       letter-spacing: 0.01em;
       cursor: default;
       user-select: none;
@@ -584,7 +578,6 @@
       border-radius: 12px;
       background: var(--accent-dim);
       border: 1.5px solid rgba(170,0,255,0.18);
-      border-bottom: 3px solid rgba(170,0,255,0.18);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -828,7 +821,7 @@
     .step-num {
       width: 28px; height: 28px;
       border-radius: 50%;
-      background: var(--accent);
+      background: linear-gradient(135deg, #aa00ff, #cc66ff);
       color: #fff;
       font-size: 0.78rem;
       font-weight: 800;
@@ -837,7 +830,7 @@
       justify-content: center;
       flex-shrink: 0;
       margin-top: 0.1em;
-      box-shadow: 0 2px 0 var(--accent-dark);
+      box-shadow: 0 2px 8px rgba(170, 0, 255, 0.30);
     }
 
     .step-body strong {

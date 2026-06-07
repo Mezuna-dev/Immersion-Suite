@@ -1,9 +1,6 @@
 name: Build Windows Installer
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -23,6 +20,9 @@ jobs:
         run: |
           pip install -r requirements.txt
           pip install pyinstaller
+
+      - name: Fetch bundled binaries (yt-dlp + ffmpeg)
+        run: python scripts/fetch_binaries.py
 
       - name: Build executable with PyInstaller
         run: pyinstaller ImmersionSuite.spec --noconfirm
@@ -44,10 +44,3 @@ jobs:
           name: ImmersionSuite-v1.3.0-Windows-Setup
           path: installer\output\*.exe
           retention-days: 30
-
-      # If triggered by a version tag, attach the installer to a GitHub Release
-      - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: installer\output\*.exe
