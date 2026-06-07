@@ -263,7 +263,7 @@ def _promote_matched_word(entries: list[dict], matched_word: str) -> None:
 def _rank_entries(entries: list[dict], freq: dict[str, int] | None = None) -> list[dict]:
     """Sort entries to match Yomitan's priority order.
 
-    1. External frequency rank — lower rank = more common = first.
+    1. External frequency rank - lower rank = more common = first.
     2. JMdict score from the term bank.
     3. 'common' tag.
     4. nf frequency band embedded in tags ('top 500' → highest).
@@ -271,7 +271,7 @@ def _rank_entries(entries: list[dict], freq: dict[str, int] | None = None) -> li
 
     Frequency lookup strategy: try kanji forms first (works for kanji-aware dicts
     like full JPDB).  For entries WITH kanji forms, never fall back to the kana
-    reading — kana dicts assign one rank to ALL kanji that share a reading (e.g.
+    reading - kana dicts assign one rank to ALL kanji that share a reading (e.g.
     もと covers 元/本/基/素), which contaminates ordering across unrelated words.
     Kana reading lookup is only used for kana-only entries where it is unambiguous.
     """

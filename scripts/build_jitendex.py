@@ -142,7 +142,7 @@ def _collect_li_texts(node, out: list[str]) -> None:
         text = _node_text(node.get('content')).strip()
         if text:
             out.append(text)
-        return  # <li> is atomic — don't descend further
+        return  # <li> is atomic - don't descend further
     content = node.get('content')
     if content is not None:
         _collect_li_texts(content, out)
@@ -203,7 +203,7 @@ def _append_token(out: list, s: str) -> None:
 
 
 def _to_ruby_tokens(node) -> list:
-    """Flatten content to a list of tokens — strings, or [base, rt] ruby pairs."""
+    """Flatten content to a list of tokens - strings, or [base, rt] ruby pairs."""
     out: list = []
 
     def walk(n):
@@ -313,7 +313,7 @@ def _walk(node, senses: list[dict], pos_stack: list[str]) -> None:
         return
 
     if marker in ('glossary', 'redirect-glossary'):
-        # Glossary outside a wrapping <sense> (rare) — attach to current POS.
+        # Glossary outside a wrapping <sense> (rare) - attach to current POS.
         glosses: list[str] = []
         _collect_li_texts(node, glosses)
         if glosses:
@@ -421,7 +421,7 @@ _TAG_LABEL = {
     'spec1': 'spec',   'spec2': 'spec',
     'gai1':  'loanword', 'gai2': 'loanword',
     '\u2605': 'common',
-    # NBSP-joined tag from Jitendex's tag bank — a single label.
+    # NBSP-joined tag from Jitendex's tag bank - a single label.
     'priority\u00a0form': 'priority form',
 }
 # nf01-nf48 are frequency bands (nf01 = top 500 words, nf02 = top 1000, …)
@@ -585,7 +585,7 @@ def _build_sqlite(zf: zipfile.ZipFile, db_path: Path) -> None:
             if len(batch_e) >= BATCH:
                 flush()
 
-        print(f'  {bank_name.split("/")[-1]} — {total_entries:,} entries so far')
+        print(f'  {bank_name.split("/")[-1]} - {total_entries:,} entries so far')
 
     if batch_e:
         flush()

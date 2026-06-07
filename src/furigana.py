@@ -1,7 +1,7 @@
 """Japanese sentence tokenization for furigana rendering.
 
 Wraps SudachiPy. The tokenizer is loaded lazily on first use so the rest of
-the app stays importable when sudachi isn't installed — `tokenize_sentence`
+the app stays importable when sudachi isn't installed - `tokenize_sentence`
 returns an `error` payload in that case which the WS handler forwards to the
 client so the extension can disable its furigana toggle gracefully.
 """
@@ -66,10 +66,10 @@ def _ensure_tokenizer() -> str:
 
         try:
             _tokenizer = dictionary.Dictionary().create()
-            # SplitMode.C = full-word segmentation (合成語 stays whole) — best
+            # SplitMode.C = full-word segmentation (合成語 stays whole) - best
             # for surfacing the natural reading of compounds like 「天気」.
             _split_mode = tokenizer.Tokenizer.SplitMode.C
-        except Exception as exc:  # noqa: BLE001 — initialization failure surfaces to UI
+        except Exception as exc:  # noqa: BLE001 - initialization failure surfaces to UI
             _init_error = f'SudachiPy init failed: {type(exc).__name__}: {exc}'
         _initialized = True
         return _init_error
@@ -136,7 +136,7 @@ def _align_token(surface: str, reading: str) -> list[dict]:
                 i += 1
             kanji_seg = surface[ki:i]
 
-            # Find where this kanji run's reading ends — at the position of
+            # Find where this kanji run's reading ends - at the position of
             # the next surface kana in the reading (or end-of-reading if the
             # kanji run is the suffix of the token).
             if i < len(surface) and _is_kana(surface[i]):
@@ -150,7 +150,7 @@ def _align_token(surface: str, reading: str) -> list[dict]:
                 j = pos
             else:
                 # Kanji run is at the very end (or followed by non-kana like
-                # punctuation in middle of a token — rare but possible).
+                # punctuation in middle of a token - rare but possible).
                 segs.append({'text': kanji_seg, 'reading': reading[j:]})
                 j = len(reading)
         elif _is_kana(surface[i]):
@@ -163,7 +163,7 @@ def _align_token(surface: str, reading: str) -> list[dict]:
             j += 1
         else:
             # Punctuation / ASCII / digits inside a token. Don't consume the
-            # reading — sudachi typically excludes these characters from the
+            # reading - sudachi typically excludes these characters from the
             # reading_form, but if it does include them they'll just slip by.
             segs.append({'text': surface[i], 'reading': ''})
             i += 1

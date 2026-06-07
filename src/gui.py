@@ -8,7 +8,7 @@ _flags = (
     _QWebEngineUrlScheme.Flag.CorsEnabled |
     _QWebEngineUrlScheme.Flag.ContentSecurityPolicyIgnored
 )
-# FetchApiAllowed was added in Qt 6.4 — add it when available.
+# FetchApiAllowed was added in Qt 6.4 - add it when available.
 if hasattr(_QWebEngineUrlScheme.Flag, 'FetchApiAllowed'):
     _flags |= _QWebEngineUrlScheme.Flag.FetchApiAllowed
 _scheme.setFlags(_flags)

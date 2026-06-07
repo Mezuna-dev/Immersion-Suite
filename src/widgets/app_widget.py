@@ -348,7 +348,7 @@ class AppBridge(QObject):
 
         # Gather cards subdeck-by-subdeck in tree order (matching Anki):
         # the parent deck's new-card limit is the total budget, and subdecks
-        # are processed sequentially — subdeck 1 is exhausted entirely before
+        # are processed sequentially - subdeck 1 is exhausted entirely before
         # any new cards are drawn from subdeck 2, etc.
         new_limit = deck.new_cards_limit if deck else 15
         ordered_ids = database.get_ordered_subdeck_tree(deck_id)

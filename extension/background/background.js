@@ -83,7 +83,7 @@ async function request(payload, { timeoutMs } = {}) {
 
 // Some actions can be heavy (downloading + clipping audio). Bump the timeout
 // on those so the WS request doesn't get killed before yt-dlp finishes.
-const LONG_ACTIONS = new Set(['create_card_with_media']);
+const LONG_ACTIONS = new Set(['create_card_with_media', 'get_youtube_subs']);
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== 'object' || !msg.action) return;

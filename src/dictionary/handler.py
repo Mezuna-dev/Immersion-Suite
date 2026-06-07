@@ -10,7 +10,7 @@ from .jitendex import JitendexModule
 from .jmdict import JMdictModule
 from .base import DictionaryModule
 
-# Module-level singleton — Jitendex is primary, JMdict is fallback.
+# Module-level singleton - Jitendex is primary, JMdict is fallback.
 _module: DictionaryModule | None = None
 
 

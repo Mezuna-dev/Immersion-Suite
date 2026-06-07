@@ -7,7 +7,7 @@
 
   // ── Constants ──────────────────────────────────────────────────────────────
   const SCAN_LEN    = 25;   // characters to extract from the caret position
-  const DEBOUNCE_MS = 16;   // ~one frame — coalesces rapid mousemoves
+  const DEBOUNCE_MS = 16;   // ~one frame - coalesces rapid mousemoves
   const CACHE_MAX   = 512;  // LRU cap for lookup results
 
   // ── State ──────────────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@
     );
   }
 
-  // ── Inline element set — text flows through these without a block break ────
+  // ── Inline element set - text flows through these without a block break ────
   const _INLINE = new Set([
     'A','ABBR','B','BDI','BDO','CITE','CODE','DATA','DFN','EM','FONT',
     'I','KBD','MARK','Q','RUBY','S','SAMP','SMALL','SPAN','STRONG',
@@ -99,7 +99,7 @@
     const textNode = range.startContainer;
     let   offset   = range.startOffset;
 
-    // caretRangeFromPoint places the caret between glyphs — probe the previous
+    // caretRangeFromPoint places the caret between glyphs - probe the previous
     // character's bounding box and step back if the cursor is visually inside it.
     if (offset > 0) {
       try {
@@ -164,7 +164,7 @@
   const _NOISE = new Set([
     'jmdict','see also','also written as','note','notes',
     'used with','★','priority','form','forms','links',
-    'tatoeba','this','|','—','-','/','language of origin','man','boy',
+    'tatoeba','this','|','-','-','/','language of origin','man','boy',
   ]);
 
   function _hasJP(s) {
@@ -362,7 +362,7 @@
     return html;
   }
 
-  // ── Popup CSS (injected into shadow root — isolated from page styles) ───────
+  // ── Popup CSS (injected into shadow root - isolated from page styles) ───────
   const POPUP_CSS = `
     :host { all: initial; }
 
@@ -377,7 +377,7 @@
       box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.06),
         0 4px 16px rgba(0, 0, 0, 0.08),
-        0 16px 48px rgba(124, 58, 237, 0.10);
+        0 16px 48px rgba(170, 0, 255, 0.10);
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       font-size: 14px;
       color: #1a1133;
@@ -392,15 +392,15 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+      background: linear-gradient(90deg, #aa00ff, #cc66ff);
       pointer-events: none;
     }
 
     .list { max-height: 320px; overflow-y: auto; }
     .list::-webkit-scrollbar       { width: 6px; }
     .list::-webkit-scrollbar-track { background: transparent; }
-    .list::-webkit-scrollbar-thumb { background: rgba(124, 58, 237, 0.20); border-radius: 3px; }
-    .list::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.35); }
+    .list::-webkit-scrollbar-thumb { background: rgba(170, 0, 255, 0.20); border-radius: 3px; }
+    .list::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.35); }
 
     .entry { padding: 14px 20px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
     .entry:last-child { border-bottom: none; }
@@ -415,8 +415,8 @@
 
     .reason {
       display: inline-block; padding: 2px 8px 3px; font-size: 10px; font-weight: 600;
-      color: #7c3aed; background: rgba(124, 58, 237, 0.08);
-      border: 1px solid rgba(124, 58, 237, 0.18); border-radius: 5px;
+      color: #aa00ff; background: rgba(170, 0, 255, 0.08);
+      border: 1px solid rgba(170, 0, 255, 0.18); border-radius: 5px;
       letter-spacing: .3px; text-transform: lowercase; white-space: nowrap;
     }
 
@@ -425,7 +425,7 @@
     .etag-common { color: #16a34a; background: rgba(22, 163, 74, 0.08);   border: 1px solid rgba(22, 163, 74, 0.20); }
     .etag-freq   { color: #d97706; background: rgba(217, 119, 6, 0.08);   border: 1px solid rgba(217, 119, 6, 0.20); }
     .etag-news   { color: #2563eb; background: rgba(37, 99, 235, 0.08);   border: 1px solid rgba(37, 99, 235, 0.18); }
-    .etag-loan   { color: #7c3aed; background: rgba(124, 58, 237, 0.08);  border: 1px solid rgba(124, 58, 237, 0.20); }
+    .etag-loan   { color: #aa00ff; background: rgba(170, 0, 255, 0.08);  border: 1px solid rgba(170, 0, 255, 0.20); }
     .etag-spec   { color: #6b5f8a; background: rgba(107, 95, 138, 0.07);  border: 1px solid rgba(107, 95, 138, 0.15); }
     .etag-misc   { color: #6b5f8a; background: rgba(107, 95, 138, 0.06);  border: 1px solid rgba(107, 95, 138, 0.12); }
     .etag-prio   { color: #d97706; background: rgba(217, 119, 6, 0.08);   border: 1px solid rgba(217, 119, 6, 0.20); }
@@ -435,9 +435,9 @@
 
     .pos-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
     .pos {
-      font-size: 10px; color: #7c3aed; text-transform: lowercase; letter-spacing: .3px;
-      font-weight: 600; padding: 3px 9px; background: rgba(124, 58, 237, 0.08);
-      border: 1px solid rgba(124, 58, 237, 0.20); border-radius: 5px; white-space: nowrap;
+      font-size: 10px; color: #aa00ff; text-transform: lowercase; letter-spacing: .3px;
+      font-weight: 600; padding: 3px 9px; background: rgba(170, 0, 255, 0.08);
+      border: 1px solid rgba(170, 0, 255, 0.20); border-radius: 5px; white-space: nowrap;
     }
 
     .gloss-list { display: flex; flex-direction: column; gap: 2px; }
@@ -446,7 +446,7 @@
 
     .examples {
       margin: 6px 0 0 4px; display: flex; flex-direction: column; gap: 6px;
-      border-left: 2px solid rgba(124, 58, 237, 0.20); padding: 4px 0 4px 10px;
+      border-left: 2px solid rgba(170, 0, 255, 0.20); padding: 4px 0 4px 10px;
     }
     .example-ja    { font-size: 13px; color: #1a1133; line-height: 1.9; }
     .example-ja ruby rt { font-size: 10.5px; color: #6b5f8a; font-weight: 500; }
@@ -454,12 +454,12 @@
 
     .forms {
       margin-top: 12px; padding: 8px 10px;
-      background: rgba(124, 58, 237, 0.04); border: 1px solid rgba(124, 58, 237, 0.12); border-radius: 6px;
+      background: rgba(170, 0, 255, 0.04); border: 1px solid rgba(170, 0, 255, 0.12); border-radius: 6px;
     }
     .forms-label    { font-size: 9.5px; font-weight: 700; color: #a898c8; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
     .forms-kanji    { font-size: 14px; color: #1a1133; font-weight: 600; margin-bottom: 4px; }
     .forms-readings { display: flex; flex-wrap: wrap; gap: 6px; }
-    .form-reading   { font-size: 12px; color: #6b5f8a; padding: 1px 6px; border-radius: 4px; background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.12); }
+    .form-reading   { font-size: 12px; color: #6b5f8a; padding: 1px 6px; border-radius: 4px; background: rgba(170, 0, 255, 0.06); border: 1px solid rgba(170, 0, 255, 0.12); }
     .form-reading.form-pri  { color: #d97706; background: rgba(217, 119, 6, 0.08); border-color: rgba(217, 119, 6, 0.20); }
     .form-reading.form-rare { color: #a898c8; }
 
@@ -472,13 +472,13 @@
     #close-btn {
       position: absolute; top: 9px; right: 10px;
       width: 22px; height: 22px;
-      background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.18);
+      background: rgba(170, 0, 255, 0.08); border: 1px solid rgba(170, 0, 255, 0.18);
       border-radius: 50%; color: #a898c8; font-size: 15px; line-height: 22px;
       cursor: pointer; padding: 0; text-align: center; z-index: 1;
     }
     #close-btn:hover {
-      background: rgba(124, 58, 237, 0.15); border-color: rgba(124, 58, 237, 0.32);
-      color: #7c3aed;
+      background: rgba(170, 0, 255, 0.15); border-color: rgba(170, 0, 255, 0.32);
+      color: #aa00ff;
     }
   `;
 
@@ -653,7 +653,7 @@
 
   // ── Result handler ────────────────────────────────────────────────────────
   function onResult(data, chunk, x, y, textNode, offset) {
-    if (chunk !== latestLookupChunk) return;  // stale response — a newer hover won
+    if (chunk !== latestLookupChunk) return;  // stale response - a newer hover won
     if (!data || (!data.entries?.length && !data.error)) {
       if (!popupHovered) hidePopup();
       return;
@@ -683,7 +683,7 @@
         if (!popupHovered) hidePopup();
         return;
       }
-      // Same chunk still under the cursor — reposition without re-fetching.
+      // Same chunk still under the cursor - reposition without re-fetching.
       if (hit.chunk === lastChunk && popupEl && popupEl.style.display === 'block') {
         positionPopup(x, y, hit.textNode, hit.offset);
         return;
@@ -709,7 +709,7 @@
     if (!popupHovered) hidePopup();
   }, true);
 
-  // Dismiss on scroll — popup position becomes stale.
+  // Dismiss on scroll - popup position becomes stale.
   document.addEventListener('scroll', () => {
     if (!popupHovered) hidePopup();
   }, true);

@@ -7,7 +7,8 @@
 
 /* ═══════════════════════════════════════════════════════════
    IMMERSION SUITE  ·  Bright & Gamified
-   Inspired by Duolingo / Migaku
+   Signature look: gradient fills, squircle radii, glow-lift +
+   spring-squish interactions. Playful and distinct.
    ═══════════════════════════════════════════════════════════ */
 
 :root {
@@ -18,7 +19,7 @@
     --accent-dim:   rgba(170, 0, 255, 0.1);
     --accent-rgb:   170, 0, 255;
 
-    /* Semantic palette — each color MEANS something */
+    /* Semantic palette - each color MEANS something */
     --green:        #16a34a;
     --green-light:  #22c55e;
     --green-dark:   #15803d;
@@ -66,6 +67,7 @@
     --r-pill: 100px;
     --r-xl:   20px;
     --r-lg:   16px;
+    --r-btn:  14px;   /* signature squircle for action buttons (was full pill) */
     --r-md:   12px;
     --r-sm:   8px;
 
@@ -78,7 +80,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 
-/* ── Body — light lavender wash ───────────────────────────── */
+/* ── Body - light lavender wash ───────────────────────────── */
 body {
     background-color: var(--bg);
     color: var(--text-1);
@@ -90,7 +92,7 @@ body {
 /* Override Bootstrap / old dark-mode helpers */
 .bg-dashboard, .bg-main { background: transparent !important; }
 
-/* text-white was for dark mode — remap to dark on light */
+/* text-white was for dark mode - remap to dark on light */
 .text-white { color: var(--text-1) !important; }
 .fw-semibold { color: var(--text-1) !important; }
 
@@ -98,7 +100,7 @@ hr { border: none !important; height: 1px; background: var(--border); }
 
 code {
     background: var(--accent-dim);
-    border: 1px solid rgba(124, 58, 237, 0.2);
+    border: 1px solid rgba(170, 0, 255, 0.2);
     border-radius: var(--r-sm);
     padding: 0.12rem 0.45rem;
     font-size: 0.8rem;
@@ -291,7 +293,7 @@ code {
 .view-section h1::after,
 .text-white h1::after { display: none; }
 
-/* ── Cards — white, clean, shadowed ──────────────────────── */
+/* ── Cards - white, clean, shadowed ──────────────────────── */
 .card,
 .dash-card,
 .settings-card {
@@ -311,7 +313,7 @@ code {
     -webkit-backdrop-filter: none;
 }
 
-/* Top accent strip — purple, clean */
+/* Top accent strip - purple, clean */
 .card::before,
 .dash-card::before,
 .settings-card::before {
@@ -328,16 +330,16 @@ code {
 .deck-card-hover {
     box-shadow:
         0 2px 6px rgba(0, 0, 0, 0.08),
-        0 8px 24px rgba(124, 58, 237, 0.1) !important;
+        0 8px 24px rgba(170, 0, 255, 0.1) !important;
     transform: translateY(-2px);
-    border-color: rgba(124, 58, 237, 0.2) !important;
+    border-color: rgba(170, 0, 255, 0.2) !important;
 }
 
 .card:nth-child(1) { animation-delay: 0.04s; }
 .card:nth-child(2) { animation-delay: 0.09s; }
 .card:nth-child(3) { animation-delay: 0.14s; }
 
-/* Danger card — red accent strip */
+/* Danger card - red accent strip */
 .settings-danger-zone::before {
     background: linear-gradient(90deg, var(--red), #f87171);
 }
@@ -345,7 +347,7 @@ code {
     border-color: rgba(220, 38, 38, 0.2) !important;
 }
 
-/* ── Dashboard stat cells — color-coded by meaning ────────── */
+/* ── Dashboard stat cells - color-coded by meaning ────────── */
 .dash-stat-cell {
     padding: 1.1rem 1.35rem;
     border-right: 1.5px solid var(--border);
@@ -354,7 +356,7 @@ code {
 .dash-stat-cell:last-child { border-right: none; }
 
 /* Each metric gets its own color */
-.dash-stat-cell:nth-child(1) { background: linear-gradient(180deg, rgba(124,58,237,0.04) 0%, transparent 100%); }
+.dash-stat-cell:nth-child(1) { background: linear-gradient(180deg, rgba(170,0,255,0.04) 0%, transparent 100%); }
 .dash-stat-cell:nth-child(2) { background: linear-gradient(180deg, rgba(37,99,235,0.04) 0%, transparent 100%); }
 .dash-stat-cell:nth-child(3) { background: linear-gradient(180deg, rgba(217,119,6,0.05) 0%, transparent 100%); }
 .dash-stat-cell:nth-child(4) { background: linear-gradient(180deg, rgba(22,163,74,0.04) 0%, transparent 100%); }
@@ -414,74 +416,69 @@ code {
 .dash-select:focus {
     outline: none !important;
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15) !important;
     color: var(--text-1) !important;
 }
 
-/* ── Buttons — 3D Duolingo style ─────────────────────────── */
+/* ── Buttons - gradient fill, glow-lift, spring-squish ─────── */
 
-/* Primary accent — the signature 3D press effect */
+/* Primary accent - gradient pill→squircle with a soft floating glow.
+   Hover lifts and brightens the glow; click springs in a quick squish
+   (tactile + playful, but no mechanical 3D ledge). */
 .btn-accent,
 .btn.btn-dark.btn-accent {
-    background: var(--accent) !important;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light)) !important;
     border: none !important;
-    /* The 3D bottom shadow */
-    border-bottom: 4px solid var(--accent-dark) !important;
     color: #fff !important;
-    border-radius: var(--r-pill) !important;
+    border-radius: var(--r-btn) !important;
     font-weight: 700;
     font-size: 0.875rem;
     letter-spacing: 0.01em;
+    box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.30);
     transition:
-        filter 0.15s var(--ease),
-        transform 0.1s var(--ease),
-        border-bottom-width 0.1s var(--ease);
+        box-shadow 0.18s var(--ease),
+        transform 0.14s var(--spring),
+        filter 0.15s var(--ease);
     position: relative;
     overflow: hidden;
-    box-shadow: none;
-    /* Compensate height for border-bottom */
-    padding-bottom: calc(0.375rem + 0px);
 }
 
 .btn-accent:hover,
 .btn.btn-dark.btn-accent:hover {
-    filter: brightness(1.1);
+    filter: brightness(1.05);
     color: #fff !important;
-    transform: translateY(-1px);
-    box-shadow: none !important;
+    transform: translateY(-2px);
+    box-shadow: 0 7px 20px rgba(var(--accent-rgb), 0.42) !important;
 }
 
-/* Press down — the tactile click */
+/* Click - quick spring squish instead of the 3D press-down. */
 .btn-accent:active,
 .btn.btn-dark.btn-accent:active {
-    border-bottom-width: 0 !important;
-    transform: translateY(4px);
-    filter: brightness(0.97);
-    box-shadow: none !important;
+    transform: scale(0.96);
+    filter: brightness(0.98);
+    box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.30) !important;
 }
 
-/* Secondary — light, rounded, clean */
+/* Secondary - light, squircle, clean; hover picks up the brand accent. */
 .btn.btn-dark:not(.btn-accent):not(.btn-danger) {
     background: #ffffff !important;
     border: 1.5px solid var(--border-md) !important;
-    border-bottom: 4px solid var(--border-md) !important;
     color: var(--text-2) !important;
-    border-radius: var(--r-pill) !important;
+    border-radius: var(--r-btn) !important;
     font-weight: 600;
     font-size: 0.875rem;
-    transition: filter 0.15s var(--ease), transform 0.1s var(--ease), border-color 0.15s var(--ease), border-bottom-width 0.1s var(--ease);
-    box-shadow: none;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: box-shadow 0.18s var(--ease), transform 0.14s var(--spring), border-color 0.15s var(--ease), color 0.15s var(--ease);
 }
 .btn.btn-dark:not(.btn-accent):not(.btn-danger):hover {
-    border-color: var(--border-md) !important;
-    border-bottom-color: var(--border-md) !important;
-    color: var(--text-1) !important;
-    filter: brightness(0.97);
-    transform: translateY(-1px);
+    background: #ffffff !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(var(--accent-rgb), 0.15) !important;
 }
 .btn.btn-dark:not(.btn-accent):not(.btn-danger):active {
-    border-bottom-width: 0 !important;
-    transform: translateY(4px) !important;
+    transform: scale(0.96) !important;
 }
 
 /* Small accent */
@@ -489,33 +486,32 @@ code {
 .btn.btn-dark.btn-accent.btn-sm {
     font-size: 0.78rem;
     padding: 0.28rem 0.85rem;
-    border-bottom-width: 3px !important;
+    border-radius: 11px !important;
 }
 .btn-accent.btn-sm:active,
 .btn.btn-dark.btn-accent.btn-sm:active {
-    border-bottom-width: 0 !important;
-    transform: translateY(3px);
+    transform: scale(0.95);
 }
 
-/* Danger — 3D red */
+/* Danger - gradient red, same glow-lift + squish signature */
 .btn.btn-danger {
-    background: var(--red) !important;
+    background: linear-gradient(135deg, var(--red), #f87171) !important;
     border: none !important;
-    border-bottom: 4px solid var(--red-dark) !important;
     color: #fff !important;
-    border-radius: var(--r-pill) !important;
+    border-radius: var(--r-btn) !important;
     font-weight: 700;
-    transition: filter 0.15s var(--ease), transform 0.1s var(--ease), border-bottom-width 0.1s var(--ease);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.30);
+    transition: box-shadow 0.18s var(--ease), transform 0.14s var(--spring), filter 0.15s var(--ease);
 }
 .btn.btn-danger:hover {
-    filter: brightness(1.08);
+    filter: brightness(1.05);
     color: #fff !important;
-    transform: translateY(-1px);
-    box-shadow: none !important;
+    transform: translateY(-2px);
+    box-shadow: 0 7px 20px rgba(220, 38, 38, 0.42) !important;
 }
 .btn.btn-danger:active {
-    border-bottom-width: 0 !important;
-    transform: translateY(4px);
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.30) !important;
 }
 
 /* Action sizing */
@@ -566,7 +562,7 @@ code {
 }
 .settings-input:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15) !important;
     outline: none;
 }
 .settings-input::placeholder { color: var(--text-3) !important; }
@@ -595,7 +591,7 @@ code {
     text-transform: uppercase;
     letter-spacing: 0.12em;
     padding: 0.65rem 0.85rem;
-    border-bottom: 1.5px solid rgba(124, 58, 237, 0.25);
+    border-bottom: 1.5px solid rgba(170, 0, 255, 0.25);
     position: sticky;
     top: 0;
     z-index: 1;
@@ -630,7 +626,7 @@ code {
     border: 1.5px solid rgba(37, 99, 235, 0.2);
 }
 
-/* ── Review — clean white card feel ──────────────────────── */
+/* ── Review - clean white card feel ──────────────────────── */
 #review-front-text, #review-back-text {
     font-size: var(--review-font-size) !important;
     font-weight: 700;
@@ -645,34 +641,41 @@ code {
 }
 #review-show-answer-btn { min-width: 11rem; }
 
-/* Rating buttons — 3D, each its own color */
-#review-rating-buttons .btn:nth-child(1) {
-    background: var(--red) !important;
-    border-bottom-color: var(--red-dark) !important;
+/* Rating buttons - gradient, each its own color, glow-lift + squish */
+#review-rating-buttons .btn {
+    border: none !important;
+    border-radius: var(--r-btn) !important;
     color: #fff !important;
+    transition: box-shadow 0.18s var(--ease), transform 0.14s var(--spring), filter 0.15s var(--ease);
+}
+#review-rating-buttons .btn:nth-child(1) {
+    background: linear-gradient(135deg, var(--red), #f87171) !important;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.28);
 }
 #review-rating-buttons .btn:nth-child(2) {
-    background: var(--orange) !important;
-    border-bottom-color: var(--orange-dark) !important;
-    color: #fff !important;
+    background: linear-gradient(135deg, var(--orange), #fb923c) !important;
+    box-shadow: 0 2px 8px rgba(234, 88, 12, 0.28);
 }
 #review-rating-buttons .btn:nth-child(3) {
-    background: var(--green) !important;
-    border-bottom-color: var(--green-dark) !important;
-    color: #fff !important;
+    background: linear-gradient(135deg, var(--green), var(--green-light)) !important;
+    box-shadow: 0 2px 8px rgba(22, 163, 74, 0.28);
 }
 #review-rating-buttons .btn:nth-child(4) {
-    background: var(--accent) !important;
-    border-bottom-color: var(--accent-dark) !important;
-    color: #fff !important;
+    background: linear-gradient(135deg, var(--accent), var(--accent-light)) !important;
+    box-shadow: 0 2px 8px rgba(var(--accent-rgb), 0.28);
 }
-#review-rating-buttons .btn:nth-child(1):hover,
-#review-rating-buttons .btn:nth-child(2):hover,
-#review-rating-buttons .btn:nth-child(3):hover,
-#review-rating-buttons .btn:nth-child(4):hover {
-    filter: brightness(1.08);
+#review-rating-buttons .btn:hover {
+    filter: brightness(1.05);
     color: #fff !important;
-    border-color: transparent !important;
+    transform: translateY(-2px);
+}
+#review-rating-buttons .btn:nth-child(1):hover { box-shadow: 0 7px 20px rgba(220, 38, 38, 0.42) !important; }
+#review-rating-buttons .btn:nth-child(2):hover { box-shadow: 0 7px 20px rgba(234, 88, 12, 0.42) !important; }
+#review-rating-buttons .btn:nth-child(3):hover { box-shadow: 0 7px 20px rgba(22, 163, 74, 0.42) !important; }
+#review-rating-buttons .btn:nth-child(4):hover { box-shadow: 0 7px 20px rgba(var(--accent-rgb), 0.42) !important; }
+#review-rating-buttons .btn:active {
+    transform: scale(0.96);
+    filter: brightness(0.98);
 }
 
 /* ── Immersion tabs ───────────────────────────────────────── */
@@ -864,12 +867,12 @@ code {
 .formatting-btn:hover {
     background: var(--accent-dim) !important;
     color: var(--accent) !important;
-    border-color: rgba(124, 58, 237, 0.3) !important;
+    border-color: rgba(170, 0, 255, 0.3) !important;
 }
 .formatting-btn-active {
     background: var(--accent-dim) !important;
     color: var(--accent) !important;
-    border-color: rgba(124, 58, 237, 0.4) !important;
+    border-color: rgba(170, 0, 255, 0.4) !important;
 }
 
 /* ── Form switches ────────────────────────────────────────── */
@@ -878,7 +881,7 @@ code {
     border-color: var(--accent) !important;
 }
 .form-check-input:focus {
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.2) !important;
+    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.2) !important;
 }
 
 /* ── Shortcut key ─────────────────────────────────────────── */
@@ -897,21 +900,21 @@ code {
 }
 #shortcut-key-btn:hover {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15) !important;
 }
 
-/* ── Scrollbar — light mode ───────────────────────────────── */
+/* ── Scrollbar - light mode ───────────────────────────────── */
 * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(124, 58, 237, 0.2) transparent;
+    scrollbar-color: rgba(170, 0, 255, 0.2) transparent;
 }
 *::-webkit-scrollbar { width: 5px; height: 5px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-    background: rgba(124, 58, 237, 0.18);
+    background: rgba(170, 0, 255, 0.18);
     border-radius: 3px;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(124, 58, 237, 0.35); }
+*::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.35); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
 /* ── Review card accent line ──────────────────────────────── */
@@ -1122,7 +1125,7 @@ code {
     display: block;
 }
 
-/* Pill style — matches old dash-select */
+/* Pill style - matches old dash-select */
 .csel-pill .csel-btn {
     display: inline-flex;
     align-items: center;
@@ -1145,10 +1148,10 @@ code {
 .csel-pill.csel-open .csel-btn {
     border-color: var(--accent);
     color: var(--text-1);
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.12);
+    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.12);
 }
 
-/* Box style — matches old settings-input select */
+/* Box style - matches old settings-input select */
 .csel-box .csel-btn {
     display: flex;
     align-items: center;
@@ -1170,7 +1173,7 @@ code {
 .csel-box .csel-btn:hover,
 .csel-box.csel-open .csel-btn {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
+    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15);
 }
 
 /* Chevron */
@@ -1183,7 +1186,7 @@ code {
 }
 .csel-open .csel-chev { transform: rotate(180deg); }
 
-/* Dropdown menu — appended to <body> when open, so position:fixed is always
+/* Dropdown menu - appended to <body> when open, so position:fixed is always
    relative to the true viewport (no ancestor transform interference) */
 .csel-menu {
     position: fixed;

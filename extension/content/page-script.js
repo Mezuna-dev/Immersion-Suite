@@ -38,7 +38,7 @@
 
   emitTrack('initial');
 
-  // SPA navigations between videos — YouTube fires this on the document after
+  // SPA navigations between videos - YouTube fires this on the document after
   // the player has loaded the new video's metadata.
   document.addEventListener('yt-navigate-finish', () => emitTrack('navigate'));
   document.addEventListener('yt-player-updated', () => emitTrack('player-updated'));

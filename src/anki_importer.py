@@ -93,9 +93,9 @@ def import_media(import_path, apkg_path=None):
 
     media_path = import_path / "media"
 
-    # Case A: media/ is a directory — newer Anki variant
+    # Case A: media/ is a directory - newer Anki variant
     if media_path.is_dir():
-        log.append("\nmedia is a DIRECTORY — copying contents directly")
+        log.append("\nmedia is a DIRECTORY - copying contents directly")
         for src in media_path.iterdir():
             log.append(f"  {src.name}")
             if src.is_file():
@@ -117,12 +117,12 @@ def import_media(import_path, apkg_path=None):
                 dctx = zstd.ZstdDecompressor()
                 with dctx.stream_reader(io.BytesIO(raw_bytes)) as reader:
                     raw_bytes = reader.read()
-                log.append("media file was zstd-compressed — decompressed successfully")
+                log.append("media file was zstd-compressed - decompressed successfully")
             try:
                 raw = json.loads(raw_bytes.decode('utf-8'))
                 if isinstance(raw, dict):
                     media_map = raw
-                    log.append(f"media JSON parsed — {len(media_map)} entries")
+                    log.append(f"media JSON parsed - {len(media_map)} entries")
                     for k, v in list(media_map.items())[:20]:
                         log.append(f"  {k!r}: {v!r}")
                     if len(media_map) > 20:
@@ -130,10 +130,10 @@ def import_media(import_path, apkg_path=None):
                 else:
                     log.append(f"media JSON is not a dict: {type(raw)}")
             except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as json_ex:
-                log.append(f"media JSON parse failed ({json_ex}) — trying protobuf")
+                log.append(f"media JSON parse failed ({json_ex}) - trying protobuf")
                 try:
                     media_map = parse_media_manifest_proto(raw_bytes)
-                    log.append(f"media manifest parsed as protobuf — {len(media_map)} entries")
+                    log.append(f"media manifest parsed as protobuf - {len(media_map)} entries")
                     for k, v in list(media_map.items())[:20]:
                         log.append(f"  {k!r}: {v!r}")
                     if len(media_map) > 20:
@@ -148,14 +148,14 @@ def import_media(import_path, apkg_path=None):
     # Try copying based on map entries
     log.append("\nCopy attempts:")
     for key, val in media_map.items():
-        # Old format: {"0": "audio.mp3"} — numeric key, filename value, stored as "0"
-        # New format: {"audio.mp3": "sha256"} — filename key, hash value, stored as hash or filename
+        # Old format: {"0": "audio.mp3"} - numeric key, filename value, stored as "0"
+        # New format: {"audio.mp3": "sha256"} - filename key, hash value, stored as hash or filename
         candidates = []
         if key.isdigit():
             # Old format
             candidates = [(import_path / key, val if isinstance(val, str) else key)]
         else:
-            # New format — file may be stored by hash (val) or by actual name (key)
+            # New format - file may be stored by hash (val) or by actual name (key)
             if isinstance(val, str) and val:
                 candidates.append((import_path / val, key))   # stored as hash
             candidates.append((import_path / key, key))        # stored by actual name
@@ -325,7 +325,7 @@ def extract_proto_strings(data):
         wire_type = b & 0x7
         i += 1
 
-        if wire_type == 0:  # varint — skip
+        if wire_type == 0:  # varint - skip
             while i < len(data) and (data[i] & 0x80):
                 i += 1
             i += 1
@@ -351,7 +351,7 @@ def extract_proto_strings(data):
         elif wire_type == 5:  # 32-bit fixed
             i += 4
         else:
-            break  # unknown wire type — stop
+            break  # unknown wire type - stop
 
     return results
 
@@ -538,7 +538,7 @@ def _anki_scheduling(anki_type, anki_queue, due, ivl, factor, reps, crt_date):
     Returns a dict with keys: is_new, reps, ease_factor, interval, due_date, last_reviewed
     """
     if anki_type == 2 and anki_queue == 2:
-        # Graduated review card — due is days since collection creation date
+        # Graduated review card - due is days since collection creation date
         ease = round(factor / 1000.0, 4) if factor else 2.5
         interval = ivl if ivl > 0 else 1
         due_date = (crt_date + timedelta(days=due)).strftime('%Y-%m-%d')
@@ -547,11 +547,11 @@ def _anki_scheduling(anki_type, anki_queue, due, ivl, factor, reps, crt_date):
                     interval=interval, due_date=due_date, last_reviewed=last_reviewed)
 
     if anki_type in (1, 3):
-        # In learning or relearning — treat as new so it surfaces immediately
+        # In learning or relearning - treat as new so it surfaces immediately
         return dict(is_new=True, reps=reps, ease_factor=2.5,
                     interval=0, due_date=None, last_reviewed=None)
 
-    # New card (type 0) — default state
+    # New card (type 0) - default state
     return dict(is_new=True, reps=0, ease_factor=2.5,
                 interval=0, due_date=None, last_reviewed=None)
 

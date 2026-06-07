@@ -16,7 +16,7 @@
   let videoEl = null;
   let captionObserver = null;   // MutationObserver used in DOM-mirror fallback
   let domMirrorActive = false;  // true when cues are being synthesized from the DOM
-  let pendingMirrorCue = null;  // {start, text} — open cue waiting for its end timestamp
+  let pendingMirrorCue = null;  // {start, text} - open cue waiting for its end timestamp
   let autoPauseEnabled = false; // pause playback at the end of the active sub
   let furiganaEnabled = false;  // show ruby annotations above kanji
   let furiganaAvailable = true; // flips off after a backend tokenize failure
@@ -29,6 +29,12 @@
   let audioStartPadMs = 0;
   let audioEndPadMs   = 400;
 
+  // Display-timing offset (ms). Positive = delay subs (show later relative
+  // to audio); negative = advance them. Lets users dial out drift between
+  // yt-dlp's cue timing and YouTube's actual audio rendering. Adjusted with
+  // `,` / `.` keys or the queue-header buttons.
+  let subOffsetMs = 0;
+
   const SETTINGS_KEY = 'imm_yt_settings';
 
   // Tokenized text cache: exact sub text → [{text, reading}, ...]. Keyed by
@@ -39,7 +45,22 @@
   // when the sub changes while a request is in flight.
   let lastTokenizeRequest = '';
 
-  // ── Settings (chrome.storage.local — Phase 4 will expose UI for these) ──
+  // Queue (sidebar) state. queueRows[i] is the DOM row for cues[i]; in
+  // DOM-mirror mode an extra "pending" row may live at queueRows[cues.length]
+  // representing the currently-on-screen cue that hasn't closed yet.
+  let queueEl = null;
+  let queueListEl = null;
+  let queueRows = [];
+  let queueOpen = false;
+  let queueLoading = false;
+  // When the user manually wheels/touches the list, suspend auto-follow until
+  // this timestamp (performance.now() ms). Clicking a row resets it.
+  let queueScrollGuardUntil = 0;
+  // Observer used to wait for #secondary-inner to appear when ensureQueue()
+  // is called before YouTube has hydrated it (common on cold page loads).
+  let queueHostObserver = null;
+
+  // ── Settings (chrome.storage.local - Phase 4 will expose UI for these) ──
   function loadSettings() {
     try {
       chrome.storage.local.get(SETTINGS_KEY, (data) => {
@@ -47,10 +68,15 @@
         if (!s) return;
         autoPauseEnabled = !!s.autoPause;
         furiganaEnabled = !!s.furigana;
+        queueOpen = !!s.queueOpen;
         if (Number.isFinite(s.audioStartPadMs)) audioStartPadMs = s.audioStartPadMs;
         if (Number.isFinite(s.audioEndPadMs))   audioEndPadMs   = s.audioEndPadMs;
+        if (Number.isFinite(s.subOffsetMs))     subOffsetMs     = s.subOffsetMs;
         syncAutoPauseButton();
         syncFuriganaButton();
+        syncQueueButton();
+        syncQueueVisibility();
+        syncOffsetDisplay();
         renderText();
       });
     } catch (_) { /* no storage permission in some contexts */ }
@@ -62,8 +88,10 @@
         [SETTINGS_KEY]: {
           autoPause: autoPauseEnabled,
           furigana: furiganaEnabled,
+          queueOpen,
           audioStartPadMs,
           audioEndPadMs,
+          subOffsetMs,
         },
       });
     } catch (_) {}
@@ -170,7 +198,12 @@
     const player = document.getElementById('movie_player');
     if (!player) return null;
 
-    if (barEl && player.contains(barEl)) return barEl;
+    if (barEl && player.contains(barEl)) {
+      // Bar persists across SPA nav, but YouTube's polymer rerenders
+      // #secondary-inner on each new video - re-attach the queue if so.
+      ensureQueue();
+      return barEl;
+    }
 
     barEl = document.createElement('div');
     barEl.id = '__imm_yt_subbar';
@@ -189,6 +222,8 @@
     player.appendChild(barEl);
     syncAutoPauseButton();
     syncFuriganaButton();
+    syncQueueButton();
+    ensureQueue();
     return barEl;
   }
 
@@ -202,6 +237,7 @@
     t.appendChild(makeButton('imm-yt-btn-pause',  '⏸', 'Auto-pause at end of sub', toggleAutoPause));
     t.appendChild(makeButton('imm-yt-btn-furi',   'あ', 'Show furigana',     toggleFurigana));
     t.appendChild(makeButton('imm-yt-btn-card',   '＋', 'Make card from sub', toggleCardPanel));
+    t.appendChild(makeButton('imm-yt-btn-queue',  '☰', 'Show subtitle queue', toggleQueue));
 
     return t;
   }
@@ -226,20 +262,20 @@
     if (!btn) return;
     btn.classList.toggle('is-on', autoPauseEnabled);
     btn.title = autoPauseEnabled
-      ? 'Auto-pause at end of sub (on) — toggle off'
-      : 'Auto-pause at end of sub (off) — toggle on';
+      ? 'Auto-pause at end of sub (on) - toggle off'
+      : 'Auto-pause at end of sub (off) - toggle on';
   }
 
   function syncFuriganaButton() {
     const btn = toolbarEl && toolbarEl.querySelector('#imm-yt-btn-furi');
     if (!btn) return;
     btn.classList.toggle('is-on', furiganaEnabled);
-    // Never `disabled` — the user must always be able to toggle the state
+    // Never `disabled` - the user must always be able to toggle the state
     // back off, even when the backend is misbehaving. We just dim the icon
     // visually so they know it's not actually rendering.
     btn.classList.toggle('is-unavailable', !furiganaAvailable);
     btn.title = !furiganaAvailable
-      ? 'Furigana unavailable — restart the desktop app or install sudachipy'
+      ? 'Furigana unavailable - restart the desktop app or install sudachipy'
       : furiganaEnabled
         ? 'Hide furigana'
         : 'Show furigana';
@@ -255,7 +291,7 @@
     renderText();
   }
 
-  // Render `currentText` into the bar — either as plain text or with ruby
+  // Render `currentText` into the bar - either as plain text or with ruby
   // annotations from the tokenizer cache. If furigana is on but the text
   // isn't tokenized yet, render plain immediately and re-render when the
   // tokens arrive.
@@ -288,7 +324,7 @@
 
   function paintTokens(tokens) {
     if (!textEl) return;
-    // Use innerHTML with a safe construction (we control the input — it's
+    // Use innerHTML with a safe construction (we control the input - it's
     // tokenized output from our own backend, no user-supplied HTML).
     const parts = [];
     for (const tok of tokens) {
@@ -320,7 +356,7 @@
         // Only flip to permanently-unavailable on errors that say the
         // tokenizer isn't installed. Transient errors (timeout, connection
         // loss, "unknown action" from an old app build) shouldn't lock the
-        // toggle — those resolve once the app is restarted with the new
+        // toggle - those resolve once the app is restarted with the new
         // ws_server build.
         if (/sudachi/i.test(resp.error) || /not installed/i.test(resp.error)) {
           furiganaAvailable = false;
@@ -347,13 +383,24 @@
   }
 
   // ── Cue lookup ──────────────────────────────────────────────────────────
+  // Effective end of cue i: clamp cue.end to the next cue's start. yt-dlp's
+  // (and YouTube's) cue.end values are sometimes longer than the audible
+  // duration, so without clamping the bar lingers on the old line after the
+  // next one has audibly started.
+  function cueEnd(i) {
+    const c = cues[i];
+    if (!c) return Infinity;
+    const next = cues[i + 1];
+    return next ? Math.min(c.end, next.start) : c.end;
+  }
+
   function findCueIndex(t) {
     let lo = 0, hi = cues.length - 1;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
       const c = cues[mid];
       if (t < c.start) hi = mid - 1;
-      else if (t >= c.end) lo = mid + 1;
+      else if (t >= cueEnd(mid)) lo = mid + 1;
       else return mid;
     }
     return -1;
@@ -374,7 +421,7 @@
 
   // Returns the cue the user is currently watching, as a {start, end, text}
   // object. In DOM-mirror mode the active sub lives in pendingMirrorCue and
-  // hasn't been pushed into cues[] yet — we synthesise its end from the
+  // hasn't been pushed into cues[] yet - we synthesise its end from the
   // current playhead so submitCard and nav use the right timestamps.
   function getActiveCue() {
     if (domMirrorActive && pendingMirrorCue && videoEl) {
@@ -388,32 +435,42 @@
   }
 
   // ── Update loop ─────────────────────────────────────────────────────────
+  // Effective time = raw playhead minus the user's display offset. Positive
+  // offset → effective_t lags behind → we stay on earlier cues for longer
+  // (subs appear later). Used for all cue lookup; raw currentTime is still
+  // used for the auto-pause check so the pause point shifts with the offset.
+  function effectiveTime() {
+    if (!videoEl) return 0;
+    return videoEl.currentTime - subOffsetMs / 1000;
+  }
+
   function tick() {
     rafHandle = null;
     if (!videoEl || !cues.length) {
       scheduleTick();
       return;
     }
-    const t = videoEl.currentTime;
+    const t = effectiveTime();
     let idx = activeCueIndex;
     if (idx >= 0 && idx < cues.length) {
       const c = cues[idx];
-      if (t >= c.start && t < c.end) {
+      const end = cueEnd(idx);
+      if (t >= c.start && t < end) {
         scheduleTick();
         return;
       }
       if (idx + 1 < cues.length) {
         const n = cues[idx + 1];
-        if (t >= n.start && t < n.end) {
+        if (t >= n.start && t < cueEnd(idx + 1)) {
           setActiveCue(idx + 1);
           scheduleTick();
           return;
         }
       }
-      // Cue just ended — honour auto-pause and leave the text visible so the
+      // Cue just ended - honour auto-pause and leave the text visible so the
       // user can read while paused. We only fire once per cue end by gating
       // on a small window past the cue's end.
-      if (autoPauseEnabled && t >= c.end && t < c.end + 0.5 && !videoEl.paused) {
+      if (autoPauseEnabled && t >= end && t < end + 0.5 && !videoEl.paused) {
         try { videoEl.pause(); } catch (_) {}
         scheduleTick();
         return;
@@ -427,6 +484,7 @@
   function setActiveCue(idx) {
     activeCueIndex = idx;
     setText(idx >= 0 ? cues[idx].text : '');
+    updateActiveRow();
   }
 
   function scheduleTick() {
@@ -446,7 +504,7 @@
   function currentCueIndexForNav() {
     if (!videoEl || !cues.length) return -1;
     if (activeCueIndex >= 0) return activeCueIndex;
-    return findCueIndexAtOrBefore(videoEl.currentTime);
+    return findCueIndexAtOrBefore(effectiveTime());
   }
 
   function seekTo(seconds) {
@@ -454,9 +512,19 @@
     try { videoEl.currentTime = Math.max(0, seconds); } catch (_) {}
   }
 
+  // Seek so that `cue` becomes the active displayed cue. For API/yt-dlp
+  // cues we add the user's display offset so the bar shows this cue
+  // immediately after the seek; mirror cues were recorded against raw
+  // playhead time and don't need the shift.
+  function seekToCueStart(cue) {
+    if (!cue) return;
+    const shift = domMirrorActive ? 0 : subOffsetMs / 1000;
+    seekTo(cue.start + shift);
+  }
+
   function prevCue() {
     if (!videoEl) return;
-    const t = videoEl.currentTime;
+    const t = effectiveTime();
 
     // In DOM-mirror mode the active sub is still in pendingMirrorCue. "prev"
     // there means rewind to that pending cue's start (if we're well past it)
@@ -466,7 +534,7 @@
       if (t - pendingMirrorCue.start >= REWIND) {
         seekTo(pendingMirrorCue.start);
       } else if (cues.length) {
-        seekTo(cues[cues.length - 1].start);
+        seekToCueStart(cues[cues.length - 1]);
         setActiveCue(cues.length - 1);
       }
       return;
@@ -477,7 +545,7 @@
     if (idx < 0) return;
     const REWIND_THRESHOLD = 0.4;
     if (t - cues[idx].start < REWIND_THRESHOLD && idx > 0) idx -= 1;
-    seekTo(cues[idx].start);
+    seekToCueStart(cues[idx]);
     setActiveCue(idx);
   }
 
@@ -490,25 +558,25 @@
     if (!cues.length) return;
     const idx = currentCueIndexForNav();
     if (idx < 0) return;
-    seekTo(cues[idx].start);
+    seekToCueStart(cues[idx]);
     setActiveCue(idx);
   }
 
   function nextCue() {
     if (!videoEl) return;
-    // In DOM-mirror mode there's no "next" yet — the active line is still
+    // In DOM-mirror mode there's no "next" yet - the active line is still
     // being filled. Best we can do is leave playback as-is.
     if (domMirrorActive && pendingMirrorCue) return;
 
     if (!cues.length) return;
     let idx = currentCueIndexForNav();
     if (idx < 0) {
-      seekTo(cues[0].start);
+      seekToCueStart(cues[0]);
       setActiveCue(0);
       return;
     }
     if (idx + 1 < cues.length) {
-      seekTo(cues[idx + 1].start);
+      seekToCueStart(cues[idx + 1]);
       setActiveCue(idx + 1);
     }
   }
@@ -528,6 +596,7 @@
     domMirrorActive = false;
     pendingMirrorCue = null;
     currentVideoId = videoId;
+    clearQueueRows();
     setText('');
     closeCardPanel();
 
@@ -541,21 +610,55 @@
       parsed = await fetchCues(trackUrl);
     } catch (e) {
       // Most common cause: track requires a PoT token we can't generate
-      // (auto-generated ASR tracks have been gated this way since late 2024).
-      console.warn('[immersion-yt] caption API failed, switching to DOM mirror:', e.message);
+      // (timedtext endpoint has been gated this way since late 2024 for both
+      // manual and auto-gen tracks on many videos).
+      console.warn('[immersion-yt] direct caption fetch failed:', e.message);
     }
 
     if (currentVideoId !== videoId) return;
 
+    // Direct fetch worked - preload everything.
     if (parsed && parsed.length) {
       cues = parsed;
+      syncQueue();
       if (videoEl) scheduleTick();
       return;
     }
 
-    // API path produced nothing — mirror YouTube's own caption DOM. We also
-    // record each transition we observe as a synthetic cue so prev/replay/next
-    // and audio clipping can work in this mode.
+    // Direct fetch empty/failed. Ask the desktop app to fetch via yt-dlp,
+    // which handles the PoT dance. While waiting, mark the queue as loading
+    // so the user sees feedback instead of an empty panel.
+    queueLoading = true;
+    syncQueue();
+    let backendCues = null;
+    try {
+      const resp = await sendBackground({
+        action: 'get_youtube_subs',
+        video_url: location.href.split('&')[0],
+        lang: 'ja',
+      });
+      if (resp && !resp.error && Array.isArray(resp.cues) && resp.cues.length) {
+        backendCues = resp.cues;
+      } else if (resp && resp.error) {
+        console.warn('[immersion-yt] backend subs failed:', resp.error);
+      }
+    } catch (e) {
+      console.warn('[immersion-yt] backend subs threw:', e);
+    }
+    queueLoading = false;
+
+    if (currentVideoId !== videoId) return;
+
+    if (backendCues && backendCues.length) {
+      cues = backendCues;
+      syncQueue();
+      if (videoEl) scheduleTick();
+      return;
+    }
+
+    // Both API and backend failed - mirror YouTube's own caption DOM as a
+    // last resort so the user still sees captions, even if one-at-a-time.
+    syncQueue();
     startCaptionObserver();
   }
 
@@ -588,7 +691,7 @@
       );
 
       // For auto-generated (rollup) captions YouTube stacks the previous N
-      // lines inside ONE .caption-window — new words roll in at the bottom,
+      // lines inside ONE .caption-window - new words roll in at the bottom,
       // older lines stay above. Showing the whole window's textContent makes
       // the bar accumulate every line that ever scrolled by ("wall of text").
       // We always take the LAST .caption-visual-line inside the active
@@ -603,7 +706,7 @@
         text = (last.textContent || '').replace(/\s+/g, ' ').trim();
       } else {
         // Fallback for layouts where .caption-window isn't present (some
-        // embedded players). Segments alone — never both at once.
+        // embedded players). Segments alone - never both at once.
         const segs = player.querySelectorAll('.ytp-caption-segment');
         text = Array.from(segs)
           .map(s => s.textContent || '')
@@ -625,7 +728,7 @@
 
     // Auto-pause + tick loop still run, against the synthetic cues we're
     // recording. Without an `end` for the in-flight cue, auto-pause can't
-    // fire until the cue closes — that's fine, it pauses at the next change.
+    // fire until the cue closes - that's fine, it pauses at the next change.
     scheduleTick();
   }
 
@@ -638,7 +741,7 @@
 
     // Auto-generated (rollup) captions add words to the same line one at a
     // time. Treat the new value as a continuation of the same cue when it
-    // extends the pending text — keep the original start time and just
+    // extends the pending text - keep the original start time and just
     // grow the cue's text. Without this, prev/replay/next would jump to
     // every word boundary and mining would clip just the last word.
     if (pendingMirrorCue && text && (
@@ -653,7 +756,7 @@
       return;
     }
 
-    // Real cue boundary — close the pending cue.
+    // Real cue boundary - close the pending cue.
     if (pendingMirrorCue) {
       const start = pendingMirrorCue.start;
       const end = Math.max(t, start + 0.05);
@@ -668,6 +771,7 @@
     }
 
     activeCueIndex = cues.length - 1;
+    syncQueue();
   }
 
   function stopCaptionObserver() {
@@ -682,6 +786,10 @@
   let decksCache = null;
   let cardTypesCache = null;
   const cardFieldMap = new Map(); // key: card_type_id → {sentence, image, audio}
+  // When set, submitCard mines this cue instead of getActiveCue(). Used by
+  // queue rows so mining a past row in DOM-mirror mode picks the right line
+  // even while pendingMirrorCue is set.
+  let cardOverrideCue = null;
 
   function cardPanelOpen() {
     return !!(cardPanelEl && cardPanelEl.classList.contains('is-open'));
@@ -775,6 +883,7 @@
   function closeCardPanel() {
     if (!cardPanelEl) return;
     cardPanelEl.classList.remove('is-open');
+    cardOverrideCue = null;
     if (barEl) barEl.style.display = textEl && textEl.textContent ? 'flex' : 'none';
   }
 
@@ -840,7 +949,7 @@
       sub.dataset.slot = slot.key;
       const none = document.createElement('option');
       none.value = '';
-      none.textContent = '— skip —';
+      none.textContent = '- skip -';
       sub.appendChild(none);
       for (const f of fields) {
         const o = document.createElement('option');
@@ -889,7 +998,7 @@
     const typeId = parseInt(typeSel.value, 10);
     if (!deckId || !typeId) { setCardStatus('Pick a deck and card type.', 'error'); return; }
 
-    const cue = getActiveCue();
+    const cue = cardOverrideCue || getActiveCue();
     if (!cue || !cue.text) { setCardStatus('No active subtitle.', 'error'); return; }
 
     const fieldMap = {};
@@ -928,7 +1037,7 @@
     }
     if (resp.audio_skipped) {
       console.warn('[immersion-yt] audio_skipped:', resp.audio_skipped);
-      setCardStatus(`Card #${resp.card_id} created — audio skipped: ${resp.audio_skipped}`, 'warn');
+      setCardStatus(`Card #${resp.card_id} created - audio skipped: ${resp.audio_skipped}`, 'warn');
       // Leave the panel open so the user can read why audio wasn't attached.
     } else {
       setCardStatus(`Card #${resp.card_id} created`, 'ok');
@@ -967,8 +1076,348 @@
     });
   }
 
+  // ── Sidebar queue ───────────────────────────────────────────────────────
+  // Lives in YouTube's right-column container (#secondary-inner). While the
+  // queue is open we hide the recommendations next to it with a body class.
+  // Survives SPA navigation by re-attaching from ensureBar() / loadVideo().
+
+  function syncQueueButton() {
+    const btn = toolbarEl && toolbarEl.querySelector('#imm-yt-btn-queue');
+    if (!btn) return;
+    btn.classList.toggle('is-on', queueOpen);
+    btn.title = queueOpen ? 'Hide subtitle queue' : 'Show subtitle queue';
+  }
+
+  function ensureQueue() {
+    const host = document.querySelector('#secondary-inner') ||
+                 document.querySelector('#secondary');
+    if (!host) {
+      // YouTube hasn't hydrated the right column yet. Watch for it and
+      // re-run; until then queueEl stays null and toggleQueue is a no-op
+      // on the visual side.
+      watchForQueueHost();
+      return null;
+    }
+
+    if (queueEl && host.contains(queueEl)) return queueEl;
+
+    queueEl = document.createElement('div');
+    queueEl.id = '__imm_yt_queue';
+    queueEl.className = 'imm-yt-queue';
+
+    const header = document.createElement('div');
+    header.className = 'imm-yt-queue-header';
+
+    const title = document.createElement('span');
+    title.className = 'imm-yt-queue-title';
+    title.textContent = 'Subtitles';
+    header.appendChild(title);
+
+    const count = document.createElement('span');
+    count.className = 'imm-yt-queue-count';
+    count.id = '__imm_yt_queue_count';
+    count.textContent = '0';
+    header.appendChild(count);
+
+    const spacer = document.createElement('span');
+    spacer.style.flex = '1';
+    header.appendChild(spacer);
+
+    const offsetGroup = document.createElement('div');
+    offsetGroup.className = 'imm-yt-queue-offset';
+    offsetGroup.title = 'Subtitle timing offset - , and . to nudge ±100ms';
+
+    const offsetMinus = document.createElement('button');
+    offsetMinus.type = 'button';
+    offsetMinus.className = 'imm-yt-queue-offset-btn';
+    offsetMinus.textContent = '−';
+    offsetMinus.title = 'Subs earlier (−100ms)';
+    offsetMinus.addEventListener('click', (e) => { e.stopPropagation(); nudgeOffset(-100); });
+    offsetGroup.appendChild(offsetMinus);
+
+    const offsetLabel = document.createElement('button');
+    offsetLabel.type = 'button';
+    offsetLabel.className = 'imm-yt-queue-offset-label';
+    offsetLabel.id = '__imm_yt_offset_label';
+    offsetLabel.textContent = '0.0s';
+    offsetLabel.title = 'Click to reset';
+    offsetLabel.addEventListener('click', (e) => { e.stopPropagation(); resetOffset(); });
+    offsetGroup.appendChild(offsetLabel);
+
+    const offsetPlus = document.createElement('button');
+    offsetPlus.type = 'button';
+    offsetPlus.className = 'imm-yt-queue-offset-btn';
+    offsetPlus.textContent = '+';
+    offsetPlus.title = 'Subs later (+100ms)';
+    offsetPlus.addEventListener('click', (e) => { e.stopPropagation(); nudgeOffset(100); });
+    offsetGroup.appendChild(offsetPlus);
+
+    header.appendChild(offsetGroup);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'imm-yt-queue-close';
+    closeBtn.title = 'Hide queue';
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', toggleQueue);
+    header.appendChild(closeBtn);
+
+    queueEl.appendChild(header);
+
+    queueListEl = document.createElement('div');
+    queueListEl.className = 'imm-yt-queue-list';
+    queueListEl.addEventListener('wheel', noteUserScroll, { passive: true });
+    queueListEl.addEventListener('touchmove', noteUserScroll, { passive: true });
+    queueEl.appendChild(queueListEl);
+
+    host.insertBefore(queueEl, host.firstChild);
+    syncQueueVisibility();
+    syncOffsetDisplay();
+    syncQueue();
+    return queueEl;
+  }
+
+  function nudgeOffset(deltaMs) {
+    subOffsetMs = Math.max(-10000, Math.min(10000,
+      Math.round((subOffsetMs + deltaMs) / 50) * 50));
+    syncOffsetDisplay();
+    saveSettings();
+    // Recompute active cue immediately so the bar reflects the change without
+    // waiting for the next natural transition.
+    if (cues.length) {
+      const idx = findCueIndex(effectiveTime());
+      if (idx !== activeCueIndex) setActiveCue(idx);
+    }
+  }
+
+  function resetOffset() {
+    if (subOffsetMs === 0) return;
+    subOffsetMs = 0;
+    syncOffsetDisplay();
+    saveSettings();
+    if (cues.length) {
+      const idx = findCueIndex(effectiveTime());
+      if (idx !== activeCueIndex) setActiveCue(idx);
+    }
+  }
+
+  function syncOffsetDisplay() {
+    const label = queueEl && queueEl.querySelector('#__imm_yt_offset_label');
+    if (!label) return;
+    const s = subOffsetMs / 1000;
+    if (subOffsetMs === 0) {
+      label.textContent = '0.0s';
+      label.classList.remove('is-nonzero');
+    } else {
+      label.textContent = (s >= 0 ? '+' : '') + s.toFixed(1) + 's';
+      label.classList.add('is-nonzero');
+    }
+  }
+
+  function watchForQueueHost() {
+    if (queueHostObserver) return;
+    queueHostObserver = new MutationObserver(() => {
+      const host = document.querySelector('#secondary-inner') ||
+                   document.querySelector('#secondary');
+      if (!host) return;
+      queueHostObserver.disconnect();
+      queueHostObserver = null;
+      // ensureQueue() will build queueEl, call syncQueueVisibility(), and
+      // syncQueue() - so whatever the user's queueOpen state and cues are
+      // right now, the panel appears with correct contents.
+      ensureQueue();
+    });
+    queueHostObserver.observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    });
+  }
+
+  function noteUserScroll() {
+    queueScrollGuardUntil = performance.now() + 3000;
+  }
+
+  function syncQueueVisibility() {
+    if (queueEl) queueEl.classList.toggle('is-open', queueOpen);
+    document.body.classList.toggle('imm-yt-queue-open', queueOpen);
+  }
+
+  function toggleQueue() {
+    queueOpen = !queueOpen;
+    if (queueOpen) ensureQueue();
+    syncQueueButton();
+    syncQueueVisibility();
+    saveSettings();
+    if (queueOpen) {
+      syncQueue();
+      // Snap to the current cue on first open so the user lands on context.
+      queueScrollGuardUntil = 0;
+      updateActiveRow(true);
+    }
+  }
+
+  function formatTime(seconds) {
+    const s = Math.max(0, Math.floor(seconds));
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    const mm = String(m).padStart(2, '0');
+    const ss = String(sec).padStart(2, '0');
+    return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+  }
+
+  function clearQueueRows() {
+    if (queueListEl) queueListEl.innerHTML = '';
+    queueRows = [];
+  }
+
+  function buildQueueRow(idx) {
+    const row = document.createElement('div');
+    row.className = 'imm-yt-queue-row';
+    row.dataset.idx = String(idx);
+
+    const time = document.createElement('div');
+    time.className = 'imm-yt-queue-time';
+    row.appendChild(time);
+
+    const text = document.createElement('div');
+    text.className = 'imm-yt-queue-text';
+    row.appendChild(text);
+
+    const mine = document.createElement('button');
+    mine.type = 'button';
+    mine.className = 'imm-yt-queue-mine';
+    mine.title = 'Make card from this line';
+    mine.textContent = '＋';
+    mine.addEventListener('click', (e) => {
+      e.stopPropagation();
+      mineQueueRow(parseInt(row.dataset.idx, 10));
+    });
+    row.appendChild(mine);
+
+    row.addEventListener('click', () => {
+      seekToQueueRow(parseInt(row.dataset.idx, 10));
+    });
+
+    return row;
+  }
+
+  function setRowData(row, idx, start, text, isPending) {
+    row.dataset.idx = String(idx);
+    const timeEl = row.querySelector('.imm-yt-queue-time');
+    const textInner = row.querySelector('.imm-yt-queue-text');
+    const newTime = formatTime(start);
+    if (timeEl.textContent !== newTime) timeEl.textContent = newTime;
+    if (textInner.textContent !== text) textInner.textContent = text;
+    row.classList.toggle('is-pending', !!isPending);
+  }
+
+  function activeQueueRowIndex() {
+    if (domMirrorActive && pendingMirrorCue) return cues.length;
+    return activeCueIndex;
+  }
+
+  function syncQueue() {
+    if (!queueListEl) return;
+    // Drop the empty-state placeholder if it's there.
+    const placeholder = queueListEl.querySelector('.imm-yt-queue-empty');
+    if (placeholder) placeholder.remove();
+
+    const needPending = !!pendingMirrorCue;
+    const totalNeeded = cues.length + (needPending ? 1 : 0);
+
+    while (queueRows.length < totalNeeded) {
+      const idx = queueRows.length;
+      const row = buildQueueRow(idx);
+      queueListEl.appendChild(row);
+      queueRows.push(row);
+    }
+    while (queueRows.length > totalNeeded) {
+      const row = queueRows.pop();
+      if (row && row.parentNode) row.parentNode.removeChild(row);
+    }
+
+    for (let i = 0; i < cues.length; i++) {
+      setRowData(queueRows[i], i, cues[i].start, cues[i].text, false);
+    }
+    if (needPending) {
+      const i = cues.length;
+      setRowData(queueRows[i], i, pendingMirrorCue.start, pendingMirrorCue.text, true);
+    }
+
+    if (totalNeeded === 0) {
+      const empty = document.createElement('div');
+      empty.className = 'imm-yt-queue-empty';
+      empty.textContent = queueLoading
+        ? 'Loading subtitles…'
+        : 'No subtitles loaded.';
+      queueListEl.appendChild(empty);
+    }
+
+    syncQueueCount();
+    updateActiveRow();
+  }
+
+  function syncQueueCount() {
+    if (!queueEl) return;
+    const el = queueEl.querySelector('#__imm_yt_queue_count');
+    if (!el) return;
+    const total = cues.length + (pendingMirrorCue ? 1 : 0);
+    const activeIdx = activeQueueRowIndex();
+    const current = activeIdx >= 0 ? activeIdx + 1 : 0;
+    el.textContent = total > 0 ? `${current} / ${total}` : '0';
+  }
+
+  function updateActiveRow(forceScroll) {
+    if (!queueListEl) return;
+    const activeIdx = activeQueueRowIndex();
+    for (let i = 0; i < queueRows.length; i++) {
+      queueRows[i].classList.toggle('is-active', i === activeIdx);
+    }
+    syncQueueCount();
+    if (activeIdx < 0 || !queueRows[activeIdx]) return;
+    if (!forceScroll && performance.now() < queueScrollGuardUntil) return;
+    if (!queueOpen) return;
+    try {
+      queueRows[activeIdx].scrollIntoView({
+        behavior: forceScroll ? 'auto' : 'smooth',
+        block: 'center',
+      });
+    } catch (_) {}
+  }
+
+  function seekToQueueRow(idx) {
+    queueScrollGuardUntil = 0; // resume auto-follow
+    if (idx < cues.length) {
+      seekToCueStart(cues[idx]);
+      setActiveCue(idx);
+      return;
+    }
+    if (idx === cues.length && pendingMirrorCue) {
+      seekTo(pendingMirrorCue.start);
+    }
+  }
+
+  async function mineQueueRow(idx) {
+    queueScrollGuardUntil = 0;
+    if (idx < cues.length) {
+      const cue = cues[idx];
+      seekToCueStart(cue);
+      setActiveCue(idx);
+      // Pin this cue as the mining target so a stray pendingMirrorCue
+      // (still set from before the seek) doesn't hijack submitCard.
+      cardOverrideCue = { start: cue.start, end: cue.end, text: cue.text };
+    } else if (idx === cues.length && pendingMirrorCue) {
+      seekTo(pendingMirrorCue.start);
+      cardOverrideCue = null; // let getActiveCue() use pendingMirrorCue
+    } else {
+      return;
+    }
+    await openCardPanel();
+  }
+
   // ── Keyboard shortcuts ──────────────────────────────────────────────────
-  // A / S / D — prev / replay / next. Skipped while typing in an input or
+  // A / S / D - prev / replay / next. Skipped while typing in an input or
   // while the card panel is taking input.
   function isTypingTarget(el) {
     if (!el) return false;
@@ -987,6 +1436,12 @@
     if (k === 'a') { prevCue(); e.preventDefault(); }
     else if (k === 's') { replayCue(); e.preventDefault(); }
     else if (k === 'd') { nextCue(); e.preventDefault(); }
+    // Sub-timing offset: , and . nudge by ±100ms; < and > by ±500ms; 0 resets.
+    else if (e.key === ',') { nudgeOffset(-100); e.preventDefault(); }
+    else if (e.key === '<') { nudgeOffset(-500); e.preventDefault(); }
+    else if (e.key === '.') { nudgeOffset(+100); e.preventDefault(); }
+    else if (e.key === '>') { nudgeOffset(+500); e.preventDefault(); }
+    else if (k === '0') { resetOffset(); e.preventDefault(); }
   }, true);
 
   // ── Message bridge from page-script ─────────────────────────────────────

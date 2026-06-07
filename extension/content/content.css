@@ -1,5 +1,5 @@
 ::highlight(immersion-match) {
-  background-color: rgba(150, 150, 150, 0.30);
+  background-color: rgba(170, 0, 255, 0.20);
   border-radius: 2px;
 }
 
@@ -43,11 +43,11 @@
   text-align: center;
 }
 
-/* Match YouTube's fullscreen — the player container becomes the viewport. */
+/* Match YouTube's fullscreen - the player container becomes the viewport. */
 .ytp-fullscreen .imm-yt-subbar { bottom: 12%; }
 .ytp-fullscreen .imm-yt-subbar-text { font-size: 36px; }
 
-/* Theater / mini-player tweaks — subbar tracks the player's own size. */
+/* Theater / mini-player tweaks - subbar tracks the player's own size. */
 .ytp-miniplayer-active .imm-yt-subbar-text { font-size: 18px; padding: 5px 10px; }
 
 /* ── Furigana (ruby annotations) ───────────────────────────────────────── */
@@ -119,8 +119,8 @@
 
 .imm-yt-btn:hover { background: rgba(255, 255, 255, 0.12); }
 .imm-yt-btn:active { background: rgba(255, 255, 255, 0.18); }
-.imm-yt-btn.is-on { background: rgba(144, 103, 198, 0.55); color: #fff; }
-.imm-yt-btn.is-on:hover { background: rgba(144, 103, 198, 0.70); }
+.imm-yt-btn.is-on { background: rgba(170, 0, 255, 0.55); color: #fff; }
+.imm-yt-btn.is-on:hover { background: rgba(170, 0, 255, 0.70); }
 .imm-yt-btn.is-unavailable { color: rgba(255, 255, 255, 0.45); }
 .imm-yt-btn.is-unavailable.is-on { background: rgba(120, 50, 50, 0.55); }
 
@@ -216,15 +216,338 @@
 }
 .imm-yt-btn-text:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
 
+/* Primary - mirrors the app's gradient + glow-lift + spring-squish signature. */
 .imm-yt-btn-primary {
-  background: #9067C6;
+  background: linear-gradient(135deg, #aa00ff, #cc66ff);
   border: none;
   color: #fff;
   cursor: pointer;
-  padding: 6px 14px;
+  padding: 6px 16px;
   font: inherit;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 700;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+  transition: box-shadow 0.18s ease,
+              transform 0.14s cubic-bezier(0.34, 1.4, 0.64, 1),
+              filter 0.15s ease;
+}
+.imm-yt-btn-primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-2px);
+  box-shadow: 0 7px 18px rgba(170, 0, 255, 0.45);
+}
+.imm-yt-btn-primary:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+}
+
+/* ── Sidebar subtitle queue ────────────────────────────────────────────── */
+
+/* Hide YouTube's recommendation widgets while our queue is open so the queue
+   has the column to itself. */
+body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
+  display: none !important;
+}
+
+@keyframes imm-yt-queue-pop {
+  0%   { transform: scale(0.985); }
+  60%  { transform: scale(1.012); }
+  100% { transform: scale(1); }
+}
+
+@keyframes imm-yt-queue-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(170, 0, 255, 0.45),
+                        0 4px 14px rgba(170, 0, 255, 0.18); }
+  50%      { box-shadow: 0 0 0 4px rgba(170, 0, 255, 0.08),
+                        0 6px 22px rgba(170, 0, 255, 0.28); }
+}
+
+.imm-yt-queue {
+  display: none;
+  flex-direction: column;
+  background:
+    radial-gradient(120% 80% at 0% 0%, rgba(170, 0, 255, 0.18), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, rgba(204, 102, 255, 0.10), transparent 55%),
+    linear-gradient(180deg, #15131e 0%, #100e18 100%);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  width: 100%;
+  max-height: calc(100vh - 160px);
+  overflow: hidden;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.55),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.03);
+  margin-bottom: 12px;
+}
+
+.imm-yt-queue.is-open { display: flex; }
+
+.imm-yt-queue-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px 12px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  color: #fff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent);
+  user-select: none;
+}
+
+.imm-yt-queue-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.imm-yt-queue-title::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #cc66ff, #aa00ff);
+  box-shadow: 0 0 10px rgba(204, 102, 255, 0.7);
+}
+
+.imm-yt-queue-count {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(170, 0, 255, 0.22);
+  color: #e0d3ff;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+.imm-yt-queue-close {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.imm-yt-queue-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  transform: rotate(90deg);
+}
+
+.imm-yt-queue-offset {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.imm-yt-queue-offset-btn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.imm-yt-queue-offset-btn:hover {
+  background: rgba(170, 0, 255, 0.35);
+  color: #fff;
+}
+
+.imm-yt-queue-offset-label {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  padding: 0 6px;
+  height: 22px;
+  border-radius: 6px;
+  min-width: 40px;
+  text-align: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.imm-yt-queue-offset-label:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.imm-yt-queue-offset-label.is-nonzero {
+  color: #cc66ff;
+  background: rgba(170, 0, 255, 0.18);
+}
+
+.imm-yt-queue-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 8px 12px;
+  overscroll-behavior: contain;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Custom scrollbar - Chromium / WebKit. */
+.imm-yt-queue-list::-webkit-scrollbar { width: 8px; }
+.imm-yt-queue-list::-webkit-scrollbar-track { background: transparent; }
+.imm-yt-queue-list::-webkit-scrollbar-thumb {
+  background: rgba(170, 0, 255, 0.30);
   border-radius: 4px;
 }
-.imm-yt-btn-primary:hover { background: #a079d6; }
+.imm-yt-queue-list::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.55); }
+
+.imm-yt-queue-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+  counter-increment: imm-yt-queue;
+}
+
+.imm-yt-queue-list { counter-reset: imm-yt-queue; }
+
+.imm-yt-queue-row::before {
+  content: counter(imm-yt-queue);
+  flex: 0 0 auto;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 7px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.imm-yt-queue-row:hover {
+  background: rgba(170, 0, 255, 0.12);
+  border-color: rgba(170, 0, 255, 0.30);
+  transform: translateX(2px);
+}
+
+.imm-yt-queue-row.is-active {
+  background: linear-gradient(135deg,
+    rgba(170, 0, 255, 0.32) 0%,
+    rgba(204, 102, 255, 0.16) 100%);
+  border-color: rgba(204, 102, 255, 0.55);
+  animation: imm-yt-queue-pop 0.28s ease, imm-yt-queue-glow 2.4s ease-in-out infinite;
+}
+.imm-yt-queue-row.is-active::before {
+  background: linear-gradient(135deg, #cc66ff, #aa00ff);
+  color: #1a1226;
+}
+.imm-yt-queue-row.is-active .imm-yt-queue-text { color: #fff; font-weight: 600; }
+
+.imm-yt-queue-row.is-pending .imm-yt-queue-text {
+  color: rgba(255, 255, 255, 0.95);
+  font-style: italic;
+}
+.imm-yt-queue-row.is-pending::before { content: '▶'; font-size: 9px; padding: 0 4px; }
+
+.imm-yt-queue-time {
+  flex: 0 0 auto;
+  min-width: 50px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(204, 102, 255, 0.9);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.imm-yt-queue-row.is-active .imm-yt-queue-time {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.imm-yt-queue-text {
+  flex: 1;
+  font-size: 16px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.92);
+  word-break: break-word;
+  user-select: text;
+}
+
+.imm-yt-queue-mine {
+  flex: 0 0 auto;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease,
+              border-color 0.15s ease;
+}
+
+.imm-yt-queue-mine:hover {
+  background: linear-gradient(135deg, #aa00ff, #cc66ff);
+  color: #fff;
+  border-color: transparent;
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(170, 0, 255, 0.45);
+}
+
+.imm-yt-queue-row.is-active .imm-yt-queue-mine {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.imm-yt-queue-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Don't bother trying to overlay #secondary in theater mode - YouTube hides it.
+   The user can toggle theater off to use the queue. */

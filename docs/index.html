@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Immersion Suite: SRS &amp; Dictionary for Language Learners</title>
-  <meta name="description" content="A free, open-source desktop app for language learners. Spaced-repetition flashcards, Anki import, statistics, and a hover dictionary browser extension." />
+  <title>Immersion Suite: SRS, Dictionary &amp; YouTube Mining for Language Learners</title>
+  <meta name="description" content="A free, open-source desktop app for language learners, now in open beta. Spaced-repetition flashcards, Anki import, statistics, a popup dictionary, and YouTube subtitle immersion with sentence mining." />
   <link rel="icon" href="icon.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -13,7 +13,7 @@
     :root {
       --accent:       #aa00ff;
       --accent-dark:  #7f00bf;
-      --accent-light: #9333ea;
+      --accent-light: #cc66ff;
       --accent-dim:   rgba(170, 0, 255, 0.08);
       --accent-glow:  rgba(170, 0, 255, 0.18);
       --bg:           #f2f0ff;
@@ -148,7 +148,7 @@
     }
 
     .hero h1 span {
-      background: linear-gradient(135deg, #aa00ff 0%, #7c3aed 100%);
+      background: linear-gradient(135deg, #aa00ff 0%, #aa00ff 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -169,17 +169,17 @@
       gap: 0.9rem;
     }
 
-    /* Duolingo-style 3D pill buttons matching the app */
+    /* Gradient buttons matching the app: glow-lift on hover, spring-squish on click */
     .btn {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      border-radius: 100px;
+      border-radius: 14px;
       padding: 0.75rem 1.75rem;
       font-size: 0.95rem;
       font-weight: 700;
       cursor: pointer;
-      transition: filter 0.12s, transform 0.1s, border-bottom-width 0.1s;
+      transition: box-shadow 0.18s, transform 0.14s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.15s, border-color 0.15s;
       text-decoration: none !important;
       border: none;
       letter-spacing: 0.01em;
@@ -187,30 +187,29 @@
     .btn:hover { text-decoration: none !important; }
 
     .btn-primary {
-      background: var(--accent);
+      background: linear-gradient(135deg, #aa00ff, #cc66ff);
       color: #fff;
-      border-bottom: 4px solid var(--accent-dark);
+      box-shadow: 0 2px 8px rgba(170, 0, 255, 0.30);
     }
-    .btn-primary:hover { filter: brightness(1.08); transform: translateY(-1px); }
-    .btn-primary:active { border-bottom-width: 0; transform: translateY(4px); }
+    .btn-primary:hover { filter: brightness(1.05); transform: translateY(-2px); box-shadow: 0 7px 20px rgba(170, 0, 255, 0.42); }
+    .btn-primary:active { transform: scale(0.96); box-shadow: 0 2px 8px rgba(170, 0, 255, 0.30); }
 
     .btn-secondary {
       background: #ffffff;
       color: var(--text-1);
       border: 1.5px solid var(--border-md);
-      border-bottom: 4px solid var(--border-md);
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
     }
-    .btn-secondary:hover { filter: brightness(0.97); transform: translateY(-1px); }
-    .btn-secondary:active { border-bottom-width: 0; transform: translateY(4px); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(170, 0, 255, 0.15); }
+    .btn-secondary:active { transform: scale(0.96); }
 
     .btn-ghost {
       background: transparent;
       color: var(--text-2);
       border: 1.5px solid var(--border-md);
-      border-bottom: 4px solid var(--border-md);
     }
-    .btn-ghost:hover { color: var(--text-1); border-color: var(--accent); transform: translateY(-1px); }
-    .btn-ghost:active { border-bottom-width: 0; transform: translateY(4px); }
+    .btn-ghost:hover { color: var(--accent); border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 6px 16px rgba(170, 0, 255, 0.15); }
+    .btn-ghost:active { transform: scale(0.96); }
 
     /* ── APP PREVIEW ── */
     .preview-wrap {
@@ -571,7 +570,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      background: linear-gradient(90deg, var(--accent), #cc66ff);
       border-radius: 16px 16px 0 0;
     }
     .feature-card:hover {
@@ -653,7 +652,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      background: linear-gradient(90deg, var(--accent), #cc66ff);
     }
 
     .ext-demo-text {
@@ -681,7 +680,7 @@
       box-shadow:
         0 1px 3px rgba(0,0,0,0.06),
         0 4px 16px rgba(0,0,0,0.08),
-        0 16px 48px rgba(124,58,237,0.10);
+        0 16px 48px rgba(170,0,255,0.10);
       position: relative;
       font-size: 14px;
       color: #1a1133;
@@ -691,7 +690,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, #7c3aed, #a78bfa);
+      background: linear-gradient(90deg, #aa00ff, #cc66ff);
     }
 
     .popup-entry {
@@ -702,8 +701,8 @@
       position: absolute;
       top: 9px; right: 10px;
       width: 22px; height: 22px;
-      background: rgba(124,58,237,0.08);
-      border: 1px solid rgba(124,58,237,0.18);
+      background: rgba(170,0,255,0.08);
+      border: 1px solid rgba(170,0,255,0.18);
       border-radius: 50%;
       color: #a898c8;
       font-size: 14px;
@@ -744,9 +743,9 @@
       padding: 2px 8px 3px;
       font-size: 10px;
       font-weight: 600;
-      color: #7c3aed;
-      background: rgba(124,58,237,0.08);
-      border: 1px solid rgba(124,58,237,0.18);
+      color: #aa00ff;
+      background: rgba(170,0,255,0.08);
+      border: 1px solid rgba(170,0,255,0.18);
       border-radius: 5px;
       letter-spacing: 0.03em;
     }
@@ -776,10 +775,10 @@
     .popup-pos {
       font-size: 10px;
       font-weight: 600;
-      color: #7c3aed;
+      color: #aa00ff;
       padding: 3px 9px;
-      background: rgba(124,58,237,0.08);
-      border: 1px solid rgba(124,58,237,0.20);
+      background: rgba(170,0,255,0.08);
+      border: 1px solid rgba(170,0,255,0.20);
       border-radius: 5px;
       text-transform: lowercase;
     }
@@ -886,7 +885,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, var(--accent), #a78bfa);
+      background: linear-gradient(90deg, var(--accent), #cc66ff);
       border-radius: 16px 16px 0 0;
     }
     .download-card:hover {
@@ -1025,13 +1024,13 @@
     <svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor" aria-hidden="true">
       <circle cx="5" cy="5" r="5"/>
     </svg>
-    v1.3.0 · Free &amp; Open Source
+    v1.3.0 · Open Beta · Free &amp; Open Source
   </div>
 
   <h1>Your all-in-one<br><span>immersion learning suite.</span></h1>
 
   <p class="hero-sub">
-    Flashcards, immersion tracking, a media library, and a hover dictionary. One app, fully offline, totally free.
+    Flashcards, immersion tracking, a popup dictionary, and YouTube subtitle immersion with sentence mining. One app, fully offline, totally free &mdash; now in open beta.
   </p>
 
   <div class="btn-row">
@@ -1132,7 +1131,7 @@
                 <div class="preview-ring-wrap">
                   <svg viewBox="0 0 80 80" width="68" height="68">
                     <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="7"/>
-                    <circle cx="40" cy="40" r="30" fill="none" stroke="#a78bfa" stroke-width="7"
+                    <circle cx="40" cy="40" r="30" fill="none" stroke="#cc66ff" stroke-width="7"
                       stroke-dasharray="188.5" stroke-dashoffset="22" stroke-linecap="round"
                       transform="rotate(-90 40 40)"/>
                     <text x="40" y="44" text-anchor="middle" font-size="14" font-weight="700" fill="#1a1133" font-family="Inter,sans-serif">88%</text>
@@ -1267,6 +1266,21 @@
       </div>
 
       <div class="feature-card">
+        <div class="feature-icon">🎬</div>
+        <div class="feature-title">YouTube Immersion &amp; Mining</div>
+        <div class="feature-desc">
+          Turn any YouTube video into a study session. A clean subtitle bar with click-to-look-up, line-by-line navigation, and one-click sentence mining.
+        </div>
+        <ul class="feature-list">
+          <li>Subtitle bar with Shift-hover word lookup</li>
+          <li>Prev / replay / next line shortcuts (A / S / D)</li>
+          <li>Auto-pause and a one-click furigana toggle</li>
+          <li>Mine cards with a screenshot + audio clip of the line</li>
+          <li>Subtitle queue and timing offset</li>
+        </ul>
+      </div>
+
+      <div class="feature-card">
         <div class="feature-icon">🔒</div>
         <div class="feature-title">Private by Design</div>
         <div class="feature-desc">
@@ -1292,7 +1306,7 @@
         <div class="section-label">Browser Extension</div>
         <h2 class="section-title">Look up any word without leaving the page</h2>
         <p class="section-desc" style="margin-bottom:1.5rem;">
-          Hold Shift and hover over Japanese text anywhere in your browser. A popup shows the reading, POS, and definition instantly.
+          Hold Shift and hover over Japanese text anywhere in your browser &mdash; a popup shows the reading, part of speech, and definition instantly. On YouTube, the same extension adds a subtitle bar with line navigation, furigana, and sentence mining.
         </p>
 
         <div class="ext-steps">
@@ -1369,16 +1383,16 @@
     <div class="section-label">Download</div>
     <h2 class="section-title">Get Immersion Suite</h2>
     <p class="section-desc">
-      Free and open source. Pick your platform and get started in seconds.
+      Free and open source, and currently in <strong>open beta</strong> &mdash; expect the occasional rough edge, and please <a href="https://github.com/Mezuna-dev/Immersion-Suite/issues">report any bugs</a>. Pick your platform and get started in seconds.
     </p>
 
     <div class="download-grid">
       <div class="download-card">
         <div class="dl-platform">Windows
         </div>
-        <div class="dl-file">ImmersionSuite_v1.x.x_Setup.exe</div>
+        <div class="dl-file">ImmersionSuite_v1.3.0_Setup.exe</div>
         <p class="dl-note">Windows 10 / 11, 64-bit. Run the installer and launch from the Start Menu.</p>
-        <a class="btn btn-primary" href="https://github.com/Mezuna-dev/Immersion-Suite/releases/latest/download/ImmersionSuite_v1.2.0_Setup.exe">
+        <a class="btn btn-primary" href="https://github.com/Mezuna-dev/Immersion-Suite/releases/latest/download/ImmersionSuite_v1.3.0_Setup.exe">
           <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
             <path d="M8 12l-5-5 1.4-1.4L7 9.2V1h2v8.2l2.6-3.6L13 7l-5 5zm-6 2h12v2H2v-2z"/>
           </svg>

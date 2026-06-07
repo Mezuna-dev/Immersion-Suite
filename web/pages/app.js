@@ -326,7 +326,7 @@ function updateRetentionStats(stats) {
         var ring = document.getElementById(ringId);
         var countEl = document.getElementById(countId);
         if (!s || s.rate === null || s.rate === undefined) {
-            el.textContent = '—';
+            el.textContent = '-';
             el.style.color = '';
             if (ring) ring.style.strokeDashoffset = CIRC;
             if (countEl) countEl.textContent = '';
@@ -694,7 +694,7 @@ function renderDeckList() {
         return zone;
     }
 
-    // Top-level drop zone — reorder to position 0 at root
+    // Top-level drop zone - reorder to position 0 at root
     frag.appendChild(makeSiblingDropZone(null, 0, 0));
 
     var pendingTrailingZones = []; // stack of {parentId, position, depth}
@@ -1033,7 +1033,7 @@ function saveDeckSettings() {
 
 var newQueue = [];
 var dueQueue = [];
-var learningQueue = []; // [{card, showAfter (ms timestamp)}] — time-gated cards waiting to return
+var learningQueue = []; // [{card, showAfter (ms timestamp)}] - time-gated cards waiting to return
 var newCardIndex = 0;
 var dueCardIndex = 0;
 var currentCard = null;
@@ -1120,14 +1120,14 @@ function applyFuriganaFilter(text, filter) {
 
 function renderTemplate(template, fields, frontHtml) {
     var result = template;
-    // {{FrontSide}} — Anki special token: re-render the already-rendered front HTML
+    // {{FrontSide}} - Anki special token: re-render the already-rendered front HTML
     result = result.replace(/\{\{FrontSide\}\}/gi, frontHtml || '');
-    // Positive conditional blocks: {{#Field}}...{{/Field}} — show content when field is non-empty
+    // Positive conditional blocks: {{#Field}}...{{/Field}} - show content when field is non-empty
     result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
         key = key.trim();
         return (fields[key] && fields[key].trim()) ? content : '';
     });
-    // Negation conditional blocks: {{^Field}}...{{/Field}} — show content when field is empty
+    // Negation conditional blocks: {{^Field}}...{{/Field}} - show content when field is empty
     result = result.replace(/\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
         key = key.trim();
         return (!fields[key] || !fields[key].trim()) ? content : '';
@@ -1218,13 +1218,13 @@ function showNextCard() {
     overdue.sort(function(a, b) { return a.showAfter - b.showAfter; });
 
     if (!hasRegular) {
-        // All regular cards done — show the earliest pending learning card
+        // All regular cards done - show the earliest pending learning card
         learningQueue.sort(function(a, b) { return a.showAfter - b.showAfter; });
         var item = learningQueue.shift();
         currentCard = item.card;
         currentCardSource = 'learning';
     } else if (overdue.length > 0) {
-        // A learning card's timer has elapsed — show it immediately (highest priority)
+        // A learning card's timer has elapsed - show it immediately (highest priority)
         var item = overdue[0];
         learningQueue = learningQueue.filter(function(i) { return i !== item; });
         currentCard = item.card;
@@ -1241,7 +1241,7 @@ function showNextCard() {
         } else if (studyOrder === 'new_last') {
             pickNew = false;
         } else {
-            // 'mix' — Anki-style intersperser: evenly distribute new cards among due cards
+            // 'mix' - Anki-style intersperser: evenly distribute new cards among due cards
             pickNew = (newCardIndex + 1) * interspersionRatio <= (dueCardIndex + 1);
         }
         if (pickNew) {
@@ -1435,7 +1435,7 @@ function rateCard(rating) {
             learningQueue.push({ card: requeueCard, showAfter: Date.now() + relearnSteps[newStep] * 60 * 1000 });
         }
     } else if (!currentCard.is_new && rating === 1 && currentDeckRelearnSteps.length > 0) {
-        // Card lapsed — record the failure then start relearning steps
+        // Card lapsed - record the failure then start relearning steps
         bridge.logLapse(currentCard.id, rating);
         bridge.updateCardLearningStep(currentCard.id, 0);
         var requeueCard = Object.assign({}, currentCard, { learning_step: 0, is_relearning: true });
@@ -1852,7 +1852,7 @@ function renderBrowsePage() {
             '<td>' + backText + '</td>' +
             '<td>' + (card.deck_name || '') + '</td>' +
             '<td>' + (card.type_name || '') + '</td>' +
-            '<td>' + (card.due_date || '—') + '</td>' +
+            '<td>' + (card.due_date || '-') + '</td>' +
             '<td>' + (card.interval || 0) + 'd</td>';
         frag.appendChild(tr);
     }
@@ -1934,9 +1934,9 @@ function loadCardForEdit(data) {
     document.getElementById('edit-card-reps').textContent = card.reps || 0;
     document.getElementById('edit-card-interval').textContent = card.interval || 0;
     document.getElementById('edit-card-ease').textContent = card.ease_factor || '2.5';
-    document.getElementById('edit-card-due').textContent = card.due_date || '—';
-    document.getElementById('edit-card-created').textContent = card.date_created || '—';
-    document.getElementById('edit-card-last-reviewed').textContent = card.last_reviewed || '—';
+    document.getElementById('edit-card-due').textContent = card.due_date || '-';
+    document.getElementById('edit-card-created').textContent = card.date_created || '-';
+    document.getElementById('edit-card-last-reviewed').textContent = card.last_reviewed || '-';
 
     // Parse existing field data
     var fields = {};
@@ -2127,7 +2127,7 @@ function renderEditCardFields(typeId, existingFields) {
     var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
 
     if (!ct) {
-        // No card type found — show raw Front / Back fields
+        // No card type found - show raw Front / Back fields
         var rawFields = [
             { name: 'Front', value: (existingFields && existingFields['Front']) || (editCardData ? editCardData.front : '') || '' },
             { name: 'Back', value: (existingFields && existingFields['Back']) || (editCardData ? editCardData.back : '') || '' }
@@ -2479,7 +2479,7 @@ function populateImmersionCategorySelects() {
     // Timer select
     var timerSel = document.getElementById('immersion-timer-category');
     var timerVal = timerSel.value;
-    timerSel.innerHTML = '<option value="">— Select a category —</option>';
+    timerSel.innerHTML = '<option value="">- Select a category -</option>';
     immersionCategories.forEach(function(c) {
         var opt = document.createElement('option');
         opt.value = c.id;
@@ -2731,7 +2731,7 @@ function populateMediaCategorySelect() {
     var sel = document.getElementById('media-add-item-cat');
     if (!sel) return;
     var prev = sel.value;
-    sel.innerHTML = '<option value="0">— None —</option>';
+    sel.innerHTML = '<option value="0">- None -</option>';
     mediaCategories.forEach(function(c) {
         var opt = document.createElement('option');
         opt.value = c.id;
@@ -2874,7 +2874,7 @@ function buildMediaItemHtml(item) {
     var statusLabel = STATUS_LABELS[item.status] || item.status;
     var statusColor = STATUS_COLORS[item.status] || '#888';
     var progressText = (item.progress || item.progress_max)
-        ? escapeHtml((item.progress || '—') + (item.progress_max ? ' / ' + item.progress_max : ''))
+        ? escapeHtml((item.progress || '-') + (item.progress_max ? ' / ' + item.progress_max : ''))
         : '';
     var timeText = item.total_seconds > 0 ? formatDuration(item.total_seconds) : '';
     var catBadge = item.category_name
@@ -2922,7 +2922,7 @@ function buildMediaItemDetailHtml(item) {
     }
     var defaultChecked = matchedImmCatId > 0;
     var immCatSel = '<select id="session-imm-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.82rem; min-width:8rem;">'
-        + '<option value="0">— Category —</option>';
+        + '<option value="0">- Category -</option>';
     immersionCategories.forEach(function(c) {
         immCatSel += '<option value="' + c.id + '"' + (c.id === matchedImmCatId ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
     });
@@ -2953,7 +2953,7 @@ function buildMediaItemDetailHtml(item) {
     var statusSel = '<select id="edit-status-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;">';
     statusOpts.forEach(function(s) { statusSel += '<option value="' + s[0] + '"' + (item.status===s[0]?' selected':'') + '>' + s[1] + '</option>'; });
     statusSel += '</select>';
-    var catSel = '<select id="edit-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;"><option value="0">— None —</option>';
+    var catSel = '<select id="edit-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;"><option value="0">- None -</option>';
     mediaCategories.forEach(function(c) { catSel += '<option value="' + c.id + '"' + (item.category_id===c.id?' selected':'') + '>' + escapeHtml(c.name) + '</option>'; });
     catSel += '</select>';
 
@@ -3013,7 +3013,7 @@ function updateMediaSessions(itemId, sessions) {
     var html = '<div style="border-top:1px solid var(--border); padding-top:0.4rem; margin-top:0.4rem;">'
         + '<span style="font-size:0.72rem; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:0.05em;">Sessions</span></div>';
     sessions.forEach(function(s) {
-        var dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '—';
+        var dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '-';
         html += '<div style="display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text-2);">'
             + (s.progress_note ? '<span style="color:var(--text-2);">' + escapeHtml(s.progress_note) + '</span><span style="color:#555;">·</span>' : '')
             + '<span style="font-weight:600; color:var(--text-1);">' + dur + '</span>'
@@ -3331,7 +3331,7 @@ function wrapSelect(sel) {
     btn.appendChild(lbl);
     btn.appendChild(chev);
 
-    // menu is NOT appended to wrap — it lives in <body> only while open
+    // menu is NOT appended to wrap - it lives in <body> only while open
     var menu = document.createElement('div');
     menu.className = 'csel-menu';
     menu.style.cssText = 'position:fixed;z-index:9999;display:block;';

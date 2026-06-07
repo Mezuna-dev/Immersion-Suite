@@ -10,7 +10,7 @@
 set -euo pipefail
 
 APP_NAME="ImmersionSuite"
-APP_VERSION="1.2.0"
+APP_VERSION="1.3.0"
 OUTPUT_DIR="installer/output"
 INSTALLER_NAME="${APP_NAME}_v${APP_VERSION}_Linux_x86_64.run"
 

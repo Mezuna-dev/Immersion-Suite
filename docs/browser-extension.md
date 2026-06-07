@@ -1,10 +1,11 @@
 # Browser Extension
 
-Last updated: 2026-05-09.
+Last updated: 2026-06-07.
 
-The Immersion Suite browser extension is a popup dictionary that works on any webpage.
-It is a thin UI layer; the desktop app owns all data (dictionary, SRS) and does all
-the heavy lifting. The extension talks to the desktop app over a local WebSocket.
+The Immersion Suite browser extension has two surfaces: a **popup dictionary** that works
+on any webpage, and a **YouTube immersion layer** (subtitle overlay, navigation, furigana,
+and sentence mining). Both are thin UI layers; the desktop app owns all data (dictionary,
+SRS, media) and does the heavy lifting. The extension talks to it over a local WebSocket.
 
 ---
 
@@ -50,7 +51,9 @@ extension/
     background.js             WS connection owner and message router
   content/
     content.js                Text detection + popup render (IIFE, injected in all tabs)
-    content.css               Page-level ::highlight rule for word underline
+    content.css               Popup ::highlight rule + YouTube overlay/queue styles
+    youtube.js                YouTube subtitle overlay, navigation, furigana, mining
+    page-script.js            Runs in the page world to read ytInitialPlayerResponse
   icons/
     16.png  48.png  128.png   Extracted from installer/icon.ico
 ```
@@ -58,6 +61,7 @@ extension/
 ```
 src/
   ws_server.py                asyncio WebSocket server, started as daemon thread
+  furigana.py                 SudachiPy tokenizer (powers the `tokenize` action)
   dictionary/
     handler.py                DictionaryUrlSchemeHandler + get_dict_module()
     jitendex.py               Primary dictionary backend (SQLite)
@@ -65,6 +69,10 @@ src/
 data/
   dicts/
     jitendex.sqlite           Built by scripts/build_jitendex.py (103 MB, ~295k entries)
+  media/                      Mined screenshots + audio clips (yt_<uuid>.{jpg,mp3})
+vendor/
+  bin/<platform>/             Bundled yt-dlp + ffmpeg (fetch_binaries.py); resolved by
+                              ws_server._resolve_binary, else PATH
 ```
 
 ---
@@ -106,6 +114,22 @@ Every message carries an `id` (UUID v4) so concurrent in-flight lookups route co
 { "id": "uuid", "action": "ping" }   →   { "id": "uuid", "action": "pong" }
 ```
 
+### YouTube + mining actions (1.3.0)
+
+The YouTube layer (`content/youtube.js`) adds these actions over the same pipe:
+
+| Action | Request payload | Response |
+|---|---|---|
+| `get_decks` | `{}` | `{ decks: [{id, name, parent_id}] }` |
+| `get_card_types` | `{}` | `{ card_types: [{id, name, fields, is_default}] }` |
+| `tokenize` | `{ text }` | `{ tokens: [{text, reading}] }` (furigana) |
+| `get_youtube_subs` | `{ video_url, lang }` | `{ cues: [{start, end, text}], source }` or `{ error }` |
+| `create_card_with_media` | `{ video_url, start_ms, end_ms, sentence, image_b64, deck_id, card_type_id, field_map }` | `{ card_id, image_filename, audio_filename, audio_skipped }` |
+
+`create_card_with_media` and `get_youtube_subs` shell out to the bundled yt-dlp + ffmpeg
+(`vendor/bin/<platform>/`, falling back to the yt-dlp Python module in dev), so they use a
+longer WS timeout - see `LONG_ACTIONS` in `background.js`.
+
 ---
 
 ## background.js
@@ -115,14 +139,14 @@ as a **persistent background page** in Firefox (never suspended).
 
 Key design points:
 
-- `ensureConnected()` — returns the open WebSocket, creating one on demand if none exists.
+- `ensureConnected()` - returns the open WebSocket, creating one on demand if none exists.
   Concurrent callers share a single in-flight `connecting` Promise.
-- `pending` Map — maps `id → resolve`. When the server response arrives, `onMessage`
+- `pending` Map - maps `id → resolve`. When the server response arrives, `onMessage`
   looks up the id and calls the stored resolve. This handles any number of concurrent
   lookups across all tabs.
-- `onClose` — drains the pending map with error responses so no tab hangs indefinitely.
-- Timeout — each lookup resolves with an error after 5 seconds if no response arrives.
-- Error path — if `ensureConnected()` rejects (desktop not running), the content script
+- `onClose` - drains the pending map with error responses so no tab hangs indefinitely.
+- Timeout - each lookup resolves with an error after 5 seconds if no response arrives.
+- Error path - if `ensureConnected()` rejects (desktop not running), the content script
   receives `{ error: "Could not connect..." }` and shows it in the popup.
 
 ---
@@ -134,15 +158,15 @@ Injected into every page at `document_idle`. Wrapped in an IIFE with a
 
 ### Text detection
 
-- `isJapanese(ch)` — checks Unicode ranges: Hiragana+Katakana (3040–30FF),
+- `isJapanese(ch)` - checks Unicode ranges: Hiragana+Katakana (3040–30FF),
   CJK unified (4E00–9FFF), CJK Extension A (3400–4DBF), Halfwidth Katakana (FF65–FF9F).
-- `caretAt(x, y)` — cross-browser shim: `caretRangeFromPoint` (Chrome/Safari) or
+- `caretAt(x, y)` - cross-browser shim: `caretRangeFromPoint` (Chrome/Safari) or
   `caretPositionFromPoint` → Range adapter (Firefox).
-- `getChunkAtPoint(x, y)` — resolves the caret, skips `<rt>`/`<rp>` furigana nodes,
+- `getChunkAtPoint(x, y)` - resolves the caret, skips `<rt>`/`<rp>` furigana nodes,
   applies the off-by-one bounding-box probe to land on the right glyph, then walks
   forward through inline elements via `collectForwardText` to gather up to 25 characters.
-- Debounce — 16 ms (≈ one frame). Rapid mousemoves coalesce into a single lookup.
-- Same-chunk optimisation — if the cursor is still over the same chunk and the popup
+- Debounce - 16 ms (≈ one frame). Rapid mousemoves coalesce into a single lookup.
+- Same-chunk optimisation - if the cursor is still over the same chunk and the popup
   is open, `positionPopup` is called directly without a new lookup.
 
 ### Staleness guard
@@ -201,7 +225,7 @@ The `content_security_policy.extension_pages` directive in the manifest is requi
 Firefox to allow the WebSocket connection. Chrome does not need it but respects it.
 
 The Python server uses `origins=None` in `websockets.serve()` so it accepts connections
-from any origin header — necessary because Firefox sends `moz-extension://<id>` as the
+from any origin header - necessary because Firefox sends `moz-extension://<id>` as the
 WebSocket origin, which `websockets` ≥12.0 would otherwise reject.
 
 ---
@@ -213,7 +237,7 @@ WebSocket origin, which `websockets` ≥12.0 would otherwise reject.
 
 ```python
 import ws_server
-ws_server.start()   # daemon thread — dies with the process
+ws_server.start()   # daemon thread - dies with the process
 ```
 
 The server runs an asyncio event loop in a daemon thread. SQLite lookups are dispatched
@@ -233,24 +257,31 @@ To rebuild the dictionary: `python scripts/build_jitendex.py`
 
 To add a new action (e.g. `"add-card"` for mining):
 
-1. **Server** (`src/ws_server.py`) — add an `elif action == 'add-card':` branch in
+1. **Server** (`src/ws_server.py`) - add an `elif action == 'add-card':` branch in
    `_handle`, call the relevant desktop function, return `{ "id": ..., ... }`.
-2. **Background** (`extension/background/background.js`) — add a new handler alongside
+2. **Background** (`extension/background/background.js`) - add a new handler alongside
    the `'lookup'` branch in `chrome.runtime.onMessage.addListener`, or create a new
    send helper similar to `lookup()`.
-3. **Content script** (`extension/content/content.js`) — call
+3. **Content script** (`extension/content/content.js`) - call
    `chrome.runtime.sendMessage({ action: 'add-card', ... })` from wherever the user
    triggers the action (e.g. a button click in the popup).
 
 ---
 
-## Planned future features
+## Shipped in 1.3.0 (formerly planned)
 
-- **YouTube subtitle bar** — content script injects a subtitle overlay into YouTube.
-  Subtitle cues are pushed from the desktop via WS (desktop side watches a subtitles
-  file or yt-dlp feed). Each word in the subtitle is hoverable via the same popup.
-- **Mining UI** — "add card" button in the popup. Sends sentence + word + definition
-  to the desktop via WS; desktop writes directly to `data/app.db` (SRS database).
-- **Sentence audio capture** — `chrome.tabCapture` or an `offscreen` document records
-  a clip of the page audio to attach to the mined card. Requires `"offscreen"`
-  permission in the manifest (Chrome only for now; Firefox MV3 audio story is unclear).
+- **YouTube subtitle bar** - `content/youtube.js` injects a subtitle overlay into the
+  YouTube player with Shift-hover lookup, A/S/D navigation, auto-pause, and a SudachiPy
+  furigana toggle. Cues come from a three-tier pipeline: direct timedtext fetch →
+  desktop `get_youtube_subs` (yt-dlp) → live DOM mirror of YouTube's own captions.
+- **Mining UI** - a card panel mines the active line to a chosen deck / card type /
+  field mapping via `create_card_with_media`; the desktop writes the card to `data/app.db`.
+- **Sentence audio + screenshot** - rather than `tabCapture`, the desktop clips the line's
+  audio directly with the bundled yt-dlp + ffmpeg and the extension captures a video frame;
+  both are written to `data/media/` and referenced from the card fields.
+
+## Still planned
+
+- Per-video external subtitle (`.srt` / `.ass`) override.
+- See [`extension-improvements.md`](extension-improvements.md) for the broader roadmap
+  (pitch accent, mining from the popup, configurable hotkeys, more streaming sites).
