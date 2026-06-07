@@ -13,7 +13,11 @@ The YouTube release: turn any YouTube video into an immersion + sentence-mining
 session, right inside your normal browser.
 
 ### Added
-- **YouTube immersion layer** (browser extension) - a custom subtitle bar over the
+- **Browser extension** for Chrome and Firefox: hold Shift and hover over Japanese text
+  on any page for an instant popup dictionary (Jitendex, ~295k entries) with furigana,
+  part of speech, frequency tags, and deinflection. Connects to the desktop app over a
+  local connection with no external requests.
+- **YouTube immersion layer** (in the same extension) - a custom subtitle bar over the
   player with Shift-hover word lookup, plus:
   - **Sub navigation** - previous / replay / next line, with **A / S / D** shortcuts.
   - **Auto-pause** at the end of each subtitle line, so you can read before moving on.
@@ -28,6 +32,10 @@ session, right inside your normal browser.
     so subtitles still load even when YouTube gates its caption endpoint.
 - **Bundled media tools** - yt-dlp and ffmpeg now ship with the app, so YouTube audio
   mining and subtitle fetching work out of the box with no manual setup.
+- **Immersion tracking and media library** - a built-in immersion timer with
+  per-category tagging and manual logging, time totals and breakdowns filterable by
+  day / week / month / year, and a media library for the anime, manga, and books you
+  are working through (with MyAnimeList search).
 
 ### Changed
 - **Refreshed UI** - gradient-fill buttons with a soft glow-lift and a springy press,
@@ -43,25 +51,48 @@ session, right inside your normal browser.
 - New WebSocket actions backing the above: `get_decks`, `get_card_types`,
   `create_card_with_media`, `tokenize`, `get_youtube_subs`.
 
-## [1.2.0]
+## [1.2.0] - Anki subdecks and review improvements
 
 ### Added
-- **Browser extension** - hold **Shift** and hover over Japanese text on any webpage for an
-  instant popup dictionary (Jitendex, ~295k entries), connected to the desktop app over a
-  local WebSocket with no external requests.
-- Documentation site.
-- Two-button review mode; improved Jitendex ranking and database.
+- **Anki subdeck support:** decks with `::` hierarchy import as proper parent/child
+  decks, and every card template per note is imported (each as its own card type with
+  the correct front/back styles).
+- **Deck hierarchy:** nested tree view with collapsible parents, hierarchical dropdowns,
+  drag-and-drop to nest and reorder decks, a Parent Deck selector, and cascade delete.
+- **Subdeck-aware review:** reviewing a parent processes its subdecks in order under a
+  shared new-card budget; sibling cards (same note, different template) are spaced apart;
+  stats, retention, heatmap, and the card browser aggregate across subdecks.
+- **Review screen:** a live counter of remaining new / learning / review cards, dynamic
+  queue interleaving, and mid-session resume.
+- **Two-button review mode** (Again / Good).
+- `{{^Field}}` negation conditionals in card templates.
+- A configurable "next day starts at" hour for the review-day rollover.
 
-## [1.1.0]
+### Changed
+- Redesigned answer buttons (dark style with the colour in the text; Easy uses the accent).
+
+## [1.1.0] - Card browser, rich editor, and settings overhaul
 
 ### Added
-- **Immersion tracking** - log books, shows, podcasts, visual novels, and more, with total
-  time tracked per category.
-- **Statistics dashboard** - full-year review heatmap, retention rings (young / mature /
-  total), streaks, and daily averages.
+- **Card browser:** a searchable, paginated table to view, edit, and delete cards across
+  decks, attach images and audio, and sort by created date, due date, interval, or front.
+- **Rich-text card editor** (bold, italic, underline, strikethrough, highlight) with a
+  formatting toolbar and a live card preview.
+- **Settings overhaul:** consistent card-based panels, a configurable review shortcut and
+  audio-autoplay toggle, app-wide SRS defaults, and a deck-deletion danger zone.
+- **Official Windows installer** (`.exe`, built with PyInstaller + Inno Setup).
 
-## [1.0.0]
+### Changed
+- Performance: single aggregated deck-stats query (removes N+1), DocumentFragment batch
+  rendering, event delegation, and lazy image loading in the card browser.
+
+## [1.0.0] - First stable release
 
 ### Added
-- Initial release: SM-2 spaced repetition with multiple decks, custom card types with
-  HTML/CSS templates, configurable learning steps, and Anki (`.apkg`) import.
+- SM-2 spaced repetition.
+- Anki `.apkg` import (including the modern compressed format).
+- Statistics dashboard with review heatmap and retention tracking.
+- Customizable card types with front/back templates.
+- Per-deck settings (new card limits, learning steps, study order).
+- Media support (images and audio in cards).
+- Data export and backup.
