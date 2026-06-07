@@ -1,6 +1,25 @@
+# Register custom URL schemes before any Qt Web Engine module is imported or
+# initialised.  Qt requires this to happen before QCoreApplication is created;
+# in Python the equivalent is module-level code that runs before main().
+from PyQt6.QtWebEngineCore import QWebEngineUrlScheme as _QWebEngineUrlScheme
+_scheme = _QWebEngineUrlScheme(b'immersion')
+_flags = (
+    _QWebEngineUrlScheme.Flag.SecureScheme |
+    _QWebEngineUrlScheme.Flag.CorsEnabled |
+    _QWebEngineUrlScheme.Flag.ContentSecurityPolicyIgnored
+)
+# FetchApiAllowed was added in Qt 6.4 - add it when available.
+if hasattr(_QWebEngineUrlScheme.Flag, 'FetchApiAllowed'):
+    _flags |= _QWebEngineUrlScheme.Flag.FetchApiAllowed
+_scheme.setFlags(_flags)
+_QWebEngineUrlScheme.registerScheme(_scheme)
+del _QWebEngineUrlScheme, _scheme, _flags
+
 from PyQt6.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QProgressDialog, QMessageBox
+from PyQt6.QtGui import QIcon
 import sys
+import os
 import database
 from widgets.app_widget import AppWidget
 from utils.import_thread import ImportThread
@@ -13,6 +32,11 @@ class MainWindow(QMainWindow):
         database.migrate_database()
 
         self.setWindowTitle("Immersion Suite")
+        base_path = getattr(sys, '_MEIPASS', os.path.join(os.path.dirname(__file__), ".."))
+        icon_path = os.path.join(base_path, "installer", "icon.ico")
+        if not os.path.exists(icon_path):
+            icon_path = os.path.join(base_path, "icon.ico")
+        self.setWindowIcon(QIcon(icon_path))
         self.showMaximized()
 
         self.setup_menu()
@@ -73,6 +97,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    import ws_server
+    ws_server.start()
+
     app = QApplication(sys.argv)
     window = MainWindow()
     window.show()

@@ -1,9 +1,6 @@
 name: Build Linux Installer
 
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
 
 jobs:
@@ -41,6 +38,12 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller pillow
 
+      - name: Fetch bundled binaries (yt-dlp + ffmpeg)
+        run: python scripts/fetch_binaries.py
+
+      - name: Build dictionary (Jitendex)
+        run: python scripts/build_jitendex.py --file data/dicts/jitendex-yomitan.zip
+
       - name: Build executable with PyInstaller
         run: pyinstaller ImmersionSuite.spec --noconfirm
 
@@ -56,25 +59,20 @@ jobs:
           PYEOF
           cp installer/linux_setup.sh dist/ImmersionSuite/linux_setup.sh
           chmod +x dist/ImmersionSuite/linux_setup.sh
+          cp -r extension dist/ImmersionSuite/extension
+          rm -rf dist/ImmersionSuite/extension/web-ext-artifacts
 
       - name: Build self-extracting installer
         run: |
           mkdir -p installer/output
           makeself dist/ImmersionSuite \
-            installer/output/ImmersionSuite_v1.2.0_Linux_x86_64.run \
-            "Immersion Suite v1.2.0" \
+            installer/output/ImmersionSuite_v1.3.0_Linux_x86_64.run \
+            "Immersion Suite v1.3.0" \
             ./linux_setup.sh
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmersionSuite-v1.2.0-Linux-x86_64
+          name: ImmersionSuite-v1.3.0-Linux-x86_64
           path: installer/output/*.run
           retention-days: 30
-
-      # If triggered by a version tag, attach the installer to a GitHub Release
-      - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: installer/output/*.run

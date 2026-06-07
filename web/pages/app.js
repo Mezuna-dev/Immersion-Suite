@@ -3,7 +3,7 @@ var cardTypes = [];
 var decks = [];
 var fieldCounter = 0;
 var createCardPreselectedDeckId = null;
-var currentAccent = '#9067C6';
+var currentAccent = '#aa00ff';
 var currentFontSize = 'medium';
 var FONT_SIZE_MAP = { small: '1.5rem', medium: '2.5rem', large: '4rem' };
 var collapsedDecks = new Set();
@@ -18,7 +18,7 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
 });
 
 function applyAppSettings(settings) {
-    currentAccent = settings.accent_color || '#9067C6';
+    currentAccent = settings.accent_color || '#aa00ff';
     currentFontSize = settings.font_size || 'medium';
     document.documentElement.style.setProperty('--accent', currentAccent);
     document.documentElement.style.setProperty('--review-font-size', FONT_SIZE_MAP[currentFontSize] || '2.5rem');
@@ -173,7 +173,7 @@ function saveAppSettings() {
 }
 
 function resetAppearanceSettings() {
-    var settings = buildSettings({ accent_color: '#9067C6', font_size: 'medium' });
+    var settings = buildSettings({ accent_color: '#aa00ff', font_size: 'medium' });
     applyAppSettings(settings);
     showAppSettings();
     if (bridge) bridge.saveAppSettings(JSON.stringify(settings));
@@ -257,6 +257,13 @@ function showView(viewId) {
         if (decks.length === 0) bridge.getDecks();
         else populateCardDeckSelect();
     }
+    if (viewId === 'immersion' && bridge) {
+        bridge.getImmersionCategories();
+        fetchImmersionStats();
+        bridge.getImmersionLogs();
+        bridge.getMediaCategories();
+        bridge.getMediaItems();
+    }
 }
 
 function updateStats(due, newCards) {
@@ -301,6 +308,7 @@ function populateRetentionDeckSelect() {
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
+    syncCustomSelect('retention-deck-select');
 }
 
 function fetchRetentionStats() {
@@ -312,22 +320,46 @@ function fetchRetentionStats() {
 }
 
 function updateRetentionStats(stats) {
-    function fmtEl(elId, countId, s) {
+    var CIRC = 188.5;
+    function fmtEl(elId, ringId, countId, s) {
         var el = document.getElementById(elId);
+        var ring = document.getElementById(ringId);
         var countEl = document.getElementById(countId);
         if (!s || s.rate === null || s.rate === undefined) {
-            el.textContent = '—';
+            el.textContent = '-';
             el.style.color = '';
+            if (ring) ring.style.strokeDashoffset = CIRC;
             if (countEl) countEl.textContent = '';
             return;
         }
         el.textContent = s.rate + '%';
-        el.style.color = s.rate >= 90 ? '#27ae60' : s.rate >= 70 ? '#f39c12' : '#e74c3c';
+        var col = s.rate >= 90 ? '#22c55e' : s.rate >= 70 ? '#f59e0b' : '#ef4444';
+        el.style.color = col;
+        if (ring) {
+            ring.style.strokeDashoffset = CIRC * (1 - s.rate / 100);
+            ring.style.stroke = col;
+        }
         if (countEl) countEl.textContent = s.successful + ' / ' + s.total;
     }
-    fmtEl('retention-young', 'retention-young-count', stats.young);
-    fmtEl('retention-mature', 'retention-mature-count', stats.mature);
-    fmtEl('retention-total', 'retention-total-count', stats.total);
+    fmtEl('retention-young', 'retention-young-ring', 'retention-young-count', stats.young);
+    fmtEl('retention-mature', 'retention-mature-ring', 'retention-mature-count', stats.mature);
+    fmtEl('retention-total', 'retention-total-ring', 'retention-total-count', stats.total);
+
+    var yTotal = (stats.young && stats.young.total) ? stats.young.total : 0;
+    var mTotal = (stats.mature && stats.mature.total) ? stats.mature.total : 0;
+    var grand = yTotal + mTotal;
+    if (grand > 0) {
+        var mPct = Math.round(mTotal / grand * 100);
+        var yPct = 100 - mPct;
+        var mFill = document.getElementById('dash-ratio-mature-fill');
+        var yFill = document.getElementById('dash-ratio-young-fill');
+        var mPctEl = document.getElementById('dash-ratio-mature-pct');
+        var yPctEl = document.getElementById('dash-ratio-young-pct');
+        if (mFill) mFill.style.width = mPct + '%';
+        if (yFill) yFill.style.width = yPct + '%';
+        if (mPctEl) mPctEl.textContent = mPct + '%';
+        if (yPctEl) yPctEl.textContent = yPct + '%';
+    }
 }
 
 function populateHeatmapDeckSelect() {
@@ -341,6 +373,7 @@ function populateHeatmapDeckSelect() {
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
+    syncCustomSelect('heatmap-deck-select');
 }
 
 function fetchHeatmap() {
@@ -353,15 +386,48 @@ function updateHeatmap(data) {
     document.getElementById('heatmap-current-streak').textContent = data.current_streak;
     document.getElementById('heatmap-longest-streak').textContent = data.longest_streak;
     document.getElementById('heatmap-year-total').textContent = data.year_total.toLocaleString();
-    renderHeatmapSVG(data.counts);
+
+    // Use the SRS today the backend computed (honors day_start_hour) instead of
+    // new Date(), so the heatmap and KPI cards agree with the forecast keys.
+    var today = data.today ? new Date(data.today + 'T00:00:00') : new Date();
+    today.setHours(0, 0, 0, 0);
+    function toDS(d) {
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+
+    var elToday = document.getElementById('dash-today-reviews');
+    if (elToday) elToday.textContent = (data.counts[toDS(today)] || 0).toLocaleString();
+
+    var sum7 = 0;
+    for (var i = 0; i < 7; i++) {
+        var d7 = new Date(today);
+        d7.setDate(d7.getDate() - i);
+        sum7 += data.counts[toDS(d7)] || 0;
+    }
+    var avg7 = Math.round(sum7 / 7 * 10) / 10;
+    var el7 = document.getElementById('dash-7day-avg');
+    if (el7) el7.textContent = avg7 + ' / day';
+
+    var dayOfYear = Math.max(1, Math.ceil((today - new Date(today.getFullYear(), 0, 1)) / 86400000));
+    var yearAvg = Math.round(data.year_total / dayOfYear * 10) / 10;
+    var elYA = document.getElementById('dash-year-avg');
+    if (elYA) elYA.textContent = yearAvg + ' / day';
+
+    var elTomorrow = document.getElementById('due-tomorrow-cards');
+    if (elTomorrow) elTomorrow.textContent = (data.due_tomorrow || 0).toLocaleString();
+
+    renderHeatmapSVG(data.counts, data.forecast || {}, today);
 }
 
-function renderHeatmapSVG(counts) {
+function renderHeatmapSVG(counts, forecast, today) {
+    forecast = forecast || {};
     var CELL = 11, GAP = 3, WEEKS = 53;
     var DAY_LABEL_W = 26, MONTH_LABEL_H = 18;
 
-    var today = new Date();
-    today.setHours(0, 0, 0, 0);
+    if (!today) {
+        today = new Date();
+        today.setHours(0, 0, 0, 0);
+    }
     
     // Calculate the start date for the current year
     var startDay = new Date(today.getFullYear(), 0, 1); // January 1 of current year
@@ -438,7 +504,8 @@ function renderHeatmapSVG(counts) {
             day.setDate(weekStart.getDate() + d);
 
             var dStr = toDateStr(day);
-            var cnt = counts[dStr] || 0;
+            var isFuture = day > today;
+            var cnt = isFuture ? (forecast[dStr] || 0) : (counts[dStr] || 0);
 
             var rect = document.createElementNS(ns, 'rect');
             rect.setAttribute('x', weekX);
@@ -447,8 +514,16 @@ function renderHeatmapSVG(counts) {
             rect.setAttribute('height', CELL);
             rect.setAttribute('rx', 2);
             rect.setAttribute('fill', cellColor(cnt));
+            if (isFuture) {
+                rect.setAttribute('opacity', '0.55');
+                if (cnt > 0) {
+                    rect.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+                    rect.setAttribute('stroke-width', '1');
+                }
+            }
             rect.dataset.date = dStr;
             rect.dataset.count = cnt;
+            rect.dataset.future = isFuture ? '1' : '0';
 
             frag.appendChild(rect);
         }
@@ -461,7 +536,14 @@ function renderHeatmapSVG(counts) {
         if (e.target.tagName === 'rect' && e.target.dataset.date) {
             var tip = document.getElementById('heatmap-tooltip');
             var count = parseInt(e.target.dataset.count, 10);
-            if (tip) tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' review' : ' reviews');
+            var isFuture = e.target.dataset.future === '1';
+            if (tip) {
+                if (isFuture) {
+                    tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' card due' : ' cards due');
+                } else {
+                    tip.textContent = e.target.dataset.date + ': ' + count + (count === 1 ? ' review' : ' reviews');
+                }
+            }
         }
     }, true);
     svg.addEventListener('mouseleave', function(e) {
@@ -612,7 +694,7 @@ function renderDeckList() {
         return zone;
     }
 
-    // Top-level drop zone — reorder to position 0 at root
+    // Top-level drop zone - reorder to position 0 at root
     frag.appendChild(makeSiblingDropZone(null, 0, 0));
 
     var pendingTrailingZones = []; // stack of {parentId, position, depth}
@@ -634,17 +716,12 @@ function renderDeckList() {
             frag.appendChild(makeSiblingDropZone(deck.parent_id, item.siblingIndex, depth));
         }
         var card = document.createElement('div');
-        card.className = 'card text-white mb-3 deck-card';
+        card.className = 'card mb-3 deck-card';
         card.setAttribute('draggable', 'true');
         card.dataset.deckId = deck.id;
-        card.style.backgroundColor = '#2d2a3e';
-        card.style.borderTop = depth === 0 ? '3px solid ' + currentAccent : '1px solid #3d3a50';
-        card.style.borderLeft = 'none';
-        card.style.borderRight = 'none';
-        card.style.borderBottom = '1px solid #3d3a50';
         card.style.cursor = 'pointer';
         card.style.maxWidth = '600px';
-        card.style.transition = 'background-color 0.15s ease, outline 0.15s ease, opacity 0.15s ease';
+        card.style.transition = 'background-color 0.15s ease, box-shadow 0.15s ease, outline 0.15s ease, opacity 0.15s ease';
         if (depth > 0) {
             card.style.marginLeft = (depth * 1.5) + 'rem';
             card.style.maxWidth = (600 - depth * 24) + 'px';
@@ -710,7 +787,7 @@ function renderDeckList() {
                 '<div style="display:flex; align-items:center;">' +
                     chevron +
                     '<div>' +
-                        '<h5 class="card-title mb-0" style="color: white; font-weight: 600;">' + deck.name + '</h5>' +
+                        '<h5 class="card-title mb-0" style="color: var(--text-1); font-weight: 600;">' + deck.name + '</h5>' +
                         '<small style="color: #888; font-size: 0.78rem;">' + deck.total + ' card' + (deck.total !== 1 ? 's' : '') + '</small>' +
                     '</div>' +
                 '</div>' +
@@ -718,8 +795,8 @@ function renderDeckList() {
                     dueBadge + newBadge + emptyLabel +
                 '</div>' +
             '</div>';
-        card.addEventListener('mouseenter', function() { if (!deckDragId) card.style.backgroundColor = '#35324a'; });
-        card.addEventListener('mouseleave', function() { card.style.backgroundColor = '#2d2a3e'; });
+        card.addEventListener('mouseenter', function() { if (!deckDragId) card.classList.add('deck-card-hover'); });
+        card.addEventListener('mouseleave', function() { card.classList.remove('deck-card-hover'); });
         card.addEventListener('click', function(e) {
             // If the chevron toggle was clicked, collapse/expand instead of navigating
             var toggle = e.target.closest('.deck-collapse-toggle');
@@ -811,13 +888,13 @@ function showDeckDetails(deck) {
     var remainingNew = Math.max(0, deck.total - deck.young - deck.mature);
     deckDetailsView.innerHTML = `
         <input type="hidden" id="current-deck-id" value="${deck.id}">
-        <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">\u2190 Back</button>
+        <button class="btn btn-dark btn-back mb-3" onclick="showView('srs')">\u2190 Back</button>
         <div class="d-flex align-items-center justify-content-between mb-4" style="flex-wrap: wrap; gap: 1rem;">
             <h1 class="mb-0">${deck.name}</h1>
             <div class="d-flex" style="gap: 0.75rem; flex-wrap: wrap;">
                 <button class="btn btn-dark btn-accent" onclick="startReview(${deck.id})" style="font-weight: 600; min-width: 9rem; height: 2.75rem;">Start Review</button>
                 <button class="btn btn-dark btn-accent" onclick="showCreateCard(${deck.id})" style="font-weight: 600; height: 2.75rem;">Add Card</button>
-                <button class="btn btn-dark" onclick="showDeckSettings()" style="background-color: #3a3555 !important; font-weight: 600; height: 2.75rem;">Settings</button>
+                <button class="btn btn-dark btn-action" onclick="showDeckSettings()">Settings</button>
             </div>
         </div>
 
@@ -838,7 +915,7 @@ function showDeckDetails(deck) {
                         <div class="dash-stat-value">${deck.total}</div>
                     </div>
                 </div>
-                <hr style="border-color: #3d3a50; margin: 0 0 0.75rem;">
+                <hr style="margin: 0 0 0.75rem;">
                 <div class="row text-center g-0">
                     <div class="col dash-stat-cell">
                         <div class="dash-stat-label">Young</div>
@@ -890,9 +967,9 @@ function showDeckDetails(deck) {
             paper_bgcolor: 'transparent',
             plot_bgcolor:  'transparent',
             showlegend: true,
-            legend: { font: { color: 'white', size: 13 }, bgcolor: 'transparent', orientation: 'h', x: 0.5, xanchor: 'center', y: -0.08 },
+            legend: { font: { color: '#1a1133', size: 13 }, bgcolor: 'transparent', orientation: 'h', x: 0.5, xanchor: 'center', y: -0.08 },
             margin: { t: 10, b: 40, l: 10, r: 10 },
-            font: { color: 'white' },
+            font: { color: '#1a1133' },
             hoverlabel: { bgcolor: '#2d2a3e', bordercolor: currentAccent, font: { color: 'white', size: 13 } }
         }, { responsive: true, displayModeBar: false });
     }
@@ -956,7 +1033,7 @@ function saveDeckSettings() {
 
 var newQueue = [];
 var dueQueue = [];
-var learningQueue = []; // [{card, showAfter (ms timestamp)}] — time-gated cards waiting to return
+var learningQueue = []; // [{card, showAfter (ms timestamp)}] - time-gated cards waiting to return
 var newCardIndex = 0;
 var dueCardIndex = 0;
 var currentCard = null;
@@ -1012,7 +1089,9 @@ function updateReviewQueue(data) {
     studyOrder = data.study_order || 'mix';
     newQueue = data.new_cards || [];
     dueQueue = data.due_cards || [];
-    learningQueue = [];
+    learningQueue = (data.learning_cards || []).map(function(card) {
+        return { card: card, showAfter: Date.now() };
+    });
     newCardIndex = 0;
     dueCardIndex = 0;
     currentCardSource = null;
@@ -1041,14 +1120,14 @@ function applyFuriganaFilter(text, filter) {
 
 function renderTemplate(template, fields, frontHtml) {
     var result = template;
-    // {{FrontSide}} — Anki special token: re-render the already-rendered front HTML
+    // {{FrontSide}} - Anki special token: re-render the already-rendered front HTML
     result = result.replace(/\{\{FrontSide\}\}/gi, frontHtml || '');
-    // Positive conditional blocks: {{#Field}}...{{/Field}} — show content when field is non-empty
+    // Positive conditional blocks: {{#Field}}...{{/Field}} - show content when field is non-empty
     result = result.replace(/\{\{#([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
         key = key.trim();
         return (fields[key] && fields[key].trim()) ? content : '';
     });
-    // Negation conditional blocks: {{^Field}}...{{/Field}} — show content when field is empty
+    // Negation conditional blocks: {{^Field}}...{{/Field}} - show content when field is empty
     result = result.replace(/\{\{\^([^}]+)\}\}([\s\S]*?)\{\{\/\1\}\}/g, function(match, key, content) {
         key = key.trim();
         return (!fields[key] || !fields[key].trim()) ? content : '';
@@ -1139,13 +1218,13 @@ function showNextCard() {
     overdue.sort(function(a, b) { return a.showAfter - b.showAfter; });
 
     if (!hasRegular) {
-        // All regular cards done — show the earliest pending learning card
+        // All regular cards done - show the earliest pending learning card
         learningQueue.sort(function(a, b) { return a.showAfter - b.showAfter; });
         var item = learningQueue.shift();
         currentCard = item.card;
         currentCardSource = 'learning';
     } else if (overdue.length > 0) {
-        // A learning card's timer has elapsed — show it immediately (highest priority)
+        // A learning card's timer has elapsed - show it immediately (highest priority)
         var item = overdue[0];
         learningQueue = learningQueue.filter(function(i) { return i !== item; });
         currentCard = item.card;
@@ -1162,7 +1241,7 @@ function showNextCard() {
         } else if (studyOrder === 'new_last') {
             pickNew = false;
         } else {
-            // 'mix' — Anki-style intersperser: evenly distribute new cards among due cards
+            // 'mix' - Anki-style intersperser: evenly distribute new cards among due cards
             pickNew = (newCardIndex + 1) * interspersionRatio <= (dueCardIndex + 1);
         }
         if (pickNew) {
@@ -1183,7 +1262,7 @@ function showNextCard() {
         if (ft.indexOf('[image:') !== -1 || ft.indexOf('[sound:') !== -1) {
             setInnerHTMLWithScripts(frontEl, resolveMedia(ft));
         } else {
-            frontEl.textContent = ft;
+            setInnerHTMLWithScripts(frontEl, ft);
         }
     }
     if (currentReviewBehavior.autoplay_audio) playAudioSequentially(frontEl);
@@ -1191,6 +1270,80 @@ function showNextCard() {
     document.getElementById('review-rating-buttons').style.display = 'none';
     document.getElementById('review-show-answer-btn').style.display = 'block';
     updateReviewCounts();
+}
+
+function sm2Interval(reps, easeFactor, currentInterval, rating) {
+    if (rating < 3) return 1;
+    var r = reps || 0;
+    if (r === 0) return 1;
+    if (r === 1) return 6;
+    return Math.ceil((currentInterval || 1) * (easeFactor || 2.5));
+}
+
+function formatIntervalLabel(minutes) {
+    if (!minutes || minutes < 1) return '1m';
+    if (minutes < 60) return minutes + 'm';
+    var hours = minutes / 60;
+    if (hours < 24) return Math.round(hours) + 'h';
+    return Math.round(minutes / 1440) + 'd';
+}
+
+function formatDays(days) {
+    if (!days || isNaN(days) || days < 1) return '1d';
+    if (days < 31) return days + 'd';
+    return Math.round(days / 30.5) + 'mo';
+}
+
+function updateRatingButtonLabels() {
+    var card = currentCard;
+    if (!card) return;
+
+    var steps = currentDeckLearningSteps;
+    var relearnSteps = currentDeckRelearnSteps;
+    var again, hard, good, easy;
+
+    if (card.is_new && steps.length > 0) {
+        var curStep = (card.learning_step !== null && card.learning_step !== undefined)
+            ? card.learning_step : -1;
+        again = formatIntervalLabel(steps[0]);
+        hard = formatIntervalLabel(steps[Math.max(0, curStep)]);
+        var goodStep = curStep + 1;
+        good = goodStep >= steps.length
+            ? formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4))
+            : formatIntervalLabel(steps[goodStep]);
+        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+    } else if (card.is_relearning && relearnSteps.length > 0) {
+        var curStep = (card.learning_step !== null && card.learning_step !== undefined)
+            ? card.learning_step : 0;
+        again = formatIntervalLabel(relearnSteps[0]);
+        hard = formatIntervalLabel(relearnSteps[Math.min(curStep, relearnSteps.length - 1)]);
+        var goodStep = curStep + 1;
+        good = goodStep >= relearnSteps.length
+            ? formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4))
+            : formatIntervalLabel(relearnSteps[goodStep]);
+        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+    } else {
+        again = relearnSteps.length > 0 ? formatIntervalLabel(relearnSteps[0]) : '1d';
+        hard = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 3));
+        good = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4));
+        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+    }
+
+    function setBtn(id, name, interval) {
+        var btn = document.getElementById(id);
+        if (!btn) return;
+        btn.innerHTML = name + '<br><span style="font-size:0.7em;opacity:0.65;">' + interval + '</span>';
+        btn.style.height = 'auto';
+        btn.style.minHeight = '2.75rem';
+        btn.style.paddingTop = '0.35rem';
+        btn.style.paddingBottom = '0.35rem';
+        btn.style.lineHeight = '1.3';
+    }
+
+    setBtn('btn-rate-again', 'Again', again);
+    setBtn('btn-rate-hard', 'Hard', hard);
+    setBtn('btn-rate-good', 'Good', good);
+    setBtn('btn-rate-easy', 'Easy', easy);
 }
 
 function revealAnswer() {
@@ -1205,7 +1358,7 @@ function revealAnswer() {
             if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
                 setInnerHTMLWithScripts(frontEl, resolveMedia(bt));
             } else {
-                frontEl.textContent = bt;
+                setInnerHTMLWithScripts(frontEl, bt);
             }
         }
         if (currentReviewBehavior.autoplay_audio) playAudioSequentially(frontEl);
@@ -1217,7 +1370,7 @@ function revealAnswer() {
             if (bt.indexOf('[image:') !== -1 || bt.indexOf('[sound:') !== -1) {
                 setInnerHTMLWithScripts(backEl, resolveMedia(bt));
             } else {
-                backEl.textContent = bt;
+                setInnerHTMLWithScripts(backEl, bt);
             }
         }
         if (currentReviewBehavior.autoplay_audio) playAudioSequentially(backEl);
@@ -1225,6 +1378,7 @@ function revealAnswer() {
     }
     document.getElementById('review-rating-buttons').style.display = 'flex';
     document.getElementById('review-show-answer-btn').style.display = 'none';
+    updateRatingButtonLabels();
 }
 
 function rateCard(rating) {
@@ -1281,7 +1435,7 @@ function rateCard(rating) {
             learningQueue.push({ card: requeueCard, showAfter: Date.now() + relearnSteps[newStep] * 60 * 1000 });
         }
     } else if (!currentCard.is_new && rating === 1 && currentDeckRelearnSteps.length > 0) {
-        // Card lapsed — record the failure then start relearning steps
+        // Card lapsed - record the failure then start relearning steps
         bridge.logLapse(currentCard.id, rating);
         bridge.updateCardLearningStep(currentCard.id, 0);
         var requeueCard = Object.assign({}, currentCard, { learning_step: 0, is_relearning: true });
@@ -1306,6 +1460,52 @@ function showReviewComplete() {
     document.getElementById('review-complete-section').style.display = 'flex';
     var cssEl = document.getElementById('review-card-css');
     if (cssEl) cssEl.textContent = '';
+}
+
+// ── Review card menu ──────────────────────────────────────────
+
+function toggleReviewMenu(e) {
+    if (e) e.stopPropagation();
+    var menu = document.getElementById('review-card-menu');
+    var open = menu.style.display !== 'none';
+    menu.style.display = open ? 'none' : 'block';
+    if (!open) {
+        document.addEventListener('click', closeReviewMenu, { once: true });
+    }
+}
+
+function closeReviewMenu() {
+    var menu = document.getElementById('review-card-menu');
+    if (menu) menu.style.display = 'none';
+}
+
+function editReviewCard() {
+    closeReviewMenu();
+    if (!currentCard) return;
+    editSourceView = 'review';
+    editCardFromBrowser(currentCard.id);
+}
+
+function deleteReviewCard() {
+    closeReviewMenu();
+    if (!currentCard) return;
+    var cardId = currentCard.id;
+    showConfirm('Delete this card? This cannot be undone.', function() {
+        if (bridge) bridge.deleteCardFromBrowser(cardId);
+        if (currentCardSource === 'new') {
+            newQueue.splice(newCardIndex, 1);
+            if (newCardIndex > 0) newCardIndex--;
+        } else if (currentCardSource === 'due') {
+            dueQueue.splice(dueCardIndex, 1);
+            if (dueCardIndex > 0) dueCardIndex--;
+        } else if (currentCardSource === 'learning') {
+            var idx = learningQueue.findIndex(function(e) { return e.id === cardId; });
+            if (idx !== -1) learningQueue.splice(idx, 1);
+        }
+        currentCard = null;
+        updateReviewCounts();
+        showNextCard();
+    });
 }
 
 document.addEventListener('keydown', function(e) {
@@ -1565,6 +1765,7 @@ function populateBrowseDeckSelect() {
     if (prev && (prev === '0' || decks.some(function(d) { return String(d.id) === prev; }))) {
         select.value = prev;
     }
+    syncCustomSelect('browse-deck-select');
 }
 
 function fetchBrowseCards() {
@@ -1651,7 +1852,7 @@ function renderBrowsePage() {
             '<td>' + backText + '</td>' +
             '<td>' + (card.deck_name || '') + '</td>' +
             '<td>' + (card.type_name || '') + '</td>' +
-            '<td>' + (card.due_date || '—') + '</td>' +
+            '<td>' + (card.due_date || '-') + '</td>' +
             '<td>' + (card.interval || 0) + 'd</td>';
         frag.appendChild(tr);
     }
@@ -1688,6 +1889,7 @@ function renderBrowsePage() {
 }
 
 var editCardData = null; // Store the card being edited
+var editSourceView = null; // Track where the edit was initiated from
 
 function editCardFromBrowser(cardId) {
     if (bridge) {
@@ -1732,9 +1934,9 @@ function loadCardForEdit(data) {
     document.getElementById('edit-card-reps').textContent = card.reps || 0;
     document.getElementById('edit-card-interval').textContent = card.interval || 0;
     document.getElementById('edit-card-ease').textContent = card.ease_factor || '2.5';
-    document.getElementById('edit-card-due').textContent = card.due_date || '—';
-    document.getElementById('edit-card-created').textContent = card.date_created || '—';
-    document.getElementById('edit-card-last-reviewed').textContent = card.last_reviewed || '—';
+    document.getElementById('edit-card-due').textContent = card.due_date || '-';
+    document.getElementById('edit-card-created').textContent = card.date_created || '-';
+    document.getElementById('edit-card-last-reviewed').textContent = card.last_reviewed || '-';
 
     // Parse existing field data
     var fields = {};
@@ -1925,7 +2127,7 @@ function renderEditCardFields(typeId, existingFields) {
     var ct = cardTypes.find(function(t) { return String(t.id) === String(typeId); });
 
     if (!ct) {
-        // No card type found — show raw Front / Back fields
+        // No card type found - show raw Front / Back fields
         var rawFields = [
             { name: 'Front', value: (existingFields && existingFields['Front']) || (editCardData ? editCardData.front : '') || '' },
             { name: 'Back', value: (existingFields && existingFields['Back']) || (editCardData ? editCardData.back : '') || '' }
@@ -2032,7 +2234,31 @@ function saveEditCard() {
     if (bridge) {
         bridge.updateCard(cardId, deckId, typeId, JSON.stringify(fieldsObj), front, back);
         showAlert('Card saved.');
-        showView('card-browser');
+        if (editSourceView === 'review' && currentCard && currentCard.id === cardId) {
+            currentCard.fields = fieldsObj;
+            currentCard.front = front;
+            currentCard.back = back;
+            document.getElementById('review-card-css').textContent = currentCard.css_style || '';
+            var frontEl = document.getElementById('review-front-text');
+            if (currentCard.front_style) {
+                setInnerHTMLWithScripts(frontEl, resolveMedia(renderTemplate(currentCard.front_style, currentCard.fields || {})));
+            } else {
+                var ft = currentCard.front || '';
+                if (ft.indexOf('[image:') !== -1 || ft.indexOf('[sound:') !== -1) {
+                    setInnerHTMLWithScripts(frontEl, resolveMedia(ft));
+                } else {
+                    setInnerHTMLWithScripts(frontEl, ft);
+                }
+            }
+            document.getElementById('review-back-container').style.display = 'none';
+            document.getElementById('review-rating-buttons').style.display = 'none';
+            document.getElementById('review-show-answer-btn').style.display = 'block';
+            editSourceView = null;
+            showView('review');
+        } else {
+            editSourceView = null;
+            showView('card-browser');
+        }
     }
 }
 
@@ -2119,3 +2345,1065 @@ function savePreviewStyling() {
         showView('edit-card');
     }
 }
+
+
+// ===========================================================
+// Immersion Section
+// ===========================================================
+
+document.addEventListener('DOMContentLoaded', function() {
+    var immersionTabsEl = document.getElementById('immersion-tabs');
+    if (immersionTabsEl) {
+        immersionTabsEl.addEventListener('shown.bs.tab', function() {
+            if (bridge) {
+                fetchImmersionStats();
+                bridge.getImmersionLogs();
+                bridge.getMediaItems();
+            }
+        });
+    }
+
+    var fullLogModal = document.getElementById('full-media-log-modal');
+    if (fullLogModal) {
+        fullLogModal.addEventListener('click', function(e) {
+            if (e.target === fullLogModal) hideFullMediaLog();
+        });
+    }
+});
+
+var immersionCategories = [];
+var immersionTimerInterval = null;
+var immersionTimerSeconds = 0;
+var immersionTimerRunning = false;
+var immersionTimerPaused = false;
+
+// --- Timer ---
+
+function immersionTimerStart() {
+    var catSelect = document.getElementById('immersion-timer-category');
+    if (!catSelect.value) {
+        showAlert('Please select a category first.');
+        return;
+    }
+    immersionTimerSeconds = 0;
+    immersionTimerRunning = true;
+    immersionTimerPaused = false;
+    updateTimerDisplay();
+    updateTimerButtons('running');
+    document.getElementById('immersion-timer-display').classList.add('running');
+    document.getElementById('immersion-timer-display').classList.remove('paused');
+    catSelect.disabled = true;
+    immersionTimerInterval = setInterval(function() {
+        immersionTimerSeconds++;
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function immersionTimerPause() {
+    if (immersionTimerInterval) clearInterval(immersionTimerInterval);
+    immersionTimerRunning = false;
+    immersionTimerPaused = true;
+    updateTimerButtons('paused');
+    document.getElementById('immersion-timer-display').classList.remove('running');
+    document.getElementById('immersion-timer-display').classList.add('paused');
+}
+
+function immersionTimerResume() {
+    immersionTimerRunning = true;
+    immersionTimerPaused = false;
+    updateTimerButtons('running');
+    document.getElementById('immersion-timer-display').classList.add('running');
+    document.getElementById('immersion-timer-display').classList.remove('paused');
+    immersionTimerInterval = setInterval(function() {
+        immersionTimerSeconds++;
+        updateTimerDisplay();
+    }, 1000);
+}
+
+function immersionTimerStop() {
+    if (immersionTimerInterval) clearInterval(immersionTimerInterval);
+    var catId = parseInt(document.getElementById('immersion-timer-category').value);
+    if (bridge && immersionTimerSeconds > 0) {
+        bridge.saveImmersionLog(catId, immersionTimerSeconds);
+    }
+    immersionTimerReset();
+}
+
+function immersionTimerDiscard() {
+    if (immersionTimerInterval) clearInterval(immersionTimerInterval);
+    immersionTimerReset();
+}
+
+function immersionTimerReset() {
+    immersionTimerSeconds = 0;
+    immersionTimerRunning = false;
+    immersionTimerPaused = false;
+    immersionTimerInterval = null;
+    updateTimerDisplay();
+    updateTimerButtons('idle');
+    var display = document.getElementById('immersion-timer-display');
+    display.classList.remove('running', 'paused');
+    document.getElementById('immersion-timer-category').disabled = false;
+}
+
+function updateTimerDisplay() {
+    var h = Math.floor(immersionTimerSeconds / 3600);
+    var m = Math.floor((immersionTimerSeconds % 3600) / 60);
+    var s = immersionTimerSeconds % 60;
+    var display = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+    document.getElementById('immersion-timer-display').textContent = display;
+}
+
+function updateTimerButtons(state) {
+    var startBtn = document.getElementById('immersion-start-btn');
+    var pauseBtn = document.getElementById('immersion-pause-btn');
+    var resumeBtn = document.getElementById('immersion-resume-btn');
+    var stopBtn = document.getElementById('immersion-stop-btn');
+    var discardBtn = document.getElementById('immersion-discard-btn');
+    startBtn.style.display = state === 'idle' ? '' : 'none';
+    pauseBtn.style.display = state === 'running' ? '' : 'none';
+    resumeBtn.style.display = state === 'paused' ? '' : 'none';
+    stopBtn.style.display = (state === 'running' || state === 'paused') ? '' : 'none';
+    discardBtn.style.display = (state === 'running' || state === 'paused') ? '' : 'none';
+}
+
+// --- Categories ---
+
+function updateImmersionCategories(cats) {
+    immersionCategories = cats;
+    populateImmersionCategorySelects();
+    renderImmersionCategoryList();
+}
+
+function populateImmersionCategorySelects() {
+    // Timer select
+    var timerSel = document.getElementById('immersion-timer-category');
+    var timerVal = timerSel.value;
+    timerSel.innerHTML = '<option value="">- Select a category -</option>';
+    immersionCategories.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        timerSel.appendChild(opt);
+    });
+    if (timerVal) timerSel.value = timerVal;
+
+    // Manual log select
+    var manualSel = document.getElementById('manual-log-category');
+    if (manualSel) {
+        var manualVal = manualSel.value;
+        manualSel.innerHTML = '';
+        immersionCategories.forEach(function(c) {
+            var opt = document.createElement('option');
+            opt.value = c.id;
+            opt.textContent = c.name;
+            manualSel.appendChild(opt);
+        });
+        if (manualVal) manualSel.value = manualVal;
+    }
+
+}
+
+function renderImmersionCategoryList() {
+    var container = document.getElementById('immersion-category-list');
+    if (!immersionCategories.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No categories yet. Create one to get started.</p>';
+        return;
+    }
+    var html = '';
+    immersionCategories.forEach(function(c) {
+        html += '<div class="immersion-category-row" id="cat-row-' + c.id + '">'
+            + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
+            + '<span style="flex: 1; font-size: 0.92rem; color: var(--text-1);">' + escapeHtml(c.name) + '</span>'
+            + '<button class="btn btn-sm" onclick="editImmersionCategory(' + c.id + ')" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Edit</button>'
+            + '<button class="btn btn-sm" onclick="deleteImmersionCategory(' + c.id + ', \'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')" style="color: #e74c3c; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Delete</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function showCreateCategoryForm() {
+    document.getElementById('immersion-create-category-form').style.display = '';
+    document.getElementById('new-category-name').value = '';
+    document.getElementById('new-category-color').value = currentAccent;
+    document.getElementById('new-category-name').focus();
+}
+
+function hideCreateCategoryForm() {
+    document.getElementById('immersion-create-category-form').style.display = 'none';
+}
+
+function submitCreateCategory() {
+    var name = document.getElementById('new-category-name').value.trim();
+    var color = document.getElementById('new-category-color').value;
+    if (!name) { showAlert('Please enter a category name.'); return; }
+    if (bridge) bridge.createImmersionCategory(name, color);
+    hideCreateCategoryForm();
+}
+
+function editImmersionCategory(catId) {
+    var cat = immersionCategories.find(function(c) { return c.id === catId; });
+    if (!cat) return;
+    var row = document.getElementById('cat-row-' + catId);
+    row.innerHTML = '<input type="color" id="edit-cat-color-' + catId + '" value="' + cat.color + '" style="width: 2rem; height: 2rem; border: none; border-radius: 4px; cursor: pointer; padding: 1px; background: none;">'
+        + '<input type="text" id="edit-cat-name-' + catId + '" value="' + escapeHtml(cat.name) + '" class="form-control settings-input" style="flex: 1; font-size: 0.88rem; height: 2rem; padding: 0.2rem 0.5rem;">'
+        + '<button class="btn btn-sm btn-accent" onclick="saveEditCategory(' + catId + ')" style="font-size: 0.75rem; padding: 0.15rem 0.5rem; font-weight: 600;">Save</button>'
+        + '<button class="btn btn-sm" onclick="renderImmersionCategoryList()" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Cancel</button>';
+    document.getElementById('edit-cat-name-' + catId).focus();
+}
+
+function saveEditCategory(catId) {
+    var name = document.getElementById('edit-cat-name-' + catId).value.trim();
+    var color = document.getElementById('edit-cat-color-' + catId).value;
+    if (!name) { showAlert('Category name cannot be empty.'); return; }
+    if (bridge) bridge.updateImmersionCategory(catId, name, color);
+}
+
+function deleteImmersionCategory(catId, catName) {
+    showConfirm('Delete category "' + catName + '" and all its logs? This cannot be undone.', function() {
+        if (bridge) bridge.deleteImmersionCategory(catId);
+    });
+}
+
+// --- Stats ---
+
+function fetchImmersionStats() {
+    var period = document.getElementById('immersion-stats-period').value;
+    if (bridge) bridge.getImmersionStats(period);
+}
+
+function formatDuration(totalSeconds) {
+    var h = Math.floor(totalSeconds / 3600);
+    var m = Math.floor((totalSeconds % 3600) / 60);
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+}
+
+function updateImmersionStats(stats) {
+    // Total time
+    document.getElementById('immersion-total-time').textContent = formatDuration(stats.total_seconds);
+
+    // Breakdown list
+    var container = document.getElementById('immersion-stats-breakdown');
+    if (!stats.categories.length || stats.total_seconds === 0) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No immersion data for this period.</p>';
+        renderImmersionPieChart([], []);
+        return;
+    }
+
+    var html = '';
+    stats.categories.forEach(function(c) {
+        if (c.total_seconds === 0) return;
+        var pct = stats.total_seconds > 0 ? (c.total_seconds / stats.total_seconds * 100) : 0;
+        html += '<div class="immersion-stat-row">'
+            + '<div class="d-flex justify-content-between align-items-center">'
+            + '<div class="d-flex align-items-center gap-2">'
+            + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
+            + '<span style="font-size: 0.9rem; color: var(--text-1);">' + escapeHtml(c.name) + '</span>'
+            + '</div>'
+            + '<div style="text-align: right;">'
+            + '<span style="font-size: 0.9rem; font-weight: 600; color: var(--text-1);">' + formatDuration(c.total_seconds) + '</span>'
+            + '<span style="font-size: 0.78rem; color: #888; margin-left: 0.5rem;">' + pct.toFixed(1) + '%</span>'
+            + '</div>'
+            + '</div>'
+            + '<div class="immersion-stat-bar"><div class="immersion-stat-bar-fill" style="width: ' + pct + '%; background-color: ' + c.color + ';"></div></div>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+
+    // Pie chart
+    var labels = [];
+    var values = [];
+    var colors = [];
+    stats.categories.forEach(function(c) {
+        if (c.total_seconds > 0) {
+            labels.push(c.name);
+            values.push(c.total_seconds);
+            colors.push(c.color);
+        }
+    });
+    renderImmersionPieChart(labels, values, colors);
+}
+
+function renderImmersionPieChart(labels, values, colors) {
+    var chartEl = document.getElementById('immersion-pie-chart');
+    if (typeof Plotly !== 'undefined' && chartEl.data) Plotly.purge(chartEl);
+    if (!labels.length) {
+        chartEl.innerHTML = '<div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #888; font-size: 0.9rem;">No data</div>';
+        return;
+    }
+
+    // Format hover text to show duration instead of raw seconds
+    var hoverText = values.map(function(v) { return formatDuration(v); });
+
+    var data = [{
+        labels: labels,
+        values: values,
+        type: 'pie',
+        hole: 0.5,
+        marker: { colors: colors },
+        textinfo: 'percent',
+        textfont: { color: '#fff', size: 12 },
+        hoverinfo: 'label+text+percent',
+        text: hoverText,
+        sort: false,
+    }];
+    var layout = {
+        paper_bgcolor: 'transparent',
+        plot_bgcolor: 'transparent',
+        margin: { t: 10, b: 10, l: 10, r: 10 },
+        showlegend: false,
+        font: { family: 'Inter, sans-serif', color: '#fff' },
+    };
+    Plotly.newPlot(chartEl, data, layout, { displayModeBar: false, responsive: true });
+}
+
+// --- Logs ---
+
+function updateImmersionLogs(logs) {
+    var container = document.getElementById('immersion-logs-list');
+    if (!logs.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No logs yet. Start the timer or add a manual entry.</p>';
+        return;
+    }
+    var html = '';
+    logs.forEach(function(log) {
+        html += '<div class="immersion-log-row">'
+            + '<span class="immersion-color-dot" style="background-color: ' + log.category_color + ';"></span>'
+            + '<span style="flex: 1; color: var(--text-1);">' + escapeHtml(log.category_name) + '</span>'
+            + '<span style="font-weight: 600; color: var(--text-1); min-width: 5rem; text-align: right;">' + formatDuration(log.duration_seconds) + '</span>'
+            + '<span style="color: #888; min-width: 6.5rem; text-align: right; font-size: 0.8rem;">' + log.log_date + '</span>'
+            + '<button class="btn btn-sm" onclick="deleteImmersionLog(' + log.id + ')" style="color: #e74c3c; font-size: 0.7rem; padding: 0.1rem 0.3rem; margin-left: 0.3rem;" title="Delete">✕</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function deleteImmersionLog(logId) {
+    showConfirm('Delete this immersion log?', function() {
+        if (bridge) bridge.deleteImmersionLog(logId);
+    });
+}
+
+// --- Manual Log ---
+
+function showManualLogForm() {
+    document.getElementById('immersion-manual-log-form').style.display = '';
+    document.getElementById('manual-log-hours').value = '0';
+    document.getElementById('manual-log-minutes').value = '0';
+    // Set default date to today
+    var today = new Date();
+    var yyyy = today.getFullYear();
+    var mm = String(today.getMonth() + 1).padStart(2, '0');
+    var dd = String(today.getDate()).padStart(2, '0');
+    document.getElementById('manual-log-date').value = yyyy + '-' + mm + '-' + dd;
+}
+
+function hideManualLogForm() {
+    document.getElementById('immersion-manual-log-form').style.display = 'none';
+}
+
+function submitManualLog() {
+    var catId = parseInt(document.getElementById('manual-log-category').value);
+    var hours = parseInt(document.getElementById('manual-log-hours').value) || 0;
+    var minutes = parseInt(document.getElementById('manual-log-minutes').value) || 0;
+    var logDate = document.getElementById('manual-log-date').value;
+    var totalSeconds = (hours * 3600) + (minutes * 60);
+    if (!catId) { showAlert('Please select a category.'); return; }
+    if (totalSeconds <= 0) { showAlert('Please enter a duration greater than 0.'); return; }
+    if (!logDate) { showAlert('Please select a date.'); return; }
+    if (bridge) bridge.addManualImmersionLog(catId, totalSeconds, logDate);
+    hideManualLogForm();
+}
+
+// --- Media Categories ---
+
+var mediaCategories = [];
+
+function updateMediaCategories(cats) {
+    mediaCategories = cats;
+    populateMediaCategorySelect();
+    populateMediaLibraryCategoryFilter();
+    renderMediaCategoryList();
+}
+
+function populateMediaCategorySelect() {
+    var sel = document.getElementById('media-add-item-cat');
+    if (!sel) return;
+    var prev = sel.value;
+    sel.innerHTML = '<option value="0">- None -</option>';
+    mediaCategories.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        sel.appendChild(opt);
+    });
+    if (prev) sel.value = prev;
+}
+
+function renderMediaCategoryList() {
+    var container = document.getElementById('media-category-list');
+    if (!container) return;
+    if (!mediaCategories.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem;">No categories yet.</p>';
+        return;
+    }
+    var html = '';
+    mediaCategories.forEach(function(c) {
+        html += '<div class="immersion-category-row" id="media-cat-row-' + c.id + '">'
+            + '<span class="immersion-color-dot" style="background-color: ' + c.color + ';"></span>'
+            + '<span style="flex: 1; font-size: 0.88rem; color: var(--text-1);">' + escapeHtml(c.name) + '</span>'
+            + '<button class="btn btn-sm" onclick="editMediaCategory(' + c.id + ')" style="color: #888; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Edit</button>'
+            + '<button class="btn btn-sm" onclick="deleteMediaCategory(' + c.id + ', \'' + escapeHtml(c.name).replace(/'/g, "\\'") + '\')" style="color: #e74c3c; font-size: 0.75rem; padding: 0.15rem 0.4rem;">Delete</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function showCreateMediaCategoryForm() {
+    document.getElementById('media-create-category-form').style.display = '';
+    document.getElementById('media-new-category-name').value = '';
+    document.getElementById('media-new-category-color').value = '#9067C6';
+}
+
+function hideCreateMediaCategoryForm() {
+    document.getElementById('media-create-category-form').style.display = 'none';
+}
+
+function submitCreateMediaCategory() {
+    var name = document.getElementById('media-new-category-name').value.trim();
+    var color = document.getElementById('media-new-category-color').value;
+    if (!name) { showAlert('Please enter a category name.'); return; }
+    if (bridge) bridge.createMediaCategory(name, color);
+    hideCreateMediaCategoryForm();
+}
+
+function editMediaCategory(catId) {
+    var cat = mediaCategories.find(function(c) { return c.id === catId; });
+    if (!cat) return;
+    var row = document.getElementById('media-cat-row-' + catId);
+    row.innerHTML = '<input type="text" class="form-control settings-input" value="' + escapeHtml(cat.name) + '" style="flex:1; font-size:0.85rem; height:2rem;" id="media-cat-edit-name-' + catId + '">'
+        + '<input type="color" value="' + cat.color + '" style="width:2.4rem; height:2rem; border:none; border-radius:4px; cursor:pointer; padding:2px; background:none;" id="media-cat-edit-color-' + catId + '">'
+        + '<button class="btn btn-sm btn-accent" onclick="saveMediaCategoryEdit(' + catId + ')" style="font-size:0.75rem; padding:0.15rem 0.5rem;">Save</button>'
+        + '<button class="btn btn-sm" onclick="renderMediaCategoryList()" style="color:#888; font-size:0.75rem; padding:0.15rem 0.4rem;">Cancel</button>';
+}
+
+function saveMediaCategoryEdit(catId) {
+    var name = document.getElementById('media-cat-edit-name-' + catId).value.trim();
+    var color = document.getElementById('media-cat-edit-color-' + catId).value;
+    if (!name) return;
+    if (bridge) bridge.updateMediaCategory(catId, name, color);
+}
+
+function deleteMediaCategory(catId, catName) {
+    showConfirm('Delete category "' + catName + '"? Existing entries will become uncategorised.', function() {
+        if (bridge) bridge.deleteMediaCategory(catId);
+    });
+}
+
+// --- Media Library ---
+
+var mediaItems = [];
+var mediaStatusFilter = 'all';
+var expandedMediaItems = {};
+
+function updateMediaItems(items) {
+    mediaItems = items;
+    populateMediaLibraryCategoryFilter();
+    renderMediaLibrary();
+}
+
+function setMediaStatusFilter(status) {
+    mediaStatusFilter = status;
+    document.querySelectorAll('.media-status-pill').forEach(function(btn) {
+        btn.classList.toggle('active', btn.dataset.status === status);
+    });
+    renderMediaLibrary();
+}
+
+function populateMediaLibraryCategoryFilter() {
+    var sel = document.getElementById('media-library-cat-filter');
+    if (!sel) return;
+    var current = sel.value;
+    sel.innerHTML = '<option value="">All types</option>';
+    mediaCategories.forEach(function(c) {
+        var opt = document.createElement('option');
+        opt.value = String(c.id);
+        opt.textContent = c.name;
+        if (String(c.id) === current) opt.selected = true;
+        sel.appendChild(opt);
+    });
+}
+
+function renderMediaLibrary() {
+    var container = document.getElementById('media-library-list');
+    if (!container) return;
+    var query = (document.getElementById('media-library-search') ? document.getElementById('media-library-search').value : '').toLowerCase().trim();
+    var catFilter = document.getElementById('media-library-cat-filter') ? document.getElementById('media-library-cat-filter').value : '';
+    var filtered = mediaItems.filter(function(item) {
+        if (mediaStatusFilter !== 'all' && item.status !== mediaStatusFilter) return false;
+        if (catFilter && String(item.category_id) !== catFilter) return false;
+        if (query && item.title.toLowerCase().indexOf(query) === -1) return false;
+        return true;
+    });
+    if (!filtered.length) {
+        container.innerHTML = '<p style="color: #888; font-size: 0.88rem; padding: 0.5rem 0;">'
+            + (mediaItems.length ? 'No items match.' : 'No items yet. Add one above.') + '</p>';
+        return;
+    }
+    var html = '';
+    filtered.forEach(function(item) { html += buildMediaItemHtml(item); });
+    container.innerHTML = html;
+    wrapAllSelects();
+    // Re-expand any previously open items
+    Object.keys(expandedMediaItems).forEach(function(id) {
+        if (expandedMediaItems[id]) {
+            var detail = document.getElementById('media-item-detail-' + id);
+            var chevron = document.getElementById('media-item-chevron-' + id);
+            if (detail) detail.style.display = '';
+            if (chevron) chevron.textContent = '▲';
+        }
+    });
+}
+
+var STATUS_LABELS = { watching: 'Watching', completed: 'Completed', dropped: 'Dropped', plan_to_watch: 'Plan to Watch' };
+var STATUS_COLORS = { watching: '#4CAF50', completed: '#4e9af1', dropped: '#e74c3c', plan_to_watch: '#888' };
+
+function buildMediaItemHtml(item) {
+    var dotColor = item.category_color || '#555';
+    var statusLabel = STATUS_LABELS[item.status] || item.status;
+    var statusColor = STATUS_COLORS[item.status] || '#888';
+    var progressText = (item.progress || item.progress_max)
+        ? escapeHtml((item.progress || '-') + (item.progress_max ? ' / ' + item.progress_max : ''))
+        : '';
+    var timeText = item.total_seconds > 0 ? formatDuration(item.total_seconds) : '';
+    var catBadge = item.category_name
+        ? '<span style="font-size:0.7rem; color:' + dotColor + '; border:1px solid ' + dotColor + '; border-radius:3px; padding:0.05rem 0.35rem; white-space:nowrap; flex-shrink:0;">' + escapeHtml(item.category_name) + '</span>'
+        : '';
+    var statusBadge = '<span style="font-size:0.7rem; font-weight:600; color:' + statusColor + '; border:1px solid ' + statusColor + '; border-radius:3px; padding:0.05rem 0.35rem; white-space:nowrap; flex-shrink:0;">' + statusLabel + '</span>';
+
+    return '<div class="media-item-card" id="media-item-' + item.id + '">'
+        + '<div class="media-item-header" onclick="toggleMediaItem(' + item.id + ')">'
+        + '<span class="immersion-color-dot" style="background-color:' + dotColor + '; flex-shrink:0;"></span>'
+        + '<span style="flex:1; font-weight:600; font-size:0.9rem; color:var(--text-1); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + escapeHtml(item.title) + '</span>'
+        + catBadge + statusBadge
+        + (progressText ? '<span style="font-size:0.8rem; color:var(--text-2); white-space:nowrap; flex-shrink:0;">' + progressText + '</span>' : '')
+        + (timeText ? '<span style="font-size:0.8rem; color:var(--text-2); white-space:nowrap; flex-shrink:0; min-width:3.5rem; text-align:right;">' + timeText + '</span>' : '')
+        + '<span id="media-item-chevron-' + item.id + '" style="color:var(--text-3); font-size:0.65rem; flex-shrink:0;">▼</span>'
+        + '</div>'
+        + '<div id="media-item-detail-' + item.id + '" style="display:none; padding:0.6rem 0.75rem 0.75rem 1.4rem; border-top:1px solid var(--border);">'
+        + buildMediaItemDetailHtml(item)
+        + '</div>'
+        + '</div>';
+}
+
+function buildMediaItemDetailHtml(item) {
+    var notesHtml = item.notes
+        ? '<p style="font-size:0.82rem; color:var(--text-2); margin:0 0 0.5rem; font-style:italic;">' + escapeHtml(item.notes) + '</p>'
+        : '';
+    var datesHtml = '';
+    if (item.date_started || item.date_finished) {
+        var parts = [];
+        if (item.date_started) parts.push('Started: ' + item.date_started);
+        if (item.date_finished) parts.push('Finished: ' + item.date_finished);
+        datesHtml = '<p style="font-size:0.78rem; color:var(--text-3); margin:0 0 0.5rem;">' + parts.join('  ·  ') + '</p>';
+    }
+
+    var today = new Date();
+    var todayStr = today.getFullYear() + '-' + String(today.getMonth()+1).padStart(2,'0') + '-' + String(today.getDate()).padStart(2,'0');
+
+    // Pre-select an immersion category matching the item's media category by name
+    var matchedImmCatId = 0;
+    if (item.category_name) {
+        var matchedCat = immersionCategories.find(function(c) {
+            return c.name.toLowerCase() === item.category_name.toLowerCase();
+        });
+        if (matchedCat) matchedImmCatId = matchedCat.id;
+    }
+    var defaultChecked = matchedImmCatId > 0;
+    var immCatSel = '<select id="session-imm-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.82rem; min-width:8rem;">'
+        + '<option value="0">- Category -</option>';
+    immersionCategories.forEach(function(c) {
+        immCatSel += '<option value="' + c.id + '"' + (c.id === matchedImmCatId ? ' selected' : '') + '>' + escapeHtml(c.name) + '</option>';
+    });
+    immCatSel += '</select>';
+
+    var sessionForm = '<div id="media-session-form-' + item.id + '" style="display:none;" class="media-form-panel mb-3 p-2">'
+        + '<div style="font-size:0.78rem; font-weight:600; color:var(--text-2); margin-bottom:0.4rem;">Log Session</div>'
+        + '<div class="d-flex flex-wrap gap-2 align-items-end">'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Hours</label><input type="number" min="0" placeholder="0" id="session-h-' + item.id + '" class="form-control settings-input" style="width:4.5rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Min</label><input type="number" min="0" max="59" placeholder="0" id="session-m-' + item.id + '" class="form-control settings-input" style="width:4.5rem; font-size:0.85rem;"></div>'
+        + '<div style="flex:1; min-width:8rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Progress note</label><input type="text" placeholder="e.g. Ep 12-13" id="session-prog-' + item.id + '" class="form-control settings-input" style="font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Date</label><input type="date" id="session-date-' + item.id + '" value="' + todayStr + '" class="form-control settings-input" style="font-size:0.85rem; width:9.5rem;"></div>'
+        + '<button class="btn btn-dark btn-accent btn-sm" onclick="submitMediaSession(' + item.id + '); event.stopPropagation();" style="height:2.2rem; font-size:0.78rem;">Save</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="hideMediaSessionForm(' + item.id + '); event.stopPropagation();" style="height:2.2rem; font-size:0.78rem; color:var(--text-muted);">Cancel</button>'
+        + '</div>'
+        + '<div class="d-flex align-items-center gap-2 mt-2" style="flex-wrap:wrap;">'
+        + '<label style="display:flex; align-items:center; gap:0.35rem; font-size:0.8rem; color:var(--text-2); cursor:pointer; user-select:none;">'
+        + '<input type="checkbox" id="session-imm-check-' + item.id + '"' + (defaultChecked ? ' checked' : '') + ' onchange="toggleSessionImmCat(' + item.id + ')" style="accent-color:var(--accent);">'
+        + 'Count as immersion'
+        + '</label>'
+        + '<div id="session-imm-cat-wrap-' + item.id + '"' + (defaultChecked ? '' : ' style="display:none;"') + '>'
+        + immCatSel
+        + '</div>'
+        + '</div>'
+        + '</div>';
+
+    var statusOpts = [['watching','Watching'],['completed','Completed'],['dropped','Dropped'],['plan_to_watch','Plan to Watch']];
+    var statusSel = '<select id="edit-status-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;">';
+    statusOpts.forEach(function(s) { statusSel += '<option value="' + s[0] + '"' + (item.status===s[0]?' selected':'') + '>' + s[1] + '</option>'; });
+    statusSel += '</select>';
+    var catSel = '<select id="edit-cat-' + item.id + '" class="form-control dash-select" style="font-size:0.85rem;"><option value="0">- None -</option>';
+    mediaCategories.forEach(function(c) { catSel += '<option value="' + c.id + '"' + (item.category_id===c.id?' selected':'') + '>' + escapeHtml(c.name) + '</option>'; });
+    catSel += '</select>';
+
+    var editForm = '<div id="media-edit-form-' + item.id + '" style="display:none;" class="media-form-panel mb-3 p-2">'
+        + '<div style="font-size:0.78rem; font-weight:600; color:var(--text-2); margin-bottom:0.5rem;">Edit Item</div>'
+        + '<div class="d-flex flex-wrap gap-2 mb-2">'
+        + '<div style="flex:2; min-width:12rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Title</label><input type="text" id="edit-title-' + item.id + '" value="' + escapeHtml(item.title) + '" class="form-control settings-input" style="font-size:0.85rem;"></div>'
+        + '<div style="min-width:9rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Category</label>' + catSel + '</div>'
+        + '<div style="min-width:9rem;"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Status</label>' + statusSel + '</div>'
+        + '</div>'
+        + '<div class="d-flex flex-wrap gap-2 mb-2">'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Progress</label><input type="text" id="edit-prog-' + item.id + '" value="' + escapeHtml(item.progress||'') + '" placeholder="e.g. 12" class="form-control settings-input" style="width:6rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Total</label><input type="text" id="edit-progmax-' + item.id + '" value="' + escapeHtml(item.progress_max||'') + '" placeholder="e.g. 75" class="form-control settings-input" style="width:6rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Started</label><input type="date" id="edit-started-' + item.id + '" value="' + (item.date_started||'') + '" class="form-control settings-input" style="width:9.5rem; font-size:0.85rem;"></div>'
+        + '<div><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Finished</label><input type="date" id="edit-finished-' + item.id + '" value="' + (item.date_finished||'') + '" class="form-control settings-input" style="width:9.5rem; font-size:0.85rem;"></div>'
+        + '</div>'
+        + '<div class="mb-2"><label style="font-size:0.7rem; color:var(--text-muted); display:block;">Notes</label><input type="text" id="edit-notes-' + item.id + '" value="' + escapeHtml(item.notes||'') + '" placeholder="Optional" class="form-control settings-input" style="font-size:0.85rem;"></div>'
+        + '<div class="d-flex gap-2">'
+        + '<button class="btn btn-dark btn-accent btn-sm" onclick="submitMediaItemEdit(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem;">Save</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="hideMediaEditForm(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem; color:var(--text-muted);">Cancel</button>'
+        + '</div></div>';
+
+    return notesHtml + datesHtml
+        + '<div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;">'
+        + '<button class="btn btn-dark btn-accent btn-sm" onclick="showMediaSessionForm(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem;">+ Log Session</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="showMediaEditForm(' + item.id + '); event.stopPropagation();" style="font-size:0.78rem; color:var(--text-2);">Edit</button>'
+        + '<button class="btn btn-dark btn-sm" onclick="deleteMediaItem(' + item.id + ', ' + jsonAttr(item.title) + '); event.stopPropagation();" style="font-size:0.78rem; color:#e74c3c;">Delete</button>'
+        + '</div>'
+        + sessionForm + editForm
+        + '<div id="media-sessions-list-' + item.id + '" style="margin-top:0.4rem;"><p style="color:#666; font-size:0.82rem; margin:0;">Loading sessions…</p></div>';
+}
+
+function toggleMediaItem(itemId) {
+    var detail = document.getElementById('media-item-detail-' + itemId);
+    var chevron = document.getElementById('media-item-chevron-' + itemId);
+    if (!detail) return;
+    var isOpen = detail.style.display !== 'none';
+    if (isOpen) {
+        detail.style.display = 'none';
+        if (chevron) chevron.textContent = '▼';
+        expandedMediaItems[itemId] = false;
+    } else {
+        detail.style.display = '';
+        if (chevron) chevron.textContent = '▲';
+        expandedMediaItems[itemId] = true;
+        if (bridge) bridge.getMediaSessions(itemId);
+    }
+}
+
+function updateMediaSessions(itemId, sessions) {
+    var container = document.getElementById('media-sessions-list-' + itemId);
+    if (!container) return;
+    if (!sessions.length) {
+        container.innerHTML = '<p style="color:#666; font-size:0.82rem; margin:0.4rem 0 0;">No sessions logged yet.</p>';
+        return;
+    }
+    var html = '<div style="border-top:1px solid var(--border); padding-top:0.4rem; margin-top:0.4rem;">'
+        + '<span style="font-size:0.72rem; font-weight:600; color:var(--text-3); text-transform:uppercase; letter-spacing:0.05em;">Sessions</span></div>';
+    sessions.forEach(function(s) {
+        var dur = s.duration_seconds ? formatDuration(s.duration_seconds) : '-';
+        html += '<div style="display:flex; align-items:center; gap:0.5rem; padding:0.3rem 0; border-bottom:1px solid var(--border); font-size:0.82rem; color:var(--text-2);">'
+            + (s.progress_note ? '<span style="color:var(--text-2);">' + escapeHtml(s.progress_note) + '</span><span style="color:#555;">·</span>' : '')
+            + '<span style="font-weight:600; color:var(--text-1);">' + dur + '</span>'
+            + '<span style="color:#666; margin-left:auto; flex-shrink:0;">' + s.session_date + '</span>'
+            + '<button class="btn btn-sm" onclick="deleteMediaSession(' + s.id + ',' + itemId + '); event.stopPropagation();" style="color:#e74c3c; font-size:0.7rem; padding:0.1rem 0.3rem;" title="Delete">✕</button>'
+            + '</div>';
+    });
+    container.innerHTML = html;
+}
+
+function toggleSessionImmCat(itemId) {
+    var checked = document.getElementById('session-imm-check-' + itemId).checked;
+    var wrap = document.getElementById('session-imm-cat-wrap-' + itemId);
+    if (wrap) wrap.style.display = checked ? '' : 'none';
+}
+
+function showMediaSessionForm(itemId) {
+    document.getElementById('media-session-form-' + itemId).style.display = '';
+    hideMediaEditForm(itemId);
+}
+function hideMediaSessionForm(itemId) {
+    document.getElementById('media-session-form-' + itemId).style.display = 'none';
+}
+function submitMediaSession(itemId) {
+    var h = parseInt(document.getElementById('session-h-' + itemId).value) || 0;
+    var m = parseInt(document.getElementById('session-m-' + itemId).value) || 0;
+    var prog = document.getElementById('session-prog-' + itemId).value.trim();
+    var sDate = document.getElementById('session-date-' + itemId).value;
+    if (!sDate) { showAlert('Please select a date.'); return; }
+    var immCatId = 0;
+    var immCheck = document.getElementById('session-imm-check-' + itemId);
+    if (immCheck && immCheck.checked) {
+        immCatId = parseInt(document.getElementById('session-imm-cat-' + itemId).value) || 0;
+        if (!immCatId) { showAlert('Please select an immersion category, or uncheck "Count as immersion".'); return; }
+    }
+    if (bridge) bridge.createMediaSession(itemId, (h * 3600) + (m * 60), prog, sDate, immCatId);
+    hideMediaSessionForm(itemId);
+}
+
+function showMediaEditForm(itemId) {
+    document.getElementById('media-edit-form-' + itemId).style.display = '';
+    hideMediaSessionForm(itemId);
+}
+function hideMediaEditForm(itemId) {
+    document.getElementById('media-edit-form-' + itemId).style.display = 'none';
+}
+function submitMediaItemEdit(itemId) {
+    var title = document.getElementById('edit-title-' + itemId).value.trim();
+    if (!title) { showAlert('Title is required.'); return; }
+    var catId = parseInt(document.getElementById('edit-cat-' + itemId).value) || 0;
+    var status = document.getElementById('edit-status-' + itemId).value;
+    var prog = document.getElementById('edit-prog-' + itemId).value.trim();
+    var progMax = document.getElementById('edit-progmax-' + itemId).value.trim();
+    var notes = document.getElementById('edit-notes-' + itemId).value.trim();
+    var started = document.getElementById('edit-started-' + itemId).value;
+    var finished = document.getElementById('edit-finished-' + itemId).value;
+    if (bridge) bridge.updateMediaItem(itemId, title, catId, status, prog, progMax, notes, started, finished);
+}
+
+function deleteMediaItem(itemId, title) {
+    showConfirm('Delete "' + title + '" and all its sessions? This cannot be undone.', function() {
+        if (bridge) bridge.deleteMediaItem(itemId);
+        expandedMediaItems[itemId] = false;
+    });
+}
+
+function deleteMediaSession(sessionId, itemId) {
+    showConfirm('Delete this session?', function() {
+        if (bridge) bridge.deleteMediaSession(sessionId, itemId);
+    });
+}
+
+function showAddItemForm() {
+    document.getElementById('media-add-item-form').style.display = '';
+    document.getElementById('media-add-item-title').value = '';
+    document.getElementById('media-add-item-status').value = 'watching';
+    document.getElementById('media-add-item-cat').value = '0';
+    document.getElementById('media-add-item-prog').value = '';
+    document.getElementById('media-add-item-progmax').value = '';
+    document.getElementById('media-add-item-notes').value = '';
+    document.getElementById('media-add-item-started').value = '';
+    document.getElementById('media-add-item-title').focus();
+}
+
+function hideAddItemForm() {
+    document.getElementById('media-add-item-form').style.display = 'none';
+}
+
+function submitAddMediaItem() {
+    var title = document.getElementById('media-add-item-title').value.trim();
+    if (!title) { showAlert('Please enter a title.'); return; }
+    var catId = parseInt(document.getElementById('media-add-item-cat').value) || 0;
+    var status = document.getElementById('media-add-item-status').value;
+    var prog = document.getElementById('media-add-item-prog').value.trim();
+    var progMax = document.getElementById('media-add-item-progmax').value.trim();
+    var notes = document.getElementById('media-add-item-notes').value.trim();
+    var started = document.getElementById('media-add-item-started').value;
+    if (bridge) bridge.createMediaItem(title, catId, status, prog, progMax, notes, started);
+    hideAddItemForm();
+}
+
+// --- Anime / Manga Search (Jikan) ---
+
+var malSearchMode = 'anime';
+
+function setMalSearchMode(mode) {
+    malSearchMode = mode;
+    var animeBtn = document.getElementById('mal-toggle-anime');
+    var mangaBtn = document.getElementById('mal-toggle-manga');
+    if (animeBtn && mangaBtn) {
+        animeBtn.style.background = mode === 'anime' ? '#7c6af5' : 'transparent';
+        animeBtn.style.color = mode === 'anime' ? '#fff' : '#aaa';
+        mangaBtn.style.background = mode === 'manga' ? '#7c6af5' : 'transparent';
+        mangaBtn.style.color = mode === 'manga' ? '#fff' : '#aaa';
+    }
+    var input = document.getElementById('mal-search-input');
+    if (input) input.placeholder = mode === 'anime' ? 'Search anime title…' : 'Search manga title…';
+    document.getElementById('mal-search-results').innerHTML = '';
+    document.getElementById('mal-search-error').style.display = 'none';
+}
+
+function malSearch() {
+    var query = document.getElementById('mal-search-input').value.trim();
+    if (!query) return;
+    document.getElementById('mal-search-results').innerHTML = '<p style="color:#888; font-size:0.85rem;">Searching…</p>';
+    document.getElementById('mal-search-error').style.display = 'none';
+    if (malSearchMode === 'manga') {
+        if (bridge) bridge.searchManga(query);
+    } else {
+        if (bridge) bridge.searchAnime(query);
+    }
+}
+
+// Keep backward-compat alias
+function animeSearch() { malSearch(); }
+
+var animeEpisodesCache = {};
+
+function updateAnimeSearchResults(items, error) {
+    animeEpisodesCache = {};
+    var errEl = document.getElementById('mal-search-error');
+    var resultsEl = document.getElementById('mal-search-results');
+    if (error) {
+        errEl.textContent = error;
+        errEl.style.display = '';
+        resultsEl.innerHTML = '';
+        return;
+    }
+    errEl.style.display = 'none';
+    if (!items.length) {
+        resultsEl.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No results found.</p>';
+        return;
+    }
+    var html = '<div class="d-flex flex-column gap-1">';
+    items.forEach(function(item) {
+        var displayTitle = item.title_english || item.title;
+        if (item.episodes) animeEpisodesCache[item.id] = { totalEpisodes: item.episodes };
+        var typeLabel = item.type || '';
+        var epLabel = item.episodes ? item.episodes + ' ep' : '';
+        var scoreLabel = item.score ? '★ ' + Number(item.score).toFixed(2) : '';
+        var meta = [typeLabel, epLabel, scoreLabel].filter(Boolean).join(' · ');
+        var img = item.image
+            ? '<img src="' + item.image + '" style="width:2.8rem; height:3.8rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
+            : '<div style="width:2.8rem; height:3.8rem; background:var(--bg-base); border-radius:4px; flex-shrink:0;"></div>';
+        html += '<div class="media-item-card" style="border-radius:6px;">'
+            + '<div class="d-flex align-items-center gap-2 p-2">'
+            + img
+            + '<div style="flex:1; min-width:0;">'
+            + '<div style="font-weight:600; font-size:0.88rem; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
+            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.73rem; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
+            + '<div style="font-size:0.73rem; color:var(--text-muted); margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
+            + '</div>'
+            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectAnime(' + item.id + ', ' + jsonAttr(displayTitle) + ')" style="font-size:0.72rem; white-space:nowrap; flex-shrink:0;">+ Add</button>'
+            + '</div>'
+            + '</div>';
+    });
+    html += '</div>';
+    resultsEl.innerHTML = html;
+}
+
+function selectAnime(animeId, title) {
+    showAddItemForm();
+    document.getElementById('media-add-item-title').value = title;
+    var animeCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'anime'; });
+    if (animeCat) document.getElementById('media-add-item-cat').value = animeCat.id;
+    var cached = animeEpisodesCache[animeId];
+    if (cached && cached.totalEpisodes) document.getElementById('media-add-item-progmax').value = String(cached.totalEpisodes);
+    document.getElementById('mal-search-results').innerHTML = '';
+    document.getElementById('mal-search-input').value = '';
+}
+
+// --- Manga Search Results ---
+
+function updateMangaSearchResults(items, error) {
+    var errEl = document.getElementById('mal-search-error');
+    var resultsEl = document.getElementById('mal-search-results');
+    if (error) {
+        errEl.textContent = error;
+        errEl.style.display = '';
+        resultsEl.innerHTML = '';
+        return;
+    }
+    errEl.style.display = 'none';
+    if (!items.length) {
+        resultsEl.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No results found.</p>';
+        return;
+    }
+    var html = '<div class="d-flex flex-column gap-1">';
+    items.forEach(function(item) {
+        var displayTitle = item.title_english || item.title;
+        var typeLabel = item.type || '';
+        var chLabel = item.chapters ? item.chapters + ' ch' : '';
+        var volLabel = item.volumes ? item.volumes + ' vol' : '';
+        var scoreLabel = item.score ? '★ ' + Number(item.score).toFixed(2) : '';
+        var meta = [typeLabel, chLabel, volLabel, scoreLabel].filter(Boolean).join(' · ');
+        var img = item.image
+            ? '<img src="' + item.image + '" style="width:2.8rem; height:3.8rem; object-fit:cover; border-radius:4px; flex-shrink:0;" onerror="this.style.display=\'none\'">'
+            : '<div style="width:2.8rem; height:3.8rem; background:var(--bg-base); border-radius:4px; flex-shrink:0;"></div>';
+        html += '<div class="media-item-card" style="border-radius:6px;">'
+            + '<div class="d-flex align-items-center gap-2 p-2">'
+            + img
+            + '<div style="flex:1; min-width:0;">'
+            + '<div style="font-weight:600; font-size:0.88rem; color:var(--text-1); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(displayTitle) + '</div>'
+            + (item.title_english && item.title_english !== item.title ? '<div style="font-size:0.73rem; color:var(--text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">' + escapeHtml(item.title) + '</div>' : '')
+            + '<div style="font-size:0.73rem; color:var(--text-muted); margin-top:0.1rem;">' + escapeHtml(meta) + '</div>'
+            + '</div>'
+            + '<button class="btn btn-dark btn-accent btn-sm" onclick="selectManga(' + jsonAttr(displayTitle) + ',' + (item.chapters || 0) + ')" style="font-size:0.72rem; white-space:nowrap; flex-shrink:0;">+ Add</button>'
+            + '</div>'
+            + '</div>';
+    });
+    html += '</div>';
+    resultsEl.innerHTML = html;
+}
+
+function selectManga(title, totalChapters) {
+    showAddItemForm();
+    document.getElementById('media-add-item-title').value = title;
+    if (totalChapters) document.getElementById('media-add-item-progmax').value = String(totalChapters);
+    var mangaCat = mediaCategories.find(function(c) { return c.name.toLowerCase() === 'manga'; });
+    if (mangaCat) document.getElementById('media-add-item-cat').value = mangaCat.id;
+    document.getElementById('mal-search-results').innerHTML = '';
+    document.getElementById('mal-search-input').value = '';
+}
+
+function escapeHtml(text) {
+    var div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Serialize a value to JSON safe for embedding inside an HTML attribute (quotes escaped as &quot;)
+function jsonAttr(val) {
+    return JSON.stringify(val).replace(/"/g, '&quot;');
+}
+
+// ── Custom select dropdowns ──────────────────────────────────────
+// Native <select> popups render incorrectly in QtWebEngine (infinite white box).
+// Menu is appended directly to <body> when opened so that CSS transforms on
+// ancestor cards (e.g. hover translateY) cannot hijack position:fixed coordinates.
+
+var _cselActive = null;
+var _cselActiveMenu = null;
+var _cselBackdrop = null;
+
+function _cselCloseAll() {
+    if (_cselActiveMenu) {
+        if (_cselActiveMenu.parentNode) _cselActiveMenu.parentNode.removeChild(_cselActiveMenu);
+        _cselActiveMenu = null;
+    }
+    if (_cselActive) {
+        _cselActive.classList.remove('csel-open');
+        _cselActive = null;
+    }
+    if (_cselBackdrop && _cselBackdrop.parentNode) {
+        _cselBackdrop.parentNode.removeChild(_cselBackdrop);
+    }
+}
+
+function _cselShowBackdrop() {
+    if (!_cselBackdrop) {
+        _cselBackdrop = document.createElement('div');
+        _cselBackdrop.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;z-index:9990;background:transparent;';
+        _cselBackdrop.addEventListener('click', _cselCloseAll);
+    }
+    if (!_cselBackdrop.parentNode) document.body.appendChild(_cselBackdrop);
+}
+
+document.addEventListener('scroll', _cselCloseAll, true);
+
+function wrapSelect(sel) {
+    if (sel._cselDone) return;
+    sel._cselDone = true;
+
+    var isDash = sel.classList.contains('dash-select');
+
+    var wrap = document.createElement('div');
+    wrap.className = 'csel' + (isDash ? ' csel-pill' : ' csel-box');
+    if (sel.style.width) {
+        wrap.style.width = sel.style.width;
+    } else if (!isDash) {
+        wrap.style.width = '100%';
+    }
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'csel-btn';
+
+    var lbl = document.createElement('span');
+    lbl.className = 'csel-lbl';
+
+    var chev = document.createElement('span');
+    chev.className = 'csel-chev';
+    chev.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+    btn.appendChild(lbl);
+    btn.appendChild(chev);
+
+    // menu is NOT appended to wrap - it lives in <body> only while open
+    var menu = document.createElement('div');
+    menu.className = 'csel-menu';
+    menu.style.cssText = 'position:fixed;z-index:9999;display:block;';
+
+    wrap.appendChild(btn);
+    sel.parentNode.insertBefore(wrap, sel);
+    sel.style.cssText = 'display:none !important;';
+    wrap.appendChild(sel);
+
+    function syncLabel() {
+        var idx = sel.selectedIndex;
+        lbl.textContent = (idx >= 0 && sel.options[idx]) ? sel.options[idx].text : '';
+    }
+
+    function buildMenu() {
+        menu.innerHTML = '';
+        Array.from(sel.options).forEach(function(opt) {
+            var item = document.createElement('div');
+            item.className = 'csel-item' + (opt.value === sel.value ? ' csel-item-on' : '');
+            item.textContent = opt.text;
+            item.addEventListener('click', function() {
+                sel.value = opt.value;
+                syncLabel();
+                _cselCloseAll();
+                sel.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+            menu.appendChild(item);
+        });
+    }
+
+    function positionMenu() {
+        var rect = btn.getBoundingClientRect();
+        menu.style.left = rect.left + 'px';
+        menu.style.right = 'auto';
+        menu.style.minWidth = rect.width + 'px';
+        var spaceBelow = window.innerHeight - rect.bottom;
+        if (spaceBelow < 160 && rect.top > 160) {
+            menu.style.top = 'auto';
+            menu.style.bottom = (window.innerHeight - rect.top + 4) + 'px';
+        } else {
+            menu.style.bottom = 'auto';
+            menu.style.top = (rect.bottom + 4) + 'px';
+        }
+    }
+
+    btn.addEventListener('click', function() {
+        var isOpen = (_cselActive === wrap);
+        _cselCloseAll();
+        if (!isOpen) {
+            buildMenu();
+            document.body.appendChild(menu);
+            positionMenu();
+            wrap.classList.add('csel-open');
+            _cselActive = wrap;
+            _cselActiveMenu = menu;
+            _cselShowBackdrop();
+        }
+    });
+
+    new MutationObserver(syncLabel).observe(sel, { childList: true, subtree: true });
+
+    sel._cselSyncLabel = syncLabel;
+    syncLabel();
+}
+
+function syncCustomSelect(id) {
+    var sel = document.getElementById(id);
+    if (sel && sel._cselSyncLabel) sel._cselSyncLabel();
+}
+
+function wrapAllSelects() {
+    document.querySelectorAll('select').forEach(wrapSelect);
+}
+
+document.addEventListener('DOMContentLoaded', wrapAllSelects);

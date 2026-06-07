@@ -52,3 +52,24 @@ class Card:
         Back: {self.card_back}\nReps: {self.reps}\nEase Factor: {self.ease_factor}\n \
         Interval: {self.interval}\nDue Date: {self.due_date}\nIs New: {self.is_new}\n \
         Date Created: {self.date_created}\nLast Reviewed: {self.last_reviewed}\n"
+
+class ImmersionCategory:
+    def __init__(self, id, name, color, date_created) -> None:
+        self.id = id
+        self.name = name
+        self.color = color
+        self.date_created = date_created
+
+    def __repr__(self) -> str:
+        return f"\nId: {self.id}\nName: {self.name}\nColor: {self.color}\nDate Created: {self.date_created}\n"
+
+class ImmersionLog:
+    def __init__(self, id, category_id, duration_seconds, log_date, date_created) -> None:
+        self.id = id
+        self.category_id = category_id
+        self.duration_seconds = duration_seconds
+        self.log_date = log_date
+        self.date_created = date_created
+
+    def __repr__(self) -> str:
+        return f"\nId: {self.id}\nCategory ID: {self.category_id}\nDuration: {self.duration_seconds}s\nLog Date: {self.log_date}\n"

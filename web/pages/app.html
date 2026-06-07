@@ -15,65 +15,69 @@
     <script src="app.js"></script>
 </head>
 <body>
-    <div class="container-fluid p-4 bg-dashboard">
+    <div class="container-fluid bg-dashboard">
         <div class="row">
-            <div class="col-md-2 sidebar-color text-white rounded shadow sidebar-container" id="sidebar" style="height: calc(100vh - 3rem);">
-                <button class="btn btn-dark toggle-btn" onclick="toggleSidebar()">
-                    ☰
-                </button>
 
+            <!-- Sidebar -->
+            <div class="sidebar-container rounded shadow" id="sidebar">
+                <button class="btn btn-dark toggle-btn" onclick="toggleSidebar()">☰</button>
                 <div class="sidebar-content">
-                    <div class="h1 pt-3 m-3 text-left h1-font">Immersion</div>
+                    <div class="h1-font">Immersion Suite</div>
                     <div class="list-group sidebar-buttons">
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('dashboard')">Dashboard</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('srs')">SRS</a>
+                        <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('immersion')">Immersion</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('settings')">Settings</a>
                         <a href="#" class="btn btn-dark dashboard-buttons" onclick="showView('about')">About</a>
                     </div>
                 </div>
             </div>
 
-            <div class="col bg-main p-5" style="height: calc(100vh - 3rem); overflow-y: auto;">
+            <!-- Main Content -->
+            <div class="col bg-main">
 
-                <!-- Dashboard View -->
+                <!-- ── Dashboard View ────────────────────────────── -->
                 <div id="dashboard-view" class="view-section text-white">
                     <h1 class="mb-4">Dashboard</h1>
 
-                    <!-- Quick Stats -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <div class="card dash-card">
-                                <div class="card-body py-3">
-                                    <div class="row text-center g-0">
-                                        <div class="col-3 dash-stat-cell">
-                                            <div class="dash-stat-label">Cards Due</div>
-                                            <div class="dash-stat-value" id="due-cards">—</div>
-                                        </div>
-                                        <div class="col-3 dash-stat-cell">
-                                            <div class="dash-stat-label">New Cards</div>
-                                            <div class="dash-stat-value" id="new-cards">—</div>
-                                        </div>
-                                        <div class="col-3 dash-stat-cell">
-                                            <div class="dash-stat-label">Current Streak</div>
-                                            <div class="dash-stat-value" id="heatmap-current-streak">—</div>
-                                            <div class="dash-stat-sub">days</div>
-                                        </div>
-                                        <div class="col-3 dash-stat-cell">
-                                            <div class="dash-stat-label">Reviews This Year</div>
-                                            <div class="dash-stat-value" id="heatmap-year-total">—</div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                    <!-- KPI Grid -->
+                    <div class="dash-kpi-grid mb-4">
+
+                        <div class="dash-kpi-card dash-kpi-due">
+                            <div class="dash-kpi-value" id="due-cards">-</div>
+                            <div class="dash-kpi-label">Due Today</div>
                         </div>
+
+                        <div class="dash-kpi-card dash-kpi-new">
+                            <div class="dash-kpi-value" id="new-cards">-</div>
+                            <div class="dash-kpi-label">New Cards</div>
+                        </div>
+
+                        <div class="dash-kpi-card dash-kpi-tomorrow">
+                            <div class="dash-kpi-value" id="due-tomorrow-cards">-</div>
+                            <div class="dash-kpi-label">Due Tomorrow</div>
+                        </div>
+
+                        <div class="dash-kpi-card dash-kpi-streak">
+                            <div class="dash-kpi-value" id="heatmap-current-streak">-</div>
+                            <div class="dash-kpi-label">Day Streak</div>
+                            <div class="dash-kpi-sub">Best: <span id="heatmap-longest-streak">-</span> days</div>
+                        </div>
+
+                        <div class="dash-kpi-card dash-kpi-year">
+                            <div class="dash-kpi-value" id="heatmap-year-total">-</div>
+                            <div class="dash-kpi-label">Reviews This Year</div>
+                        </div>
+
                     </div>
 
-                    <!-- Retention Rate -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <div class="card dash-card">
+                    <!-- Retention + Activity -->
+                    <div class="row g-3 mb-4">
+
+                        <div class="col-md-7">
+                            <div class="card dash-card h-100">
                                 <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
                                         <span class="dash-section-title">Retention Rate</span>
                                         <div class="d-flex gap-2 flex-wrap">
                                             <select id="retention-deck-select" class="form-select form-select-sm dash-select" onchange="fetchRetentionStats()">
@@ -88,38 +92,95 @@
                                             </select>
                                         </div>
                                     </div>
-                                    <div class="row text-center g-0">
-                                        <div class="col-4 dash-stat-cell">
-                                            <div class="dash-stat-label">Young</div>
-                                            <div class="dash-stat-value" id="retention-young">—</div>
-                                            <div class="dash-stat-sub" id="retention-young-count"></div>
+                                    <div class="dash-retention-rings">
+                                        <div class="dash-ring-wrap">
+                                            <div class="dash-ring">
+                                                <svg viewBox="0 0 80 80" width="108" height="108">
+                                                    <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="7"/>
+                                                    <circle cx="40" cy="40" r="30" fill="none" stroke="#3b82f6" stroke-width="7" stroke-dasharray="188.5" stroke-dashoffset="188.5" stroke-linecap="round" transform="rotate(-90 40 40)" id="retention-young-ring"/>
+                                                </svg>
+                                                <div class="dash-ring-value" id="retention-young">-</div>
+                                            </div>
+                                            <div class="dash-ring-label">Young</div>
+                                            <div class="dash-ring-count" id="retention-young-count"></div>
                                         </div>
-                                        <div class="col-4 dash-stat-cell">
-                                            <div class="dash-stat-label">Mature</div>
-                                            <div class="dash-stat-value" id="retention-mature">—</div>
-                                            <div class="dash-stat-sub" id="retention-mature-count"></div>
+                                        <div class="dash-ring-wrap">
+                                            <div class="dash-ring">
+                                                <svg viewBox="0 0 80 80" width="108" height="108">
+                                                    <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="7"/>
+                                                    <circle cx="40" cy="40" r="30" fill="none" stroke="#22c55e" stroke-width="7" stroke-dasharray="188.5" stroke-dashoffset="188.5" stroke-linecap="round" transform="rotate(-90 40 40)" id="retention-mature-ring"/>
+                                                </svg>
+                                                <div class="dash-ring-value" id="retention-mature">-</div>
+                                            </div>
+                                            <div class="dash-ring-label">Mature</div>
+                                            <div class="dash-ring-count" id="retention-mature-count"></div>
                                         </div>
-                                        <div class="col-4 dash-stat-cell">
-                                            <div class="dash-stat-label">Total</div>
-                                            <div class="dash-stat-value" id="retention-total">—</div>
-                                            <div class="dash-stat-sub" id="retention-total-count"></div>
+                                        <div class="dash-ring-wrap">
+                                            <div class="dash-ring">
+                                                <svg viewBox="0 0 80 80" width="108" height="108">
+                                                    <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(0,0,0,0.07)" stroke-width="7"/>
+                                                    <circle cx="40" cy="40" r="30" fill="none" stroke="#cc66ff" stroke-width="7" stroke-dasharray="188.5" stroke-dashoffset="188.5" stroke-linecap="round" transform="rotate(-90 40 40)" id="retention-total-ring"/>
+                                                </svg>
+                                                <div class="dash-ring-value" id="retention-total">-</div>
+                                            </div>
+                                            <div class="dash-ring-label">Total</div>
+                                            <div class="dash-ring-count" id="retention-total-count"></div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <div class="col-md-5">
+                            <div class="card dash-card h-100">
+                                <div class="card-body">
+                                    <span class="dash-section-title">Activity</span>
+                                    <div class="dash-activity-stats mt-3">
+                                        <div class="dash-activity-row">
+                                            <div>
+                                                <div class="dash-activity-value"><span id="dash-today-reviews">-</span></div>
+                                                <div class="dash-activity-label">Done Today</div>
+                                            </div>
+                                        </div>
+                                        <div class="dash-activity-row">
+                                            <div>
+                                                <div class="dash-activity-value"><span id="dash-7day-avg">-</span></div>
+                                                <div class="dash-activity-label">7-Day Average</div>
+                                            </div>
+                                        </div>
+                                        <div class="dash-activity-row">
+                                            <div>
+                                                <div class="dash-activity-value"><span id="dash-year-avg">-</span></div>
+                                                <div class="dash-activity-label">Daily Avg This Year</div>
+                                            </div>
+                                        </div>
+                                        <div class="dash-activity-row" style="align-items:flex-start;">
+                                            <div style="flex:1; min-width:0;">
+                                                <div class="dash-activity-label mb-1">Mature vs. Young</div>
+                                                <div class="dash-ratio-bar">
+                                                    <div class="dash-ratio-fill dash-ratio-mature" id="dash-ratio-mature-fill" style="width:0%"></div>
+                                                    <div class="dash-ratio-fill dash-ratio-young" id="dash-ratio-young-fill" style="width:0%"></div>
+                                                </div>
+                                                <div class="d-flex justify-content-between mt-1" style="font-size:0.68rem; color:var(--text-3);">
+                                                    <span><span id="dash-ratio-mature-pct">-</span> mature</span>
+                                                    <span><span id="dash-ratio-young-pct">-</span> young</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
 
-                    <!-- Review Activity -->
-                    <div class="row mb-4" style="margin-right: 10rem;">
+                    <!-- Review Activity (Heatmap) -->
+                    <div class="row mb-4">
                         <div class="col-12">
                             <div class="card dash-card">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-                                        <div class="d-flex align-items-center gap-3">
-                                            <span class="dash-section-title">Review Activity</span>
-                                            <span class="dash-stat-sub">Longest streak: <span class="text-white fw-semibold" id="heatmap-longest-streak">—</span> days</span>
-                                        </div>
+                                        <span class="dash-section-title">Review Activity</span>
                                         <select id="heatmap-deck-select" class="form-select form-select-sm dash-select" onchange="fetchHeatmap()">
                                             <option value="0">All Decks</option>
                                         </select>
@@ -127,14 +188,14 @@
                                     <div style="overflow-x:auto;">
                                         <svg id="heatmap-svg" style="display:block;"></svg>
                                     </div>
-                                    <div id="heatmap-tooltip" style="font-size:0.8rem;color:#aaa;height:1.2em;margin-top:4px;"></div>
+                                    <div id="heatmap-tooltip" style="font-size:0.78rem;color:var(--text-muted);height:1.2em;margin-top:4px;"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- SRS View -->
+                <!-- ── SRS / Decks View ───────────────────────────── -->
                 <div id="srs-view" class="view-section view-hidden text-white">
                     <h1 class="mb-3">Decks</h1>
                     <div class="d-flex flex-wrap mb-4" style="gap: 0.5rem;">
@@ -147,51 +208,48 @@
                     <div id="deck-list"></div>
                 </div>
 
-
-                <!-- Create Deck View -->
+                <!-- ── Create Deck View ──────────────────────────── -->
                 <div id="create-deck-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('srs')">← Back</button>
                     <h1 class="mb-4">Create Deck</h1>
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">General</h2>
                             <label class="form-label settings-label" for="deck-name">Deck Name</label>
                             <input type="text" class="form-control settings-input" id="deck-name" placeholder="Enter deck name">
-                            <label class="form-label settings-label" for="deck-parent-select" style="margin-top: 1.25rem;">Parent Deck</label>
+                            <label class="form-label settings-label mt-4" for="deck-parent-select">Parent Deck</label>
                             <select class="form-control settings-input settings-select" id="deck-parent-select">
                                 <option value="0">None (top level)</option>
                             </select>
-                            <label class="form-label settings-label" for="deck-description" style="margin-top: 1.25rem;">Description</label>
+                            <label class="form-label settings-label mt-4" for="deck-description">Description</label>
                             <textarea class="form-control settings-input" id="deck-description" placeholder="Optional" style="height: 120px; resize: vertical;"></textarea>
                         </div>
                     </div>
-                    <div class="d-flex" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="createDeck()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Confirm</button>
-                        <button class="btn btn-dark" onclick="showView('srs')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Cancel</button>
+                    <div class="d-flex gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="createDeck()">Confirm</button>
+                        <button class="btn btn-dark btn-action" onclick="showView('srs')">Cancel</button>
                     </div>
                 </div>
 
-                <!-- Deck Details View -->
-                <div id="deck-details-view" class="view-section view-hidden text-white">
+                <!-- ── Deck Details View ─────────────────────────── -->
+                <div id="deck-details-view" class="view-section view-hidden text-white"></div>
 
-                </div>
-
-                <!-- Deck Settings View -->
+                <!-- ── Deck Settings View ───────────────────────── -->
                 <div id="deck-settings-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('deck-details')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
-                    <h1 class="mb-4"><span id="settings-deck-name"></span> — Settings</h1>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('deck-details')">← Back</button>
+                    <h1 class="mb-4"><span id="settings-deck-name"></span> - Settings</h1>
+
                     <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">General</h2>
                             <label class="form-label settings-label" for="settings-deck-name-input">Deck name</label>
                             <input type="text" class="form-control settings-input" id="settings-deck-name-input">
-                            <label class="form-label settings-label" for="settings-deck-parent-select" style="margin-top: 1.25rem;">Parent Deck</label>
+                            <label class="form-label settings-label mt-4" for="settings-deck-parent-select">Parent Deck</label>
                             <select class="form-control settings-input settings-select" id="settings-deck-parent-select">
                                 <option value="0">None (top level)</option>
                             </select>
-                            <label class="form-label settings-label" for="settings-deck-description-input" style="margin-top: 1.25rem;">Description</label>
-                            <textarea class="form-control settings-input" id="settings-deck-description-input" placeholder="Optional"
-                                      style="height: 80px; resize: vertical;"></textarea>
+                            <label class="form-label settings-label mt-4" for="settings-deck-description-input">Description</label>
+                            <textarea class="form-control settings-input" id="settings-deck-description-input" placeholder="Optional" style="height: 80px; resize: vertical;"></textarea>
                         </div>
                     </div>
                     <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
@@ -199,7 +257,7 @@
                             <h2 class="settings-section-title">New Cards</h2>
                             <label class="form-label settings-label" for="settings-new-cards-limit">New cards per day</label>
                             <input type="number" class="form-control settings-input" id="settings-new-cards-limit" min="0" style="width: 8rem;">
-                            <label class="form-label settings-label" for="settings-learning-steps" style="margin-top: 1.25rem;">Learning steps</label>
+                            <label class="form-label settings-label mt-4" for="settings-learning-steps">Learning steps</label>
                             <input type="text" class="form-control settings-input" id="settings-learning-steps" placeholder="e.g. 1 10" style="width: 12rem;">
                             <small class="settings-hint">Space-separated minutes. New cards cycle through each step before graduating to reviews.</small>
                         </div>
@@ -222,7 +280,7 @@
                                 <option value="mix">Mix with reviews</option>
                             </select>
                             <small class="settings-hint">Controls when new cards appear relative to due reviews in a session.</small>
-                            <label class="form-label settings-label" for="settings-answer-display" style="margin-top: 1.25rem;">Answer display</label>
+                            <label class="form-label settings-label mt-4" for="settings-answer-display">Answer display</label>
                             <select class="form-control settings-input settings-select" id="settings-answer-display">
                                 <option value="replace">Replace front with back</option>
                                 <option value="show_below">Show back below front</option>
@@ -232,20 +290,20 @@
                     </div>
                     <div class="card mb-4 settings-card settings-danger-zone" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
-                            <h2 class="settings-section-title" style="color: #e74c3c;">Danger Zone</h2>
-                            <p style="opacity: 0.8; font-size: 0.9rem; margin-bottom: 0.75rem;">Permanently delete this deck and all its cards. This cannot be undone.</p>
-                            <button class="btn btn-danger" onclick="deleteDeckFromSettings()" style="font-weight: 600;">Delete Deck</button>
+                            <h2 class="settings-section-title" style="color: #e05454;">Danger Zone</h2>
+                            <p style="opacity: 0.75; font-size: 0.875rem; margin-bottom: 0.75rem;">Permanently delete this deck and all its cards. This cannot be undone.</p>
+                            <button class="btn btn-danger" onclick="deleteDeckFromSettings()">Delete Deck</button>
                         </div>
                     </div>
-                    <div class="mt-1 mb-4 d-flex" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="saveDeckSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="showView('deck-details')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
+                    <div class="mt-1 mb-4 d-flex gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="saveDeckSettings()">Save</button>
+                        <button class="btn btn-dark btn-action" onclick="showView('deck-details')">Discard</button>
                     </div>
                 </div>
 
-                <!-- Card Types View -->
+                <!-- ── Card Types View ───────────────────────────── -->
                 <div id="card-types-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('srs')">← Back</button>
                     <div class="d-flex align-items-center justify-content-between mb-4" style="flex-wrap: wrap; gap: 1rem;">
                         <h1 class="mb-0">Card Types</h1>
                         <a href="#" class="btn btn-dark btn-accent" onclick="showView('create-card-type')">Create Card Type</a>
@@ -253,9 +311,9 @@
                     <div id="card-type-list"></div>
                 </div>
 
-                <!-- Create Card Type View -->
+                <!-- ── Create Card Type View ─────────────────────── -->
                 <div id="create-card-type-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('card-types')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('card-types')">← Back</button>
                     <h1 class="mb-4">Create Card Type</h1>
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
@@ -273,27 +331,24 @@
                     </div>
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
-                            <h2 class="settings-section-title">Styling <span style="font-size: 0.8rem; font-weight: 400; opacity: 0.6; text-transform: none; letter-spacing: 0;">optional</span></h2>
+                            <h2 class="settings-section-title">Styling <span style="font-size: 0.78rem; font-weight: 400; opacity: 0.5; text-transform: none; letter-spacing: 0;">optional</span></h2>
                             <label class="form-label settings-label" for="card-type-front-style">Front Template</label>
-                            <textarea class="form-control settings-input" id="card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label settings-label" for="card-type-back-style" style="margin-top: 1rem;">Back Template</label>
-                            <textarea class="form-control settings-input" id="card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label settings-label" for="card-type-css-style" style="margin-top: 1rem;">CSS</label>
-                            <textarea class="form-control settings-input" id="card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
-                                      style="font-family: monospace; height: 100px;"></textarea>
+                            <textarea class="form-control settings-input" id="card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders" style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label mt-3" for="card-type-back-style">Back Template</label>
+                            <textarea class="form-control settings-input" id="card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders" style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label mt-3" for="card-type-css-style">CSS</label>
+                            <textarea class="form-control settings-input" id="card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }" style="font-family: monospace; height: 100px;"></textarea>
                         </div>
                     </div>
-                    <div class="d-flex mb-4" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="submitCreateCardType()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Confirm</button>
-                        <button class="btn btn-dark" onclick="showView('card-types')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Cancel</button>
+                    <div class="d-flex mb-4 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="submitCreateCardType()">Confirm</button>
+                        <button class="btn btn-dark btn-action" onclick="showView('card-types')">Cancel</button>
                     </div>
                 </div>
 
-                <!-- Edit Card Type View -->
+                <!-- ── Edit Card Type View ───────────────────────── -->
                 <div id="edit-card-type-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('card-types')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('card-types')">← Back</button>
                     <h1 class="mb-4">Edit Card Type</h1>
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
@@ -311,65 +366,59 @@
                     </div>
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
-                            <h2 class="settings-section-title">Styling <span style="font-size: 0.8rem; font-weight: 400; opacity: 0.6; text-transform: none; letter-spacing: 0;">optional</span></h2>
+                            <h2 class="settings-section-title">Styling <span style="font-size: 0.78rem; font-weight: 400; opacity: 0.5; text-transform: none; letter-spacing: 0;">optional</span></h2>
                             <label class="form-label settings-label" for="edit-card-type-front-style">Front Template</label>
-                            <textarea class="form-control settings-input" id="edit-card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label settings-label" for="edit-card-type-back-style" style="margin-top: 1rem;">Back Template</label>
-                            <textarea class="form-control settings-input" id="edit-card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders"
-                                      style="font-family: monospace; height: 100px;"></textarea>
-                            <label class="form-label settings-label" for="edit-card-type-css-style" style="margin-top: 1rem;">CSS</label>
-                            <textarea class="form-control settings-input" id="edit-card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }"
-                                      style="font-family: monospace; height: 100px;"></textarea>
+                            <textarea class="form-control settings-input" id="edit-card-type-front-style" placeholder="HTML template with {{FieldName}} placeholders" style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label mt-3" for="edit-card-type-back-style">Back Template</label>
+                            <textarea class="form-control settings-input" id="edit-card-type-back-style" placeholder="HTML template with {{FieldName}} placeholders" style="font-family: monospace; height: 100px;"></textarea>
+                            <label class="form-label settings-label mt-3" for="edit-card-type-css-style">CSS</label>
+                            <textarea class="form-control settings-input" id="edit-card-type-css-style" placeholder=".my-class { font-size: 2rem; color: white; }" style="font-family: monospace; height: 100px;"></textarea>
                         </div>
                     </div>
-                    <div class="d-flex mb-4" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="submitEditCardType()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="showView('card-types')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
+                    <div class="d-flex mb-4 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="submitEditCardType()">Save</button>
+                        <button class="btn btn-dark btn-action" onclick="showView('card-types')">Discard</button>
                     </div>
                 </div>
 
-                <!-- Create Card View -->
+                <!-- ── Create Card View ──────────────────────────── -->
                 <div id="create-card-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('srs')">← Back</button>
                     <h1 class="mb-4">Create New Card</h1>
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">Card Details</h2>
                             <label class="form-label settings-label" for="card-deck-select">Deck</label>
                             <select class="form-control settings-input settings-select" id="card-deck-select"></select>
-                            <label class="form-label settings-label" for="card-type-select" style="margin-top: 1.25rem;">Card Type</label>
+                            <label class="form-label settings-label mt-4" for="card-type-select">Card Type</label>
                             <select class="form-control settings-input settings-select" id="card-type-select" onchange="renderCardFields(this.value)"></select>
                         </div>
                     </div>
                     <div id="card-fields-container"></div>
-                    <div class="d-flex mb-4" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="createCard()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Confirm</button>
-                        <button class="btn btn-dark" onclick="showView('srs')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Cancel</button>
+                    <div class="d-flex mb-4 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="createCard()">Confirm</button>
+                        <button class="btn btn-dark btn-action" onclick="showView('srs')">Cancel</button>
                     </div>
                 </div>
 
-                <!-- Card Browser View -->
+                <!-- ── Card Browser View ─────────────────────────── -->
                 <div id="card-browser-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('srs')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('srs')">← Back</button>
                     <h1 class="mb-4">Card Browser</h1>
                     <div class="d-flex gap-3 mb-4 flex-wrap align-items-end" style="animation: fadeIn 0.6s ease;">
                         <div>
-                            <label class="form-label" style="font-size: 0.85rem;">Deck</label>
-                            <select class="form-control dash-select" id="browse-deck-select" onchange="fetchBrowseCards()"
-                                    style="width: 14rem; font-size: 1rem;">
+                            <label class="form-label settings-label" style="font-size: 0.8rem;">Deck</label>
+                            <select class="form-control dash-select" id="browse-deck-select" onchange="fetchBrowseCards()" style="width: 14rem; font-size: 0.9rem;">
                                 <option value="0">All Decks</option>
                             </select>
                         </div>
                         <div style="flex: 1; max-width: 24rem;">
-                            <label class="form-label" style="font-size: 0.85rem;">Search</label>
-                            <input type="text" class="form-control settings-input" id="browse-search-input" placeholder="Search cards..."
-                                   oninput="debounceBrowseSearch()" style="font-size: 1rem;">
+                            <label class="form-label settings-label" style="font-size: 0.8rem;">Search</label>
+                            <input type="text" class="form-control settings-input" id="browse-search-input" placeholder="Search cards…" oninput="debounceBrowseSearch()" style="font-size: 0.9rem;">
                         </div>
                         <div>
-                            <label class="form-label" style="font-size: 0.85rem;">Sort By</label>
-                            <select class="form-control dash-select" id="browse-sort-select" onchange="fetchBrowseCards()"
-                                    style="width: 16rem; font-size: 1rem;">
+                            <label class="form-label settings-label" style="font-size: 0.8rem;">Sort By</label>
+                            <select class="form-control dash-select" id="browse-sort-select" onchange="fetchBrowseCards()" style="width: 16rem; font-size: 0.9rem;">
                                 <option value="date_created_desc">Date Created (Newest)</option>
                                 <option value="date_created_asc">Date Created (Oldest)</option>
                                 <option value="due_date_asc">Due Date</option>
@@ -379,13 +428,13 @@
                             </select>
                         </div>
                     </div>
-                    <div id="browse-card-count" style="font-size: 0.85rem; color: #888; margin-bottom: 0.75rem; animation: fadeIn 0.6s ease;"></div>
+                    <div id="browse-card-count" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; animation: fadeIn 0.6s ease;"></div>
                     <div id="browse-card-list" style="animation: fadeIn 0.6s ease;"></div>
                 </div>
 
-                <!-- Edit Card View -->
+                <!-- ── Edit Card View ────────────────────────────── -->
                 <div id="edit-card-view" class="view-section view-hidden text-white">
-                    <button class="btn btn-dark mb-3" onclick="showView('card-browser')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('card-browser')">← Back</button>
                     <h1 class="mb-4">Edit Card</h1>
                     <input type="hidden" id="edit-card-id">
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
@@ -393,7 +442,7 @@
                             <h2 class="settings-section-title">Card Details</h2>
                             <label class="form-label settings-label" for="edit-card-deck-select">Deck</label>
                             <select class="form-control settings-input settings-select" id="edit-card-deck-select"></select>
-                            <label class="form-label settings-label" for="edit-card-type-select" style="margin-top: 1.25rem;">Card Type</label>
+                            <label class="form-label settings-label mt-4" for="edit-card-type-select">Card Type</label>
                             <select class="form-control settings-input settings-select" id="edit-card-type-select" onchange="renderEditCardFields(this.value)"></select>
                         </div>
                     </div>
@@ -401,31 +450,31 @@
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white" style="font-size: 0.85rem;">
                             <h2 class="settings-section-title">Scheduling Info</h2>
-                            <div class="mb-2"><span style="color:#888;">Status:</span> <span id="edit-card-status">—</span></div>
+                            <div class="mb-2"><span style="color:var(--text-muted);">Status:</span> <span id="edit-card-status">-</span></div>
                             <div class="d-flex flex-wrap gap-4">
-                                <div><span style="color:#888;">Reps:</span> <span id="edit-card-reps">—</span></div>
-                                <div><span style="color:#888;">Interval:</span> <span id="edit-card-interval">—</span> days</div>
-                                <div><span style="color:#888;">Ease:</span> <span id="edit-card-ease">—</span></div>
-                                <div><span style="color:#888;">Due:</span> <span id="edit-card-due">—</span></div>
+                                <div><span style="color:var(--text-muted);">Reps:</span> <span id="edit-card-reps">-</span></div>
+                                <div><span style="color:var(--text-muted);">Interval:</span> <span id="edit-card-interval">-</span> days</div>
+                                <div><span style="color:var(--text-muted);">Ease:</span> <span id="edit-card-ease">-</span></div>
+                                <div><span style="color:var(--text-muted);">Due:</span> <span id="edit-card-due">-</span></div>
                             </div>
                             <div class="d-flex flex-wrap gap-4 mt-2">
-                                <div><span style="color:#888;">Created:</span> <span id="edit-card-created">—</span></div>
-                                <div><span style="color:#888;">Last Reviewed:</span> <span id="edit-card-last-reviewed">—</span></div>
+                                <div><span style="color:var(--text-muted);">Created:</span> <span id="edit-card-created">-</span></div>
+                                <div><span style="color:var(--text-muted);">Last Reviewed:</span> <span id="edit-card-last-reviewed">-</span></div>
                             </div>
                         </div>
                     </div>
-                    <div class="d-flex mb-4" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="saveEditCard()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="openCardPreview()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Preview</button>
-                        <button class="btn btn-dark" onclick="showView('card-browser')" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Discard</button>
-                        <button class="btn btn-danger" onclick="deleteCardFromEdit()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Delete</button>
+                    <div class="d-flex mb-4 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="saveEditCard()">Save</button>
+                        <button class="btn btn-dark btn-action" onclick="openCardPreview()">Preview</button>
+                        <button class="btn btn-dark btn-action" onclick="showView('card-browser')">Discard</button>
+                        <button class="btn btn-danger btn-action" onclick="deleteCardFromEdit()">Delete</button>
                     </div>
                 </div>
 
-                <!-- Card Preview View -->
+                <!-- ── Card Preview View ─────────────────────────── -->
                 <div id="card-preview-view" class="view-section view-hidden text-white">
                     <style id="preview-card-css"></style>
-                    <button class="btn btn-dark mb-3" onclick="showView('edit-card')" style="background-color: #3a3555 !important; font-weight: 600; padding: 0.35rem 0.85rem;">← Back to Edit</button>
+                    <button class="btn btn-dark btn-back mb-3" onclick="showView('edit-card')">← Back to Edit</button>
                     <h1 class="mb-4">Card Preview</h1>
                     <div style="display: flex; gap: 1.5rem; flex-wrap: wrap;">
                         <!-- Preview Panel -->
@@ -433,13 +482,13 @@
                             <div class="card mb-4 settings-card">
                                 <div class="card-body text-white">
                                     <h2 class="settings-section-title">Front</h2>
-                                    <div id="preview-front-render" style="font-size: 2.5rem; color: white; text-align: center; min-height: 60px; padding: 1rem;"></div>
+                                    <div id="preview-front-render" style="font-size: 2.5rem; color: var(--text-primary); text-align: center; min-height: 60px; padding: 1rem;"></div>
                                 </div>
                             </div>
                             <div class="card mb-4 settings-card">
                                 <div class="card-body text-white">
                                     <h2 class="settings-section-title">Back</h2>
-                                    <div id="preview-back-render" style="font-size: 2.5rem; color: white; text-align: center; min-height: 60px; padding: 1rem;"></div>
+                                    <div id="preview-back-render" style="font-size: 2.5rem; color: var(--text-primary); text-align: center; min-height: 60px; padding: 1rem;"></div>
                                 </div>
                             </div>
                         </div>
@@ -449,20 +498,14 @@
                                 <div class="card-body text-white">
                                     <h2 class="settings-section-title">Styling</h2>
                                     <label class="form-label settings-label" for="preview-front-template">Front Template</label>
-                                    <textarea class="form-control settings-input" id="preview-front-template" oninput="refreshCardPreview()"
-                                              placeholder="HTML template with {{FieldName}} placeholders"
-                                              style="font-family: monospace; height: 100px;"></textarea>
-                                    <label class="form-label settings-label" for="preview-back-template" style="margin-top: 1rem;">Back Template</label>
-                                    <textarea class="form-control settings-input" id="preview-back-template" oninput="refreshCardPreview()"
-                                              placeholder="HTML template with {{FieldName}} placeholders"
-                                              style="font-family: monospace; height: 100px;"></textarea>
-                                    <label class="form-label settings-label" for="preview-css-style" style="margin-top: 1rem;">CSS</label>
-                                    <textarea class="form-control settings-input" id="preview-css-style" oninput="refreshCardPreview()"
-                                              placeholder=".my-class { font-size: 2rem; color: white; }"
-                                              style="font-family: monospace; height: 100px;"></textarea>
-                                    <div class="d-flex mt-3" style="gap: 0.75rem;">
-                                        <button class="btn btn-dark btn-accent" onclick="savePreviewStyling()" style="font-weight: 600;">Save Styling</button>
-                                        <button class="btn btn-dark" onclick="showView('edit-card')" style="background-color: #3a3555 !important; font-weight: 600;">Cancel</button>
+                                    <textarea class="form-control settings-input" id="preview-front-template" oninput="refreshCardPreview()" placeholder="HTML template with {{FieldName}} placeholders" style="font-family: monospace; height: 100px;"></textarea>
+                                    <label class="form-label settings-label mt-3" for="preview-back-template">Back Template</label>
+                                    <textarea class="form-control settings-input" id="preview-back-template" oninput="refreshCardPreview()" placeholder="HTML template with {{FieldName}} placeholders" style="font-family: monospace; height: 100px;"></textarea>
+                                    <label class="form-label settings-label mt-3" for="preview-css-style">CSS</label>
+                                    <textarea class="form-control settings-input" id="preview-css-style" oninput="refreshCardPreview()" placeholder=".my-class { font-size: 2rem; color: white; }" style="font-family: monospace; height: 100px;"></textarea>
+                                    <div class="d-flex mt-3 gap-3">
+                                        <button class="btn btn-dark btn-accent" onclick="savePreviewStyling()">Save Styling</button>
+                                        <button class="btn btn-dark" onclick="showView('edit-card')">Cancel</button>
                                     </div>
                                 </div>
                             </div>
@@ -470,66 +513,334 @@
                     </div>
                 </div>
 
-                <!-- Review View -->
-                <div id="review-view" class="view-section view-hidden text-white" style="margin-bottom: -3rem;">                    <style id="review-card-css"></style>
+                <!-- ── Review View ───────────────────────────────── -->
+                <div id="review-view" class="view-section view-hidden text-white" style="margin-bottom: -3rem;">
+                    <style id="review-card-css"></style>
                     <div id="review-inner" style="display: flex; flex-direction: column; height: calc(100vh - 6rem);">
                         <!-- Card Section -->
                         <div id="review-card-section" style="flex: 1; overflow-y: auto; padding-bottom: 1rem;">
                             <div class="mb-2" style="display: flex; align-items: center; justify-content: space-between;">
                                 <h1 style="animation: fadeIn 0.6s ease; margin: 0;">Review</h1>
-                                <div id="review-card-counts" style="display: flex; gap: 0.75rem; font-size: 1.1rem; font-weight: 600; animation: fadeIn 0.6s ease;">
-                                    <span id="review-count-new" title="New" style="color: #3498db;">0</span>
-                                    <span style="color: #555;">+</span>
-                                    <span id="review-count-learning" title="Learning" style="color: #e74c3c;">0</span>
-                                    <span style="color: #555;">+</span>
-                                    <span id="review-count-review" title="Review" style="color: #27ae60;">0</span>
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <div id="review-card-counts" style="display: flex; gap: 0.75rem; font-size: 1.05rem; font-weight: 700; animation: fadeIn 0.6s ease;">
+                                        <span id="review-count-new" title="New" style="color: #4a90d9;">0</span>
+                                        <span style="color: var(--text-muted);">+</span>
+                                        <span id="review-count-learning" title="Learning" style="color: #e05454;">0</span>
+                                        <span style="color: var(--text-muted);">+</span>
+                                        <span id="review-count-review" title="Review" style="color: #4dbf7a;">0</span>
+                                    </div>
+                                    <div style="position: relative;">
+                                        <button id="review-menu-btn" onclick="toggleReviewMenu(event)" style="background: transparent; border: 1px solid var(--border); border-radius: 6px; color: var(--text-muted); font-size: 1.1rem; line-height: 1; padding: 0.2rem 0.55rem; cursor: pointer; transition: background 0.12s, color 0.12s;" title="Card options">⋯</button>
+                                        <div id="review-card-menu" style="display: none; position: absolute; right: 0; top: calc(100% + 6px); background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 8px; min-width: 10rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4); z-index: 999; overflow: hidden;">
+                                            <div class="review-menu-item" onclick="editReviewCard()">Edit Card</div>
+                                            <div class="review-menu-item" onclick="deleteReviewCard()" style="color: #e74c3c;">Delete Card</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             <div style="display: flex; flex-direction: column; align-items: center;">
                                 <div class="d-flex flex-column justify-content-center align-items-center">
-                                    <div id="review-front-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
+                                    <div id="review-front-text" style="text-align: center;"></div>
                                 </div>
                                 <div id="review-back-container" style="display: none; width: 100%; text-align: center;">
                                     <hr style="border-color: var(--accent); width: 70%; margin: 2rem auto;">
                                     <div class="d-flex flex-column justify-content-center align-items-center">
-                                        <div id="review-back-text" style="font-size: 2.5rem; color: white; text-align: center;"></div>
+                                        <div id="review-back-text" style="text-align: center;"></div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0; border-top: 1px solid #3a3555;">
-                            <button id="review-show-answer-btn" class="btn btn-dark btn-accent" onclick="revealAnswer()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; animation: fadeIn 0.6s ease;">Show Answer</button>
+                        <div id="review-action-bar" style="display: flex; flex-shrink: 0; justify-content: center; align-items: center; padding: 1rem 0 0;">
+                            <button id="review-show-answer-btn" class="btn btn-dark btn-accent btn-action" onclick="revealAnswer()" style="animation: fadeIn 0.6s ease;">Show Answer</button>
                             <div id="review-rating-buttons" style="display: none; gap: 1rem; flex-wrap: wrap; justify-content: center;">
-                                <button class="btn btn-dark" onclick="rateCard(1)" style="background-color: #3a3555 !important; color: #c0392b; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Again</button>
-                                <button class="btn btn-dark" onclick="rateCard(3)" style="background-color: #3a3555 !important; color: #e67e22; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Hard</button>
-                                <button class="btn btn-dark" onclick="rateCard(4)" style="background-color: #3a3555 !important; color: #27ae60; width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Good</button>
-                                <button class="btn btn-dark" onclick="rateCard(5)" style="background-color: #3a3555 !important; color: var(--accent); width: 8rem; height: 3rem; font-size: large; font-weight: 600;">Easy</button>
+                                <button id="btn-rate-again" class="btn btn-dark btn-action" onclick="rateCard(1)">Again</button>
+                                <button id="btn-rate-hard" class="btn btn-dark btn-action" onclick="rateCard(3)">Hard</button>
+                                <button id="btn-rate-good" class="btn btn-dark btn-action" onclick="rateCard(4)">Good</button>
+                                <button id="btn-rate-easy" class="btn btn-dark btn-action" onclick="rateCard(5)">Easy</button>
                             </div>
                         </div>
-                    <!-- Complete Section -->
-                    <div id="review-complete-section" style="display: none; flex: 1; justify-content: center; align-items: center; flex-direction: column; text-align: center;">
-                        <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Review Complete!</h1>
-                        <p style="animation: fadeIn 0.6s ease;">Great job! You've reviewed all your cards for today.</p>
-                        <button class="btn btn-dark btn-accent" onclick="showView('srs')" style="margin-top: 1rem; animation: fadeIn 0.6s ease;">Back to Decks</button>
-                    </div>
+                        <!-- Complete Section -->
+                        <div id="review-complete-section" style="display: none; flex: 1; justify-content: center; align-items: center; flex-direction: column; text-align: center;">
+                            <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">Review Complete!</h1>
+                            <p style="animation: fadeIn 0.6s ease; color: var(--text-secondary);">Great job! You've reviewed all your cards for today.</p>
+                            <button class="btn btn-dark btn-accent btn-action mt-3" onclick="showView('srs')" style="animation: fadeIn 0.6s ease;">Back to Decks</button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Settings View -->
+                <!-- ── Immersion View ─────────────────────────────── -->
+                <div id="immersion-view" class="view-section view-hidden text-white">
+                    <div class="d-flex align-items-end gap-4 mb-4">
+                        <h1 class="mb-0">Immersion</h1>
+                        <ul class="nav immersion-tabs" id="immersion-tabs">
+                            <li class="nav-item">
+                                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#immersion-tab-timer">Timer</button>
+                            </li>
+                            <li class="nav-item">
+                                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#immersion-tab-media-tracker">Media Tracker</button>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="tab-content">
+
+                    <!-- Timer Tab -->
+                    <div class="tab-pane fade show active" id="immersion-tab-timer">
+                        <!-- Timer + Stats -->
+                        <div class="row mb-4">
+                            <div class="col-md-5 mb-4 mb-md-0">
+                                <div class="card dash-card" style="height: 100%;">
+                                    <div class="card-body text-center d-flex flex-column justify-content-center">
+                                        <span class="dash-section-title">Timer</span>
+                                        <div id="immersion-timer-display" class="immersion-timer-display mt-3">00:00:00</div>
+                                        <div class="mt-3 mb-3">
+                                            <label class="form-label" style="font-size: 0.78rem; color: var(--text-muted);">Category</label>
+                                            <select class="form-control dash-select mx-auto" id="immersion-timer-category" style="width: 16rem; font-size: 0.9rem;">
+                                                <option value="">- Select a category -</option>
+                                            </select>
+                                        </div>
+                                        <div class="d-flex justify-content-center gap-3 flex-wrap">
+                                            <button id="immersion-start-btn" class="btn btn-dark btn-accent btn-action" onclick="immersionTimerStart()">Start</button>
+                                            <button id="immersion-pause-btn" class="btn btn-dark btn-action" onclick="immersionTimerPause()" style="display: none;">Pause</button>
+                                            <button id="immersion-resume-btn" class="btn btn-dark btn-accent btn-action" onclick="immersionTimerResume()" style="display: none;">Resume</button>
+                                            <button id="immersion-stop-btn" class="btn btn-danger btn-action" onclick="immersionTimerStop()" style="display: none;">Save</button>
+                                            <button id="immersion-discard-btn" class="btn btn-dark btn-action" onclick="immersionTimerDiscard()" style="display: none;">Discard</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-7">
+                                <div class="card dash-card" style="height: 100%;">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                                            <span class="dash-section-title">Immersion Stats</span>
+                                            <select id="immersion-stats-period" class="form-select form-select-sm dash-select" onchange="fetchImmersionStats()">
+                                                <option value="today">Today</option>
+                                                <option value="this_week">This Week</option>
+                                                <option value="this_month">This Month</option>
+                                                <option value="all_time" selected>All Time</option>
+                                            </select>
+                                        </div>
+                                        <div class="row">
+                                            <div class="col-md-5 d-flex align-items-center justify-content-center">
+                                                <div id="immersion-pie-chart" style="width: 100%; height: 320px;"></div>
+                                            </div>
+                                            <div class="col-md-7">
+                                                <div class="mb-2" style="font-size: 0.8rem; color: var(--text-muted);">
+                                                    Total: <span id="immersion-total-time" class="text-white fw-bold" style="font-size: 1.05rem;">0h 0m</span>
+                                                </div>
+                                                <div id="immersion-stats-breakdown" style="max-height: 270px; overflow-y: auto;"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Logs + Categories -->
+                        <div class="row mb-4">
+                            <div class="col-md-7 mb-4 mb-md-0">
+                                <div class="card dash-card" style="height: 100%;">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="dash-section-title">Recent Logs</span>
+                                            <button class="btn btn-dark btn-accent btn-sm" onclick="showManualLogForm()">+ Add Manual</button>
+                                        </div>
+                                        <div id="immersion-manual-log-form" style="display: none;" class="mb-3 p-3">
+                                            <div class="d-flex flex-wrap gap-2 align-items-end">
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Category</label>
+                                                    <select class="form-control dash-select" id="manual-log-category" style="width: 12rem; font-size: 0.88rem;"></select>
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Hours</label>
+                                                    <input type="number" class="form-control settings-input" id="manual-log-hours" min="0" value="0" style="width: 5rem; font-size: 0.88rem;">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Minutes</label>
+                                                    <input type="number" class="form-control settings-input" id="manual-log-minutes" min="0" max="59" value="0" style="width: 5rem; font-size: 0.88rem;">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Date</label>
+                                                    <input type="date" class="form-control settings-input" id="manual-log-date" style="width: 10rem; font-size: 0.88rem;">
+                                                </div>
+                                                <button class="btn btn-dark btn-accent btn-sm" onclick="submitManualLog()" style="height: 2.4rem;">Add</button>
+                                                <button class="btn btn-dark btn-sm" onclick="hideManualLogForm()" style="height: 2.4rem;">Cancel</button>
+                                            </div>
+                                        </div>
+                                        <div id="immersion-logs-list" style="max-height: 320px; overflow-y: auto;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-5">
+                                <div class="card dash-card" style="height: 100%;">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="dash-section-title">Categories</span>
+                                            <button class="btn btn-dark btn-accent btn-sm" onclick="showCreateCategoryForm()">+ New</button>
+                                        </div>
+                                        <div id="immersion-create-category-form" style="display: none;" class="mb-3">
+                                            <div class="d-flex gap-2 align-items-end">
+                                                <div style="flex: 1;">
+                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Name</label>
+                                                    <input type="text" class="form-control settings-input" id="new-category-name" placeholder="e.g. Anime" style="font-size: 0.88rem;">
+                                                </div>
+                                                <div>
+                                                    <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Color</label>
+                                                    <input type="color" id="new-category-color" value="#9067C6" style="width: 3rem; height: 2.4rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
+                                                </div>
+                                                <button class="btn btn-dark btn-accent btn-sm" onclick="submitCreateCategory()" style="height: 2.4rem;">Add</button>
+                                                <button class="btn btn-dark btn-sm" onclick="hideCreateCategoryForm()" style="height: 2.4rem;">Cancel</button>
+                                            </div>
+                                        </div>
+                                        <div id="immersion-category-list" style="max-height: 320px; overflow-y: auto;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div><!-- /tab-pane timer -->
+
+                    <!-- Media Tracker Tab -->
+                    <div class="tab-pane fade" id="immersion-tab-media-tracker">
+                        <!-- MAL Search -->
+                        <div class="card dash-card mb-4">
+                            <div class="card-body text-white">
+                                <div class="d-flex align-items-center justify-content-between mb-3">
+                                    <span class="dash-section-title">Media Search</span>
+                                    <div class="d-flex gap-1" style="background: var(--bg-base); border-radius: 7px; padding: 2px;">
+                                        <button id="mal-toggle-anime" class="btn btn-sm" onclick="setMalSearchMode('anime')" style="font-size:0.75rem; font-weight:700; padding:0.2rem 0.75rem; border-radius:5px; background:var(--accent); color:#fff; border:none;">Anime</button>
+                                        <button id="mal-toggle-manga" class="btn btn-sm" onclick="setMalSearchMode('manga')" style="font-size:0.75rem; font-weight:700; padding:0.2rem 0.75rem; border-radius:5px; background:transparent; color:var(--text-muted); border:none;">Manga</button>
+                                    </div>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <input type="text" class="form-control settings-input" id="mal-search-input" placeholder="Search anime title…" style="font-size: 0.875rem;" onkeydown="if(event.key==='Enter') malSearch()">
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="malSearch()" style="white-space: nowrap;">Search</button>
+                                </div>
+                                <div id="mal-search-error" style="display: none; color: #e05454; font-size: 0.8rem; margin-top: 0.5rem;"></div>
+                                <div id="mal-search-results" style="margin-top: 0.75rem;"></div>
+                            </div>
+                        </div>
+
+                        <!-- Media Library -->
+                        <div class="card dash-card mb-4">
+                            <div class="card-body text-white">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="dash-section-title">Media Library</span>
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="showAddItemForm()">+ Add Item</button>
+                                </div>
+
+                                <!-- Status filter pills -->
+                                <div class="d-flex flex-wrap gap-2 mb-3">
+                                    <button class="media-status-pill active" data-status="all" onclick="setMediaStatusFilter('all')">All</button>
+                                    <button class="media-status-pill" data-status="watching" onclick="setMediaStatusFilter('watching')">Watching</button>
+                                    <button class="media-status-pill" data-status="completed" onclick="setMediaStatusFilter('completed')">Completed</button>
+                                    <button class="media-status-pill" data-status="dropped" onclick="setMediaStatusFilter('dropped')">Dropped</button>
+                                    <button class="media-status-pill" data-status="plan_to_watch" onclick="setMediaStatusFilter('plan_to_watch')">Plan to Watch</button>
+                                </div>
+
+                                <!-- Search + category filter -->
+                                <div class="d-flex gap-2 mb-3">
+                                    <input type="text" class="form-control settings-input" id="media-library-search" placeholder="Search titles…" oninput="renderMediaLibrary()" style="font-size: 0.86rem;">
+                                    <select class="form-control dash-select" id="media-library-cat-filter" onchange="renderMediaLibrary()" style="font-size: 0.86rem; min-width: 9rem; width: auto;">
+                                        <option value="">All types</option>
+                                    </select>
+                                </div>
+
+                                <!-- Add Item Form -->
+                                <div id="media-add-item-form" style="display: none;" class="mb-3 p-3 media-form-panel">
+                                    <div style="font-size: 0.8rem; font-weight: 600; color: var(--text-2); margin-bottom: 0.6rem;">Add Item</div>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        <div style="flex: 2; min-width: 12rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Title *</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-title" placeholder="e.g. Attack on Titan" style="font-size: 0.88rem;">
+                                        </div>
+                                        <div style="min-width: 9rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Category</label>
+                                            <select class="form-control dash-select" id="media-add-item-cat" style="font-size: 0.88rem;">
+                                                <option value="0">- None -</option>
+                                            </select>
+                                        </div>
+                                        <div style="min-width: 9rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Status</label>
+                                            <select class="form-control dash-select" id="media-add-item-status" style="font-size: 0.88rem;">
+                                                <option value="watching">Watching</option>
+                                                <option value="completed">Completed</option>
+                                                <option value="dropped">Dropped</option>
+                                                <option value="plan_to_watch">Plan to Watch</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-2 mb-2">
+                                        <div>
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Progress</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-prog" placeholder="e.g. 1" style="width: 6rem; font-size: 0.88rem;">
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Total</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-progmax" placeholder="e.g. 75" style="width: 6rem; font-size: 0.88rem;">
+                                        </div>
+                                        <div>
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Date Started</label>
+                                            <input type="date" class="form-control settings-input" id="media-add-item-started" style="width: 9.5rem; font-size: 0.88rem;">
+                                        </div>
+                                        <div style="flex: 1; min-width: 12rem;">
+                                            <label style="font-size: 0.72rem; color: var(--text-muted); display: block;">Notes</label>
+                                            <input type="text" class="form-control settings-input" id="media-add-item-notes" placeholder="Optional notes" style="font-size: 0.88rem;">
+                                        </div>
+                                    </div>
+                                    <div class="d-flex gap-2">
+                                        <button class="btn btn-dark btn-accent btn-sm" onclick="submitAddMediaItem()">Add Item</button>
+                                        <button class="btn btn-dark btn-sm" onclick="hideAddItemForm()" style="color: var(--text-muted);">Cancel</button>
+                                    </div>
+                                </div>
+
+                                <!-- Library list -->
+                                <div id="media-library-list"></div>
+                            </div>
+                        </div>
+
+                        <!-- Categories -->
+                        <div class="card dash-card mb-4">
+                            <div class="card-body text-white">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <span class="dash-section-title">Media Categories</span>
+                                    <button class="btn btn-dark btn-accent btn-sm" onclick="showCreateMediaCategoryForm()">+ New</button>
+                                </div>
+                                <div id="media-create-category-form" style="display: none;" class="mb-3">
+                                    <div class="d-flex gap-2 align-items-end">
+                                        <div style="flex: 1;">
+                                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Name</label>
+                                            <input type="text" class="form-control settings-input" id="media-new-category-name" placeholder="e.g. Manga" style="font-size: 0.88rem;">
+                                        </div>
+                                        <div>
+                                            <label class="form-label" style="font-size: 0.75rem; color: var(--text-muted);">Color</label>
+                                            <input type="color" id="media-new-category-color" value="#9067C6" style="width: 3rem; height: 2.4rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
+                                        </div>
+                                        <button class="btn btn-dark btn-accent btn-sm" onclick="submitCreateMediaCategory()" style="height: 2.4rem;">Add</button>
+                                        <button class="btn btn-dark btn-sm" onclick="hideCreateMediaCategoryForm()" style="height: 2.4rem;">Cancel</button>
+                                    </div>
+                                </div>
+                                <div id="media-category-list" style="max-height: 320px; overflow-y: auto;"></div>
+                            </div>
+                        </div>
+                    </div><!-- /tab-pane media tracker -->
+                    </div><!-- /tab-content -->
+                </div>
+
+                <!-- ── Settings View ──────────────────────────────── -->
                 <div id="settings-view" class="view-section view-hidden text-white">
                     <h1 class="mb-4">Settings</h1>
 
+                    <!-- Appearance -->
                     <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">Appearance</h2>
                             <label class="form-label settings-label" for="settings-accent-color">Accent Color</label>
                             <div class="d-flex align-items-center gap-3 mb-1">
-                                <input type="color" id="settings-accent-color" oninput="previewAccent(this.value)"
-                                       style="width: 3rem; height: 2.5rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
-                                <span id="settings-accent-hex" style="font-family: monospace; font-size: 1rem;">#9067C6</span>
+                                <input type="color" id="settings-accent-color" oninput="previewAccent(this.value)" style="width: 3rem; height: 2.5rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
+                                <span id="settings-accent-hex" style="font-family: monospace; font-size: 0.95rem; color: var(--text-secondary);">#9067C6</span>
                             </div>
                             <small class="settings-hint" style="margin-bottom: 1.5rem;">Color used for the sidebar, cards, and buttons throughout the app. Preview updates live.</small>
-                            <label class="form-label settings-label" for="settings-font-size" style="margin-top: 1.25rem;">Review Card Font Size</label>
+                            <label class="form-label settings-label mt-4" for="settings-font-size">Review Card Font Size</label>
                             <select class="form-control settings-input settings-select" id="settings-font-size" style="width: 14rem;">
                                 <option value="small">Small</option>
                                 <option value="medium">Medium</option>
@@ -538,11 +849,12 @@
                             <small class="settings-hint">Font size for card content during review sessions.</small>
                         </div>
                     </div>
-                    <div class="d-flex mb-5" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="saveAppSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="resetAppearanceSettings()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Reset to Default</button>
+                    <div class="d-flex mb-5 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="saveAppSettings()">Save</button>
+                        <button class="btn btn-dark btn-action" onclick="resetAppearanceSettings()">Reset to Default</button>
                     </div>
 
+                    <!-- SRS Defaults -->
                     <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">SRS Defaults</h2>
@@ -550,30 +862,30 @@
                             <label class="form-label settings-label" for="srs-default-new-limit">New cards per day</label>
                             <input type="number" class="form-control settings-input" id="srs-default-new-limit" min="0" style="width: 8rem;">
                             <small class="settings-hint">How many new cards to introduce per day in new decks.</small>
-                            <label class="form-label settings-label" for="srs-default-learning-steps" style="margin-top: 1.25rem;">Learning steps</label>
+                            <label class="form-label settings-label mt-4" for="srs-default-learning-steps">Learning steps</label>
                             <input type="text" class="form-control settings-input" id="srs-default-learning-steps" placeholder="e.g. 1 10" style="width: 12rem;">
                             <small class="settings-hint">Space-separated minutes for new card learning steps.</small>
-                            <label class="form-label settings-label" for="srs-default-relearning-steps" style="margin-top: 1.25rem;">Relearning steps</label>
+                            <label class="form-label settings-label mt-4" for="srs-default-relearning-steps">Relearning steps</label>
                             <input type="text" class="form-control settings-input" id="srs-default-relearning-steps" placeholder="e.g. 10" style="width: 12rem;">
                             <small class="settings-hint">Space-separated minutes for lapsed card relearning steps.</small>
-                            <label class="form-label settings-label" for="srs-default-study-order" style="margin-top: 1.25rem;">Card study order</label>
+                            <label class="form-label settings-label mt-4" for="srs-default-study-order">Card study order</label>
                             <select class="form-control settings-input settings-select" id="srs-default-study-order" style="width: 20rem;">
                                 <option value="new_first">New cards before reviews</option>
                                 <option value="new_last">New cards after reviews</option>
                                 <option value="mix">Mix with reviews</option>
                             </select>
                             <small class="settings-hint">Order in which new cards appear relative to due reviews.</small>
-                            <label class="form-label settings-label" for="srs-day-start-hour" style="margin-top: 1.25rem;">Next day starts at</label>
-                            <select class="form-control settings-input settings-select" id="srs-day-start-hour" style="width: 14rem;">
-                            </select>
+                            <label class="form-label settings-label mt-4" for="srs-day-start-hour">Next day starts at</label>
+                            <select class="form-control settings-input settings-select" id="srs-day-start-hour" style="width: 14rem;"></select>
                             <small class="settings-hint">Hour when the new review day begins. Reviews done before this hour count toward the previous day.</small>
                         </div>
                     </div>
-                    <div class="d-flex mb-5" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="saveAppSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="resetSRSDefaults()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Reset to Default</button>
+                    <div class="d-flex mb-5 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="saveAppSettings()">Save</button>
+                        <button class="btn btn-dark btn-action" onclick="resetSRSDefaults()">Reset to Default</button>
                     </div>
 
+                    <!-- Review Behavior -->
                     <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">Review Behavior</h2>
@@ -587,80 +899,74 @@
                                 <label class="form-check-label settings-label" for="review-shortcut-enabled" style="cursor: pointer;">Answer shortcut key</label>
                             </div>
                             <small class="settings-hint" style="margin-bottom: 0.75rem; display: block;">Press the shortcut to show the answer, press again to rate Good.</small>
-                            <div class="form-check form-switch mb-1" style="margin-top: 1.25rem;">
+                            <div class="form-check form-switch mb-1 mt-4">
                                 <input class="form-check-input" type="checkbox" id="review-two-button-mode" style="cursor: pointer;">
                                 <label class="form-check-label settings-label" for="review-two-button-mode" style="cursor: pointer;">Two-button mode</label>
                             </div>
                             <small class="settings-hint" style="margin-bottom: 1.5rem; display: block;">Show only Again and Good buttons during review.</small>
                             <div class="d-flex align-items-center gap-3">
-                                <button id="shortcut-key-btn" onclick="startKeyCapture()"
-                                        style="padding: 5px 18px; background-color: #1e1b2e; color: white; border: 1px solid #4a4060; border-radius: 6px; cursor: pointer; font-family: monospace; font-size: 1.1rem; min-width: 7rem; text-align: center;">Space</button>
+                                <button id="shortcut-key-btn" onclick="startKeyCapture()">Space</button>
                                 <small class="settings-hint">Click to change &mdash; press Escape to cancel</small>
                             </div>
                         </div>
                     </div>
-                    <div class="d-flex mb-5" style="gap: 0.75rem;">
-                        <button class="btn btn-dark btn-accent" onclick="saveAppSettings()" style="width: 10rem; height: 3rem; font-size: large; font-weight: 600;">Save</button>
-                        <button class="btn btn-dark" onclick="resetReviewBehavior()" style="width: 12rem; height: 3rem; font-size: large; font-weight: 600; background-color: #3a3555 !important;">Reset to Default</button>
+                    <div class="d-flex mb-5 gap-3">
+                        <button class="btn btn-dark btn-accent btn-action" onclick="saveAppSettings()">Save</button>
+                        <button class="btn btn-dark btn-action" onclick="resetReviewBehavior()">Reset to Default</button>
                     </div>
 
+                    <!-- Data & Storage -->
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">Data &amp; Storage</h2>
                             <p class="mb-0 settings-hint">Database location</p>
                             <div class="d-flex align-items-center gap-2 mb-1">
-                                <code id="data-db-path" style="font-size: 0.8rem; word-break: break-all; opacity: 0.9;">—</code>
+                                <code id="data-db-path" style="font-size: 0.78rem; word-break: break-all; opacity: 0.9;">-</code>
                             </div>
                             <div class="d-flex align-items-center gap-3 mb-4">
-                                <small id="data-db-size" style="opacity: 0.6;">—</small>
-                                <button class="btn btn-dark btn-sm" onclick="if(bridge) bridge.openDataFolder()" style="background-color: #3a3555; font-size: 0.8rem;">Open Folder</button>
+                                <small id="data-db-size" style="color: var(--text-muted);">-</small>
+                                <button class="btn btn-dark btn-sm" onclick="if(bridge) bridge.openDataFolder()">Open Folder</button>
                             </div>
-                            <p id="data-stats" style="font-size: 0.9rem; opacity: 0.8; margin-bottom: 1.5rem;">—</p>
+                            <p id="data-stats" style="font-size: 0.875rem; color: var(--text-secondary); margin-bottom: 1.5rem;">-</p>
                             <div class="d-flex gap-3 flex-wrap">
-                                <button class="btn btn-dark btn-accent" onclick="if(bridge) bridge.exportData()" style="font-size: 0.95rem; font-weight: 600;">Export All Data</button>
-                                <button class="btn btn-dark" onclick="showConfirm('Clear all review history? Card scheduling will not be affected.', function(){ if(bridge){ bridge.clearReviewHistory(); } })" style="background-color: #c0392b; font-size: 0.95rem; font-weight: 600;">Clear Review History</button>
+                                <button class="btn btn-dark btn-accent" onclick="if(bridge) bridge.exportData()">Export All Data</button>
+                                <button class="btn btn-danger" onclick="showConfirm('Clear all review history? Card scheduling will not be affected.', function(){ if(bridge){ bridge.clearReviewHistory(); } })">Clear Review History</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- About View -->
+                <!-- ── About View ─────────────────────────────────── -->
                 <div id="about-view" class="view-section view-hidden text-white">
                     <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">About</h1>
- 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.6s ease;">
+
+                    <div class="card mb-4 settings-card" style="width: 50%; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Immersion App</h2>
-                            </div>
-                            <p style="font-size: 1rem; opacity: 0.9; margin-bottom: 0.5rem;">
-                                A desktop application for spaced repetition flashcard study, immersion material tracking (Comming Soon), and review session management.
+                            <h2 class="settings-section-title">Immersion App</h2>
+                            <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                A desktop application for spaced repetition flashcard study, immersion time tracking, and review session management.
                             </p>
-                            <p style="font-size: 0.85rem; opacity: 0.6; margin-bottom: 0;">Version 1.2.0</p>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0;">Version 1.2.0</p>
                         </div>
                     </div>
- 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.7s ease;">
+
+                    <div class="card mb-4 settings-card" style="width: 50%; animation: fadeIn 0.7s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Features</h2>
-                            </div>
-                            <ul style="font-size: 0.95rem; opacity: 0.85; padding-left: 1.25rem; margin-bottom: 0; line-height: 1.9;">
+                            <h2 class="settings-section-title">Features</h2>
+                            <ul style="font-size: 0.9rem; color: var(--text-secondary); padding-left: 1.25rem; margin-bottom: 0; line-height: 2;">
                                 <li>Spaced repetition system (SRS) with customizable scheduling</li>
                                 <li>Anki deck import (.apkg)</li>
                                 <li>Custom card types and field templates</li>
                                 <li>Review statistics and activity heatmap</li>
-                                <li>Immersion time tracking(Coming Soon)</li>
+                                <li>Immersion time tracking with categories and stats</li>
                             </ul>
                         </div>
                     </div>
- 
-                    <div class="card mb-4" style="background-color: #2d2a3e; width: 50%; animation: fadeIn 0.8s ease;">
+
+                    <div class="card mb-4 settings-card" style="width: 50%; animation: fadeIn 0.8s ease;">
                         <div class="card-body text-white">
-                            <div class="mb-3">
-                                <h2 class="card-title mb-0" style="border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; display: inline-block;">Built With</h2>
-                            </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 2rem; font-size: 0.9rem; opacity: 0.85;">
+                            <h2 class="settings-section-title">Built With</h2>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 2rem; font-size: 0.875rem; color: var(--text-secondary);">
                                 <span>Python &amp; PyQt6</span>
                                 <span>Bootstrap 5</span>
                                 <span>SQLite</span>
@@ -672,19 +978,19 @@
                     </div>
                 </div>
 
-            </div>
-        </div>
-    </div>
+            </div><!-- /col.bg-main -->
+        </div><!-- /row -->
+    </div><!-- /container-fluid -->
 
     <!-- Alert Modal -->
     <div class="modal fade" id="alert-modal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0" style="background-color: #2d2a3e; color: white;">
+            <div class="modal-content">
                 <div class="modal-body p-4">
-                    <p id="alert-modal-message" style="font-size: 1.1rem; margin-bottom: 0;"></p>
+                    <p id="alert-modal-message" style="font-size: 1.05rem; margin-bottom: 0; color: var(--text-primary);"></p>
                 </div>
                 <div class="modal-footer border-0 pt-0 pb-4 px-4">
-                    <button class="btn btn-dark btn-accent" data-bs-dismiss="modal" style="width: 9rem; height: 2.75rem; font-weight: 600;">OK</button>
+                    <button class="btn btn-dark btn-accent btn-action" data-bs-dismiss="modal">OK</button>
                 </div>
             </div>
         </div>
@@ -693,13 +999,13 @@
     <!-- Confirmation Modal -->
     <div class="modal fade" id="confirm-modal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content border-0" style="background-color: #2d2a3e; color: white;">
+            <div class="modal-content">
                 <div class="modal-body p-4">
-                    <p id="confirm-modal-message" style="font-size: 1.1rem; margin-bottom: 0;"></p>
+                    <p id="confirm-modal-message" style="font-size: 1.05rem; margin-bottom: 0; color: var(--text-primary);"></p>
                 </div>
                 <div class="modal-footer border-0 pt-0 pb-4 px-4 gap-2">
-                    <button class="btn btn-dark btn-accent" onclick="confirmModalAction()" style="width: 9rem; height: 2.75rem; font-weight: 600;">Confirm</button>
-                    <button class="btn btn-dark" data-bs-dismiss="modal" style="background-color: #242038; width: 9rem; height: 2.75rem; font-weight: 600;">Cancel</button>
+                    <button class="btn btn-dark btn-accent btn-action" onclick="confirmModalAction()">Confirm</button>
+                    <button class="btn btn-dark btn-action" data-bs-dismiss="modal">Cancel</button>
                 </div>
             </div>
         </div>

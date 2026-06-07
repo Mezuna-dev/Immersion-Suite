@@ -55,3 +55,9 @@ Thumbs.db
 data/media_import_debug.txt
 /.claude
 data/settings.json
+
+# Vendored upstream sources (cloned for audit, not committed)
+vendor/
+
+# Internal planning / design docs (kept local, not part of the public repo)
+docs/planning/

@@ -164,9 +164,86 @@ def initialize_database():
                 )
         """)
 
+        # ImmersionCategory Table
+        cur.execute("""
+            CREATE TABLE ImmersionCategory (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Color TEXT NOT NULL DEFAULT '#9067C6',
+                Date_Created TEXT NOT NULL
+                )
+        """)
+
+        # ImmersionLog Table
+        cur.execute("""
+            CREATE TABLE ImmersionLog (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Category_ID INTEGER NOT NULL,
+                Duration_Seconds INTEGER NOT NULL,
+                Log_Date TEXT NOT NULL,
+                Date_Created TEXT NOT NULL,
+                FOREIGN KEY (Category_ID) REFERENCES ImmersionCategory(ID)
+                )
+        """)
+
+        # MediaCategory Table
+        cur.execute("""
+            CREATE TABLE MediaCategory (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Color TEXT NOT NULL DEFAULT '#9067C6',
+                Date_Created TEXT NOT NULL
+                )
+        """)
+
+        # MediaEntry Table (legacy)
+        cur.execute("""
+            CREATE TABLE MediaEntry (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Title TEXT NOT NULL,
+                Category_ID INTEGER,
+                Duration_Seconds INTEGER,
+                Entry_Date TEXT NOT NULL,
+                Date_Created TEXT NOT NULL,
+                FOREIGN KEY (Category_ID) REFERENCES MediaCategory(ID)
+                )
+        """)
+
+        # MediaItem Table
+        cur.execute("""
+            CREATE TABLE MediaItem (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Title TEXT NOT NULL,
+                Category_ID INTEGER,
+                Status TEXT NOT NULL DEFAULT 'plan_to_watch',
+                Progress TEXT,
+                Progress_Max TEXT,
+                Notes TEXT,
+                Date_Started TEXT,
+                Date_Finished TEXT,
+                Date_Created TEXT NOT NULL,
+                FOREIGN KEY (Category_ID) REFERENCES MediaCategory(ID)
+                )
+        """)
+
+        # MediaSession Table
+        cur.execute("""
+            CREATE TABLE MediaSession (
+                ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+                Item_ID INTEGER NOT NULL,
+                Duration_Seconds INTEGER,
+                Progress_Note TEXT,
+                Session_Date TEXT NOT NULL,
+                Date_Created TEXT NOT NULL,
+                FOREIGN KEY (Item_ID) REFERENCES MediaItem(ID)
+                )
+        """)
+
         con.commit()
         con.close()
         seed_default_card_type()
+        seed_default_immersion_categories()
+        seed_default_media_categories()
 
 
 def migrate_database():
@@ -200,7 +277,89 @@ def migrate_database():
                 cur.execute("UPDATE Deck SET Position = ? WHERE ID = ?", (pos, did))
         con.commit()
 
+    # Create ImmersionCategory table if missing (for existing DBs)
+    for tbl_stmt in [
+        """CREATE TABLE IF NOT EXISTS ImmersionCategory (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Color TEXT NOT NULL DEFAULT '#9067C6',
+            Date_Created TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS ImmersionLog (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Category_ID INTEGER NOT NULL,
+            Duration_Seconds INTEGER NOT NULL,
+            Log_Date TEXT NOT NULL,
+            Date_Created TEXT NOT NULL,
+            FOREIGN KEY (Category_ID) REFERENCES ImmersionCategory(ID)
+        )""",
+        """CREATE TABLE IF NOT EXISTS MediaCategory (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Name TEXT NOT NULL,
+            Color TEXT NOT NULL DEFAULT '#9067C6',
+            Date_Created TEXT NOT NULL
+        )""",
+        """CREATE TABLE IF NOT EXISTS MediaEntry (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Title TEXT NOT NULL,
+            Category_ID INTEGER,
+            Duration_Seconds INTEGER,
+            Entry_Date TEXT NOT NULL,
+            Date_Created TEXT NOT NULL,
+            FOREIGN KEY (Category_ID) REFERENCES MediaCategory(ID)
+        )""",
+        """CREATE TABLE IF NOT EXISTS MediaItem (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Title TEXT NOT NULL,
+            Category_ID INTEGER,
+            Status TEXT NOT NULL DEFAULT 'plan_to_watch',
+            Progress TEXT,
+            Progress_Max TEXT,
+            Notes TEXT,
+            Date_Started TEXT,
+            Date_Finished TEXT,
+            Date_Created TEXT NOT NULL,
+            FOREIGN KEY (Category_ID) REFERENCES MediaCategory(ID)
+        )""",
+        """CREATE TABLE IF NOT EXISTS MediaSession (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Item_ID INTEGER NOT NULL,
+            Duration_Seconds INTEGER,
+            Progress_Note TEXT,
+            Session_Date TEXT NOT NULL,
+            Date_Created TEXT NOT NULL,
+            FOREIGN KEY (Item_ID) REFERENCES MediaItem(ID)
+        )""",
+    ]:
+        try:
+            cur.execute(tbl_stmt)
+            con.commit()
+        except sqlite3.OperationalError:
+            pass
+
+    # Migrate legacy MediaEntry rows into MediaItem + MediaSession
+    cur.execute("SELECT COUNT(*) FROM MediaItem")
+    if cur.fetchone()[0] == 0:
+        cur.execute("SELECT COUNT(*) FROM MediaEntry")
+        if cur.fetchone()[0] > 0:
+            cur.execute("SELECT ID, Title, Category_ID, Duration_Seconds, Entry_Date, Date_Created FROM MediaEntry")
+            for entry in cur.fetchall():
+                eid, title, cat_id, duration, entry_date, date_created = entry
+                cur.execute("""
+                    INSERT INTO MediaItem (Title, Category_ID, Status, Date_Started, Date_Created)
+                    VALUES (?, ?, 'completed', ?, ?)
+                """, (title, cat_id, entry_date, date_created))
+                item_id = cur.lastrowid
+                if duration and duration > 0:
+                    cur.execute("""
+                        INSERT INTO MediaSession (Item_ID, Duration_Seconds, Session_Date, Date_Created)
+                        VALUES (?, ?, ?, ?)
+                    """, (item_id, duration, entry_date, date_created))
+            con.commit()
+
     con.close()
+    seed_default_immersion_categories()
+    seed_default_media_categories()
 
 
 # ===========================================================
@@ -397,6 +556,41 @@ def delete_deck_by_name(name):
 
 # --- CardType Functions --------------------------------
 
+DEFAULT_IMMERSION_CATEGORIES = [
+    ('Anime',    '#4e9af1'),
+    ('Manga',    '#e06c75'),
+    ('Book',     '#56b6c2'),
+    ('Movie',    '#d19a66'),
+    ('TV Show',  '#c678dd'),
+]
+
+def seed_default_immersion_categories():
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM ImmersionCategory")
+    if cur.fetchone()[0] == 0:
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur.executemany(
+            "INSERT INTO ImmersionCategory (Name, Color, Date_Created) VALUES (?, ?, ?)",
+            [(name, color, today) for name, color in DEFAULT_IMMERSION_CATEGORIES]
+        )
+        con.commit()
+    con.close()
+
+def seed_default_media_categories():
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT COUNT(*) FROM MediaCategory")
+    if cur.fetchone()[0] == 0:
+        today = datetime.now().strftime('%Y-%m-%d')
+        cur.executemany(
+            "INSERT INTO MediaCategory (Name, Color, Date_Created) VALUES (?, ?, ?)",
+            [(name, color, today) for name, color in DEFAULT_IMMERSION_CATEGORIES]
+        )
+        con.commit()
+    con.close()
+
+
 def seed_default_card_type():
     con = create_db_connection()
     cur = con.cursor()
@@ -551,7 +745,7 @@ def get_due_cards(deck_id=None, deck_ids=None):
 
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
     "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
-    "WHERE Due_Date <= ? AND Due_Date IS NOT NULL"
+    "WHERE Due_Date <= ? AND Due_Date IS NOT NULL AND Learning_Step IS NULL"
 
     query_params = [todays_date]
 
@@ -571,6 +765,25 @@ def get_due_cards(deck_id=None, deck_ids=None):
         card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
         cards.append(card)
 
+    con.close()
+    return cards
+
+def get_learning_cards(deck_ids=None):
+    """Return cards currently in a learning or relearning step (Learning_Step IS NOT NULL)."""
+    con = create_db_connection()
+    cur = con.cursor()
+    cards = []
+    query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
+    "WHERE Learning_Step IS NOT NULL"
+    query_params = []
+    if deck_ids is not None:
+        placeholders = ','.join('?' * len(deck_ids))
+        query_string += f" AND Deck_ID IN ({placeholders})"
+        query_params.extend(deck_ids)
+    cur.execute(query_string, query_params)
+    for row in cur.fetchall():
+        cards.append(models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13]))
     con.close()
     return cards
 
@@ -702,9 +915,17 @@ def update_card_learning_step(card_id: int, learning_step: int):
     today = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
+    cur.execute("SELECT Is_New, Learning_Step FROM Card WHERE ID = ?", (card_id,))
+    row = cur.fetchone()
+    first_introduction = row and row[0] == 1 and row[1] is None
     cur.execute("""
         UPDATE Card SET Learning_Step = ?, Due_Date = ? WHERE ID = ?
     """, (learning_step, today, card_id))
+    if first_introduction:
+        cur.execute("""
+            INSERT INTO Review (Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After)
+            VALUES (?, ?, 0, 0, 2.5)
+        """, (card_id, today))
     con.commit()
     con.close()
 
@@ -912,6 +1133,8 @@ def export_all_data() -> dict:
 def get_daily_review_counts(deck_id=None) -> dict:
     today = get_srs_today()
     start = today - timedelta(days=364)
+    tomorrow = today + timedelta(days=1)
+    forecast_end = today + timedelta(days=60)
 
     con = create_db_connection()
     cur = con.cursor()
@@ -935,6 +1158,29 @@ def get_daily_review_counts(deck_id=None) -> dict:
         """, (start.isoformat(), today.isoformat()))
 
     counts = {row[0]: row[1] for row in cur.fetchall()}
+
+    if deck_id is not None:
+        all_ids = get_deck_and_descendant_ids(deck_id)
+        placeholders = ','.join('?' * len(all_ids))
+        cur.execute(f"""
+            SELECT Due_Date, COUNT(*)
+            FROM Card
+            WHERE Deck_ID IN ({placeholders}) AND Is_New = 0 AND Learning_Step IS NULL
+                AND Due_Date > ? AND Due_Date <= ?
+            GROUP BY Due_Date
+        """, all_ids + [today.isoformat(), forecast_end.isoformat()])
+    else:
+        cur.execute("""
+            SELECT Due_Date, COUNT(*)
+            FROM Card
+            WHERE Is_New = 0 AND Learning_Step IS NULL
+                AND Due_Date > ? AND Due_Date <= ?
+            GROUP BY Due_Date
+        """, (today.isoformat(), forecast_end.isoformat()))
+
+    forecast = {row[0]: row[1] for row in cur.fetchall()}
+    due_tomorrow = forecast.get(tomorrow.isoformat(), 0)
+
     con.close()
 
     # Current streak: consecutive days ending today (or yesterday if no reviews today)
@@ -954,10 +1200,13 @@ def get_daily_review_counts(deck_id=None) -> dict:
             run = 0
 
     return {
+        'today': today.isoformat(),
         'counts': counts,
         'current_streak': current_streak,
         'longest_streak': longest_streak,
         'year_total': sum(counts.values()),
+        'forecast': forecast,
+        'due_tomorrow': due_tomorrow,
     }
 
 
@@ -1022,5 +1271,309 @@ def clear_review_history():
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("DELETE FROM Review")
+    con.commit()
+    con.close()
+
+
+# ===========================================================
+# Section: Immersion Functions
+# ===========================================================
+
+def create_immersion_category(name: str, color: str = '#9067C6') -> int:
+    creation_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO ImmersionCategory (Name, Color, Date_Created)
+        VALUES (?, ?, ?)
+    """, (name, color, creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+def get_all_immersion_categories() -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID, Name, Color, Date_Created FROM ImmersionCategory ORDER BY Name ASC")
+    rows = cur.fetchall()
+    con.close()
+    return [models.ImmersionCategory(r[0], r[1], r[2], r[3]) for r in rows]
+
+def update_immersion_category(cat_id: int, name: str, color: str):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE ImmersionCategory SET Name = ?, Color = ? WHERE ID = ?", (name, color, cat_id))
+    con.commit()
+    con.close()
+
+def delete_immersion_category(cat_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM ImmersionLog WHERE Category_ID = ?", (cat_id,))
+    cur.execute("DELETE FROM ImmersionCategory WHERE ID = ?", (cat_id,))
+    con.commit()
+    con.close()
+
+def create_immersion_log(category_id: int, duration_seconds: int, log_date: str = None) -> int:
+    if log_date is None:
+        log_date = get_srs_today().strftime('%Y-%m-%d')
+    creation_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO ImmersionLog (Category_ID, Duration_Seconds, Log_Date, Date_Created)
+        VALUES (?, ?, ?, ?)
+    """, (category_id, duration_seconds, log_date, creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+def delete_immersion_log(log_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM ImmersionLog WHERE ID = ?", (log_id,))
+    con.commit()
+    con.close()
+
+def get_immersion_stats(period: str = 'all_time') -> dict:
+    """Return per-category immersion totals for the given period."""
+    today = get_srs_today()
+    con = create_db_connection()
+    cur = con.cursor()
+
+    date_filter = ''
+    params = []
+    if period == 'today':
+        date_filter = 'AND l.Log_Date = ?'
+        params = [today.strftime('%Y-%m-%d')]
+    elif period == 'last_week':
+        start = (today - timedelta(days=6)).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'last_month':
+        start = (today - timedelta(days=29)).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'last_year':
+        start = (today - timedelta(days=364)).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'this_week':
+        # Monday of the current week
+        start = (today - timedelta(days=today.weekday())).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'this_month':
+        start = today.replace(day=1).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+    elif period == 'this_year':
+        start = today.replace(month=1, day=1).strftime('%Y-%m-%d')
+        date_filter = 'AND l.Log_Date >= ? AND l.Log_Date <= ?'
+        params = [start, today.strftime('%Y-%m-%d')]
+
+    cur.execute(f"""
+        SELECT c.ID, c.Name, c.Color, COALESCE(SUM(l.Duration_Seconds), 0)
+        FROM ImmersionCategory c
+        LEFT JOIN ImmersionLog l ON c.ID = l.Category_ID {date_filter}
+        GROUP BY c.ID
+        ORDER BY COALESCE(SUM(l.Duration_Seconds), 0) DESC
+    """, params)
+    rows = cur.fetchall()
+
+    # Also get total across all
+    cur.execute(f"""
+        SELECT COALESCE(SUM(l.Duration_Seconds), 0)
+        FROM ImmersionLog l
+        WHERE 1=1 {date_filter}
+    """, params)
+    total = cur.fetchone()[0]
+
+    con.close()
+
+    categories = []
+    for r in rows:
+        categories.append({
+            'id': r[0],
+            'name': r[1],
+            'color': r[2],
+            'total_seconds': r[3],
+        })
+
+    return {'categories': categories, 'total_seconds': total}
+
+def get_immersion_logs(category_id: int = None, limit: int = 50) -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    query = """
+        SELECT l.ID, l.Category_ID, c.Name, c.Color, l.Duration_Seconds, l.Log_Date, l.Date_Created
+        FROM ImmersionLog l
+        JOIN ImmersionCategory c ON l.Category_ID = c.ID
+    """
+    params = []
+    if category_id is not None:
+        query += " WHERE l.Category_ID = ?"
+        params.append(category_id)
+    query += " ORDER BY l.Date_Created DESC LIMIT ?"
+    params.append(limit)
+    cur.execute(query, params)
+    rows = cur.fetchall()
+    con.close()
+    return [{
+        'id': r[0], 'category_id': r[1], 'category_name': r[2],
+        'category_color': r[3], 'duration_seconds': r[4],
+        'log_date': r[5], 'date_created': r[6],
+    } for r in rows]
+
+
+# Section: Media Tracker Functions
+
+def create_media_category(name: str, color: str = '#9067C6') -> int:
+    con = create_db_connection()
+    cur = con.cursor()
+    today = datetime.now().strftime('%Y-%m-%d')
+    cur.execute(
+        "INSERT INTO MediaCategory (Name, Color, Date_Created) VALUES (?, ?, ?)",
+        (name, color, today)
+    )
+    new_id = cur.lastrowid
+    con.commit()
+    con.close()
+    return new_id
+
+
+def get_all_media_categories() -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID, Name, Color, Date_Created FROM MediaCategory ORDER BY Name ASC")
+    rows = cur.fetchall()
+    con.close()
+    return [{'id': r[0], 'name': r[1], 'color': r[2], 'date_created': r[3]} for r in rows]
+
+
+def update_media_category(cat_id: int, name: str, color: str):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE MediaCategory SET Name = ?, Color = ? WHERE ID = ?", (name, color, cat_id))
+    con.commit()
+    con.close()
+
+
+def delete_media_category(cat_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE MediaEntry SET Category_ID = NULL WHERE Category_ID = ?", (cat_id,))
+    cur.execute("UPDATE MediaItem SET Category_ID = NULL WHERE Category_ID = ?", (cat_id,))
+    cur.execute("DELETE FROM MediaCategory WHERE ID = ?", (cat_id,))
+    con.commit()
+    con.close()
+
+
+def create_media_item(title: str, category_id: int = None, status: str = 'plan_to_watch',
+                       progress: str = None, progress_max: str = None,
+                       notes: str = None, date_started: str = None, date_finished: str = None) -> int:
+    creation_date = datetime.now().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO MediaItem (Title, Category_ID, Status, Progress, Progress_Max, Notes, Date_Started, Date_Finished, Date_Created)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (title, category_id, status, progress or None, progress_max or None,
+          notes or None, date_started or None, date_finished or None, creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+
+def get_media_items() -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT m.ID, m.Title, m.Category_ID, c.Name, c.Color, m.Status,
+               m.Progress, m.Progress_Max, m.Notes, m.Date_Started, m.Date_Finished,
+               COALESCE(SUM(s.Duration_Seconds), 0), m.Date_Created
+        FROM MediaItem m
+        LEFT JOIN MediaCategory c ON m.Category_ID = c.ID
+        LEFT JOIN MediaSession s ON m.ID = s.Item_ID
+        GROUP BY m.ID
+        ORDER BY
+            CASE m.Status WHEN 'watching' THEN 1 WHEN 'plan_to_watch' THEN 2
+                           WHEN 'completed' THEN 3 WHEN 'dropped' THEN 4 ELSE 5 END,
+            m.Title COLLATE NOCASE ASC
+    """)
+    rows = cur.fetchall()
+    con.close()
+    return [{
+        'id': r[0], 'title': r[1], 'category_id': r[2],
+        'category_name': r[3], 'category_color': r[4],
+        'status': r[5], 'progress': r[6], 'progress_max': r[7],
+        'notes': r[8], 'date_started': r[9], 'date_finished': r[10],
+        'total_seconds': r[11], 'date_created': r[12],
+    } for r in rows]
+
+
+def update_media_item(item_id: int, title: str, category_id: int, status: str,
+                       progress: str, progress_max: str, notes: str,
+                       date_started: str, date_finished: str):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE MediaItem SET Title=?, Category_ID=?, Status=?, Progress=?, Progress_Max=?,
+        Notes=?, Date_Started=?, Date_Finished=? WHERE ID=?
+    """, (title, category_id or None, status, progress or None, progress_max or None,
+          notes or None, date_started or None, date_finished or None, item_id))
+    con.commit()
+    con.close()
+
+
+def delete_media_item(item_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM MediaSession WHERE Item_ID = ?", (item_id,))
+    cur.execute("DELETE FROM MediaItem WHERE ID = ?", (item_id,))
+    con.commit()
+    con.close()
+
+
+def create_media_session(item_id: int, duration_seconds: int = None,
+                          progress_note: str = None, session_date: str = None) -> int:
+    creation_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    if not session_date:
+        session_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        INSERT INTO MediaSession (Item_ID, Duration_Seconds, Progress_Note, Session_Date, Date_Created)
+        VALUES (?, ?, ?, ?, ?)
+    """, (item_id, duration_seconds or None, progress_note or None, session_date, creation_date))
+    con.commit()
+    new_id = cur.lastrowid
+    con.close()
+    return new_id
+
+
+def get_media_sessions(item_id: int) -> list:
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        SELECT ID, Item_ID, Duration_Seconds, Progress_Note, Session_Date, Date_Created
+        FROM MediaSession WHERE Item_ID = ?
+        ORDER BY Session_Date DESC, Date_Created DESC
+    """, (item_id,))
+    rows = cur.fetchall()
+    con.close()
+    return [{
+        'id': r[0], 'item_id': r[1], 'duration_seconds': r[2],
+        'progress_note': r[3], 'session_date': r[4], 'date_created': r[5],
+    } for r in rows]
+
+
+def delete_media_session(session_id: int):
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("DELETE FROM MediaSession WHERE ID = ?", (session_id,))
     con.commit()
     con.close()

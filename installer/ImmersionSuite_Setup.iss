@@ -1,5 +1,5 @@
-; Inno Setup Script for Immersion Suite v1.1.0
-; Requires Inno Setup 6.x — https://jrsoftware.org/isinfo.php
+; Inno Setup Script for Immersion Suite v1.3.0
+; Requires Inno Setup 6.x - https://jrsoftware.org/isinfo.php
 ;
 ; Build steps (run on Windows):
 ;   1. pip install pyinstaller
@@ -8,7 +8,7 @@
 ;      OR run: iscc installer\ImmersionSuite_Setup.iss
 
 #define AppName      "Immersion Suite"
-#define AppVersion   "1.2.0"
+#define AppVersion   "1.3.0"
 #define AppPublisher "Mezuna"
 #define AppURL       "https://github.com/mezuna-dev/immersion-app"
 #define AppExeName   "ImmersionSuite.exe"
@@ -50,9 +50,12 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 [Files]
 ; Main application bundle (produced by PyInstaller)
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Browser extension source, so users can load it unpacked in Chrome / Firefox
+Source: "..\extension\*"; DestDir: "{app}\extension"; Excludes: "web-ext-artifacts\*"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{group}\Browser Extension (load unpacked)"; Filename: "{app}\extension"
 Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}";     Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#AppName}"; Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"; Tasks: quicklaunchicon
@@ -61,6 +64,6 @@ Name: "{userappdata}\Microsoft\Internet Explorer\Quick Launch\{#AppName}"; Filen
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#StringChange(AppName, '&', '&&')}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Remove the data directory only if the user chooses to — left as a note.
+; Remove the data directory only if the user chooses to - left as a note.
 ; User data in {app}\data is intentionally NOT deleted on uninstall
 ; so that a reinstall or upgrade does not wipe flashcard progress.

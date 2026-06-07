@@ -9,5 +9,5 @@
   "review_autoplay_audio": true,
   "review_shortcut_enabled": true,
   "review_shortcut_key": "Space",
-  "review_two_button_mode": false
+  "review_two_button_mode": true
 }

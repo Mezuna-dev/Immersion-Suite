@@ -1,0 +1,57 @@
+{
+  "manifest_version": 3,
+  "name": "Immersion Suite",
+  "version": "1.3.0",
+  "description": "Popup dictionary powered by the Immersion Suite desktop app.",
+
+  "icons": {
+    "16":  "icons/16.png",
+    "48":  "icons/48.png",
+    "128": "icons/128.png"
+  },
+
+  "background": {
+    "service_worker": "background/background.js",
+    "type": "module"
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js":  ["content/content.js"],
+      "css": ["content/content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://*.youtube.com/*"],
+      "js":  ["content/youtube.js"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "web_accessible_resources": [
+    {
+      "resources": ["content/page-script.js"],
+      "matches": ["*://*.youtube.com/*"]
+    }
+  ],
+
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src ws://127.0.0.1:8765/"
+  },
+
+  "permissions": ["storage"],
+
+  "host_permissions": ["<all_urls>"],
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "immersion-suite@immersion-suite",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"],
+        "optional": []
+      }
+    }
+  }
+}
