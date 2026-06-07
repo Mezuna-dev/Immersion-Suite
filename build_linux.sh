@@ -17,17 +17,17 @@ INSTALLER_NAME="${APP_NAME}_v${APP_VERSION}_Linux_x86_64.run"
 echo "=== Immersion Suite v${APP_VERSION} Linux Installer Build ==="
 echo
 
-# Step 1 — install / verify dependencies
+# Step 1 - install / verify dependencies
 echo "[1/4] Installing Python dependencies..."
 pip install -r requirements.txt
 pip install pyinstaller pillow
 
-# Step 2 — build the executable bundle with PyInstaller
+# Step 2 - build the executable bundle with PyInstaller
 echo
 echo "[2/4] Building executable with PyInstaller..."
 pyinstaller ImmersionSuite.spec --noconfirm
 
-# Step 3 — add icon and installer script to the bundle
+# Step 3 - add icon and installer script to the bundle
 echo
 echo "[3/4] Adding icon and setup script to bundle..."
 python3 - <<'PYEOF'
@@ -40,8 +40,10 @@ img.save("dist/ImmersionSuite/icon.png", format="PNG")
 PYEOF
 cp installer/linux_setup.sh dist/ImmersionSuite/linux_setup.sh
 chmod +x dist/ImmersionSuite/linux_setup.sh
+cp -r extension dist/ImmersionSuite/extension
+rm -rf dist/ImmersionSuite/extension/web-ext-artifacts
 
-# Step 4 — build the self-extracting installer with makeself
+# Step 4 - build the self-extracting installer with makeself
 echo
 echo "[4/4] Creating ${INSTALLER_NAME}..."
 mkdir -p "${OUTPUT_DIR}"

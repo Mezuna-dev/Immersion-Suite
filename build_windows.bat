@@ -16,7 +16,7 @@ set ISCC="C:\Program Files (x86)\Inno Setup 6\iscc.exe"
 echo === Immersion Suite v%APP_VERSION% Windows Build ===
 echo.
 
-:: Step 1 — install / verify dependencies
+:: Step 1 - install / verify dependencies
 echo [1/3] Installing Python dependencies...
 pip install -r requirements.txt
 if errorlevel 1 (
@@ -29,7 +29,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Step 2 — build the executable bundle with PyInstaller
+:: Step 2 - build the executable bundle with PyInstaller
 echo.
 echo [2/3] Building executable with PyInstaller...
 pyinstaller ImmersionSuite.spec --noconfirm
@@ -38,7 +38,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-:: Step 3 — compile the Inno Setup installer
+:: Step 3 - compile the Inno Setup installer
 echo.
 echo [3/3] Compiling installer with Inno Setup...
 if not exist %ISCC% (

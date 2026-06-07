@@ -149,11 +149,18 @@ without any extra setup. See [`CHANGELOG.md`](CHANGELOG.md) for release notes.
 
 ## Browser Extension
 
-The extension is located in `extension/`. To load it:
+The extension is installed alongside the desktop app; you load it into your browser once.
 
-**Chrome:** `chrome://extensions` → Enable Developer Mode → Load Unpacked → select the `extension/` folder
+**Find the extension folder:**
+- **Windows (installed):** Start Menu → **Immersion Suite → "Browser Extension (load unpacked)"** (opens the folder), or the `extension` folder inside the install directory.
+- **Linux (installed):** `~/.local/share/ImmersionSuite/app/extension`
+- **From source:** the `extension/` folder in this repo.
 
-**Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → select `extension/manifest.json`
+**Load it:**
+
+**Chrome / Edge:** `chrome://extensions` → enable Developer Mode → Load Unpacked → select the extension folder.
+
+**Firefox:** `about:debugging` → This Firefox → Load Temporary Add-on → select `manifest.json` inside that folder.
 
 The desktop app must be running for lookups to work. The extension connects automatically over `ws://127.0.0.1:8765`.
 

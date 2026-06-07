@@ -24,17 +24,26 @@ other over a local connection on your own machine. Nothing is sent to the intern
 
 ## Installing the extension
 
-The extension ships in the `extension/` folder of the project (and in the GitHub
-releases). Load it as an unpacked / temporary add-on:
+The extension is installed together with the desktop app. You load it into your
+browser once, as an unpacked / temporary add-on.
+
+**First, find the extension folder:**
+- **Windows (installed):** open **Start Menu → Immersion Suite → "Browser Extension
+  (load unpacked)"**, which opens the folder. It also lives in the `extension` folder
+  inside the install directory.
+- **Linux (installed):** `~/.local/share/ImmersionSuite/app/extension`
+- **Building from source:** the `extension/` folder in the project.
 
 **Chrome / Edge**
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
-3. Click **Load unpacked** and select the `extension/` folder.
+3. Click **Load unpacked** and select the extension folder.
 
 **Firefox**
 1. Open `about:debugging` → **This Firefox**.
-2. Click **Load Temporary Add-on** and select `extension/manifest.json`.
+2. Click **Load Temporary Add-on** and select `manifest.json` in the extension folder.
+   (Firefox clears temporary add-ons when it restarts, so you reload it the same way
+   next session.)
 
 Make sure the desktop app is open. The extension connects automatically; no
 configuration is needed.

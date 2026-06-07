@@ -56,6 +56,8 @@ jobs:
           PYEOF
           cp installer/linux_setup.sh dist/ImmersionSuite/linux_setup.sh
           chmod +x dist/ImmersionSuite/linux_setup.sh
+          cp -r extension dist/ImmersionSuite/extension
+          rm -rf dist/ImmersionSuite/extension/web-ext-artifacts
 
       - name: Build self-extracting installer
         run: |
