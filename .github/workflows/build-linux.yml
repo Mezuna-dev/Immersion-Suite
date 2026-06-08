@@ -16,6 +16,10 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Read app version
+        id: ver
+        run: echo "version=$(python -c 'import sys; sys.path.insert(0,"src"); import version; print(version.__version__)')" >> "$GITHUB_OUTPUT"
+
       - name: Install system dependencies
         run: |
           sudo apt-get update
@@ -66,13 +70,13 @@ jobs:
         run: |
           mkdir -p installer/output
           makeself dist/ImmersionSuite \
-            installer/output/ImmersionSuite_v1.3.0_Linux_x86_64.run \
-            "Immersion Suite v1.3.0" \
+            installer/output/ImmersionSuite_v${{ steps.ver.outputs.version }}_Linux_x86_64.run \
+            "Immersion Suite v${{ steps.ver.outputs.version }}" \
             ./linux_setup.sh
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmersionSuite-v1.3.0-Linux-x86_64
+          name: ImmersionSuite-v${{ steps.ver.outputs.version }}-Linux-x86_64
           path: installer/output/*.run
           retention-days: 30

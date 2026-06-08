@@ -16,6 +16,13 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Read app version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = python -c "import sys; sys.path.insert(0,'src'); import version; print(version.__version__)"
+          "version=$v" >> $env:GITHUB_OUTPUT
+
       - name: Install Python dependencies
         run: |
           pip install -r requirements.txt
@@ -44,6 +51,6 @@ jobs:
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ImmersionSuite-v1.3.0-Windows-Setup
+          name: ImmersionSuite-v${{ steps.ver.outputs.version }}-Windows-Setup
           path: installer\output\*.exe
           retention-days: 30
