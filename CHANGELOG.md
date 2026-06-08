@@ -7,6 +7,35 @@ All notable changes to Immersion Suite are documented here. The format is based 
 > Immersion Suite is currently in **open beta** - usable day to day, but still under
 > active development. Bug reports and feedback are very welcome.
 
+## [1.3.1] - 2026-06-08
+
+A maintenance release focused on correct SRS scheduling, a useful menu bar, and
+built-in update checking.
+
+### Added
+- **In-app updates** - the app checks GitHub for a newer version on startup (and on
+  demand via **Help → Check for Updates**), shows the new version with its release
+  notes, and can download and launch the installer for you. Can be turned off under
+  **Settings → Updates**, and individual versions can be skipped.
+- **Menu bar** - the top menu is now fully wired up: **File** (Import Deck, Export
+  Backup, Open Data Folder, Exit), **Decks** (New Deck, New Card, Browse, Card Types),
+  **View** (Dashboard / SRS / Immersion / Settings), and **Help** (Check for Updates,
+  About, GitHub, Report a Bug), with keyboard shortcuts.
+
+### Fixed
+- **Lapses no longer inflate intervals.** Failing a review card (Again) now correctly
+  resets it - interval drops to 1 day, ease is reduced, and the card enters relearning -
+  instead of keeping (and growing) its pre-lapse interval. Previously, with relearning
+  steps configured, forgetting a card could schedule it *further* out than before.
+- **Hard / Good / Easy now schedule distinct intervals** on review cards (Hard shrinks
+  the growth, Easy adds a bonus), and the button labels match what actually gets
+  scheduled. Easy also graduates a new card further out than Good.
+- **Ease is frozen during relearning** - it drops once when a card lapses and is no
+  longer nudged again each time the card graduates out of relearning.
+
+### Changed
+- The About screen now shows the running version dynamically (no more stale number).
+
 ## [1.3.0] - 2026-06-07
 
 The YouTube release: turn any YouTube video into an immersion + sentence-mining

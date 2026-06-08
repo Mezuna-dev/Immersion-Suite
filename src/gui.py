@@ -17,7 +17,8 @@ del _QWebEngineUrlScheme, _scheme, _flags
 
 from PyQt6.QtWidgets import QApplication, QMainWindow, \
     QFileDialog, QProgressDialog, QMessageBox
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QAction, QDesktopServices
+from PyQt6.QtCore import QUrl
 import sys
 import os
 import database
@@ -42,18 +43,69 @@ class MainWindow(QMainWindow):
         self.setup_menu()
         self.setup_widgets()
 
+    GITHUB_URL = "https://github.com/Mezuna-dev/Immersion-Suite"
+    ISSUES_URL = "https://github.com/Mezuna-dev/Immersion-Suite/issues"
+
     def setup_menu(self):
         self.menu_bar = self.menuBar()
-        self.file_menu = self.menu_bar.addMenu("File")
-        self.edit_menu = self.menu_bar.addMenu("Edit")
-        self.view_menu = self.menu_bar.addMenu("View")
-        self.help_menu = self.menu_bar.addMenu("Help")
 
-        import_action = self.file_menu.addAction("Import Deck")
-        exit_action = self.file_menu.addAction("Exit")
+        # ── File ──────────────────────────────────────────────
+        file_menu = self.menu_bar.addMenu("&File")
+        self._add_action(file_menu, "Import Deck…", self.import_deck, "Ctrl+I")
+        self._add_action(file_menu, "Export Backup…", self._export_backup, "Ctrl+E")
+        self._add_action(file_menu, "Open Data Folder", self._open_data_folder)
+        file_menu.addSeparator()
+        self._add_action(file_menu, "Exit", self.close, "Ctrl+Q")
 
-        import_action.triggered.connect(self.import_deck)
-        exit_action.triggered.connect(self.close)
+        # ── Decks ─────────────────────────────────────────────
+        decks_menu = self.menu_bar.addMenu("&Decks")
+        self._add_action(decks_menu, "New Deck", lambda: self._show_view("create-deck"))
+        self._add_action(decks_menu, "New Card", lambda: self._run_js("showCreateCard();"))
+        self._add_action(decks_menu, "Browse Cards", lambda: self._show_view("card-browser"))
+        self._add_action(decks_menu, "Card Types", lambda: self._show_view("card-types"))
+
+        # ── View ──────────────────────────────────────────────
+        view_menu = self.menu_bar.addMenu("&View")
+        self._add_action(view_menu, "Dashboard", lambda: self._show_view("dashboard"), "Ctrl+1")
+        self._add_action(view_menu, "SRS", lambda: self._show_view("srs"), "Ctrl+2")
+        self._add_action(view_menu, "Immersion", lambda: self._show_view("immersion"), "Ctrl+3")
+        self._add_action(view_menu, "Settings", lambda: self._show_view("settings"), "Ctrl+4")
+
+        # ── Help ──────────────────────────────────────────────
+        help_menu = self.menu_bar.addMenu("&Help")
+        self._add_action(help_menu, "Check for Updates", self._check_for_updates)
+        help_menu.addSeparator()
+        self._add_action(help_menu, "About", lambda: self._show_view("about"))
+        self._add_action(help_menu, "View on GitHub", lambda: self._open_url(self.GITHUB_URL))
+        self._add_action(help_menu, "Report a Bug", lambda: self._open_url(self.ISSUES_URL))
+
+    def _add_action(self, menu, text, handler, shortcut=None):
+        action = QAction(text, self)
+        action.triggered.connect(handler)
+        if shortcut:
+            action.setShortcut(shortcut)
+        menu.addAction(action)
+        return action
+
+    # ── Menu helpers ──────────────────────────────────────────
+    def _run_js(self, script):
+        self.app_widget.web_view.page().runJavaScript(script)
+
+    def _show_view(self, view_id):
+        self._run_js(f"showView('{view_id}');")
+
+    def _export_backup(self):
+        self.app_widget.bridge.exportData()
+
+    def _open_data_folder(self):
+        self.app_widget.bridge.openDataFolder()
+
+    def _open_url(self, url):
+        QDesktopServices.openUrl(QUrl(url))
+
+    def _check_for_updates(self):
+        # manual=True: always reports a result, even when already up to date.
+        self.app_widget.bridge.checkForUpdates(True)
 
     def setup_widgets(self):
         self.app_widget = AppWidget()

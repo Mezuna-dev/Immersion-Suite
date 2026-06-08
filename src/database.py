@@ -37,6 +37,8 @@ DEFAULT_SETTINGS = {
     'review_shortcut_key': 'Space',
     'review_two_button_mode': False,
     'day_start_hour': 4,
+    'update_check_enabled': True,
+    'skipped_update_version': '',
 }
 
 def get_app_settings() -> dict:
@@ -926,6 +928,23 @@ def update_card_learning_step(card_id: int, learning_step: int):
             INSERT INTO Review (Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After)
             VALUES (?, ?, 0, 0, 2.5)
         """, (card_id, today))
+    con.commit()
+    con.close()
+
+def apply_lapse(card_id, new_reps, new_ease_factor, new_interval):
+    """Reduce a card's SRS strength when it lapses (failed a review) and enters
+    relearning. Unlike update_card_after_review this leaves Learning_Step and
+    Due_Date untouched - those are set by update_card_learning_step so the card
+    stays in the relearning queue. Resetting the interval here means relearning
+    graduation rebuilds the interval instead of growing the pre-lapse one."""
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card
+        SET Reps = ?, Ease_Factor = ?, Interval = ?, Last_Reviewed = ?
+        WHERE ID = ?
+    """, (new_reps, new_ease_factor, new_interval, todays_date, card_id))
     con.commit()
     con.close()
 

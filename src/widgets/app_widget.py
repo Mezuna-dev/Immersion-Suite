@@ -10,6 +10,8 @@ import json
 import urllib.parse
 import database
 import scheduler
+import updater
+import version
 
 
 class AppBridge(QObject):
@@ -17,6 +19,10 @@ class AppBridge(QObject):
         super().__init__()
         self.web_view = web_view
         self.network_manager = QNetworkAccessManager()
+        # In-flight update download state
+        self._update_reply = None
+        self._update_file = None
+        self._update_file_path = None
 
     @pyqtSlot()
     def refreshStats(self):
@@ -211,6 +217,139 @@ class AppBridge(QObject):
     def getDataInfo(self):
         info = database.get_data_info()
         self.web_view.page().runJavaScript(f'updateDataInfo({json.dumps(info)});')
+
+    # --- Updates ---
+
+    @pyqtSlot()
+    def getAppInfo(self):
+        info = {'version': version.__version__}
+        self.web_view.page().runJavaScript(f'applyAppInfo({json.dumps(info)});')
+
+    @pyqtSlot(bool)
+    def checkForUpdates(self, manual):
+        # Automatic (startup) checks honour the user's preference; manual checks
+        # from the Help menu always run.
+        if not manual and not database.get_app_settings().get('update_check_enabled', True):
+            return
+        request = QNetworkRequest(QUrl(updater.RELEASES_API_URL))
+        request.setRawHeader(b'Accept', b'application/vnd.github+json')
+        request.setRawHeader(b'User-Agent', b'ImmersionSuite-Updater')
+        reply = self.network_manager.get(request)
+        reply.finished.connect(lambda: self._on_update_check_finished(reply, manual))
+
+    def _on_update_check_finished(self, reply, manual):
+        import sys
+        payload = {
+            'available': False, 'manual': manual, 'error': None,
+            'version': None, 'notes': '', 'asset_name': None,
+            'download_url': None, 'page_url': updater.RELEASES_PAGE_URL,
+        }
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+            payload['error'] = reply.errorString()
+            reply.deleteLater()
+            self.web_view.page().runJavaScript(f'onUpdateCheckResult({json.dumps(payload)});')
+            return
+        data = bytes(reply.readAll()).decode('utf-8')
+        reply.deleteLater()
+        try:
+            release = json.loads(data)
+            tag = release.get('tag_name', '') or ''
+            payload['version'] = tag.lstrip('vV') or tag
+            payload['notes'] = release.get('body', '') or ''
+            assets = [
+                {'name': a.get('name'), 'browser_download_url': a.get('browser_download_url')}
+                for a in release.get('assets', [])
+            ]
+            asset = updater.select_asset(assets, sys.platform)
+            if asset:
+                payload['asset_name'] = asset['name']
+                payload['download_url'] = asset['browser_download_url']
+            newer = updater.is_newer(tag, version.__version__)
+            # Suppress a release the user chose to skip (auto checks only).
+            if newer and not manual:
+                skipped = database.get_app_settings().get('skipped_update_version', '')
+                if skipped and updater.parse_version(skipped) >= updater.parse_version(tag):
+                    newer = False
+            payload['available'] = bool(newer)
+        except Exception as e:
+            payload['error'] = str(e)
+        self.web_view.page().runJavaScript(f'onUpdateCheckResult({json.dumps(payload)});')
+
+    @pyqtSlot(str)
+    def skipUpdateVersion(self, ver):
+        settings = database.get_app_settings()
+        settings['skipped_update_version'] = ver or ''
+        database.save_app_settings(settings)
+
+    @pyqtSlot(str, str)
+    def downloadUpdate(self, download_url, asset_name):
+        import tempfile, os
+        if not download_url:
+            from PyQt6.QtGui import QDesktopServices
+            QDesktopServices.openUrl(QUrl(updater.RELEASES_PAGE_URL))
+            return
+        try:
+            tmp_dir = tempfile.mkdtemp(prefix='immersion_update_')
+            self._update_file_path = os.path.join(tmp_dir, asset_name or 'ImmersionSuite_Setup')
+            self._update_file = open(self._update_file_path, 'wb')
+        except Exception as e:
+            self.web_view.page().runJavaScript(
+                f'onUpdateDownloadError({json.dumps("Could not start download: " + str(e))});'
+            )
+            return
+        request = QNetworkRequest(QUrl(download_url))
+        request.setRawHeader(b'User-Agent', b'ImmersionSuite-Updater')
+        reply = self.network_manager.get(request)
+        self._update_reply = reply
+        reply.downloadProgress.connect(self._on_update_progress)
+        reply.readyRead.connect(lambda: self._on_update_ready_read(reply))
+        reply.finished.connect(lambda: self._on_update_download_finished(reply))
+
+    def _on_update_ready_read(self, reply):
+        if self._update_file:
+            self._update_file.write(bytes(reply.readAll()))
+
+    def _on_update_progress(self, received, total):
+        self.web_view.page().runJavaScript(f'onUpdateDownloadProgress({received}, {total});')
+
+    def _on_update_download_finished(self, reply):
+        err = reply.error()
+        err_str = reply.errorString()
+        if self._update_file:
+            self._update_file.write(bytes(reply.readAll()))
+            self._update_file.close()
+            self._update_file = None
+        reply.deleteLater()
+        self._update_reply = None
+        if err != QNetworkReply.NetworkError.NoError:
+            self.web_view.page().runJavaScript(
+                f'onUpdateDownloadError({json.dumps("Download failed: " + err_str)});'
+            )
+            return
+        self.web_view.page().runJavaScript('onUpdateDownloadComplete();')
+        self._launch_installer_and_quit()
+
+    def _launch_installer_and_quit(self):
+        import sys, os, subprocess, stat
+        path = self._update_file_path
+        try:
+            if sys.platform == 'win32':
+                os.startfile(path)  # noqa: S606 - launches the signed installer
+            elif sys.platform.startswith('linux'):
+                os.chmod(path, os.stat(path).st_mode | stat.S_IEXEC)
+                subprocess.Popen(['bash', path])
+            else:
+                from PyQt6.QtGui import QDesktopServices
+                QDesktopServices.openUrl(QUrl.fromLocalFile(path))
+        except Exception as e:
+            self.web_view.page().runJavaScript(
+                f'onUpdateDownloadError({json.dumps("Could not launch installer: " + str(e))});'
+            )
+            return
+        # Quit shortly after so the installer can replace the running files.
+        from PyQt6.QtCore import QTimer
+        from PyQt6.QtWidgets import QApplication
+        QTimer.singleShot(1500, QApplication.quit)
 
     @pyqtSlot()
     def exportData(self):
@@ -429,11 +568,18 @@ class AppBridge(QObject):
 
     @pyqtSlot(int, int)
     def logLapse(self, card_id, rating):
-        """Record a lapse review for a due card that is entering relearning steps.
-        interval_after=0 signals the card is back in learning; ease_factor is unchanged."""
+        """A review card was failed (Again) and is entering relearning steps.
+        Reset its strength so relearning rebuilds the interval instead of growing
+        the pre-lapse one: interval -> 1 day, ease -0.20 (floored), reps -> 0.
+        Learning_Step / Due_Date are set separately by updateCardLearningStep,
+        keeping the card in the relearning queue."""
         card = database.get_card_by_id(card_id)
         if card:
-            database.create_review(card_id, rating, 0, card.ease_factor)
+            new_ease_factor = max(scheduler.EASE_FLOOR, card.ease_factor - scheduler.LAPSE_EASE_PENALTY)
+            new_interval = 1
+            new_reps = 0
+            database.apply_lapse(card_id, new_reps, new_ease_factor, new_interval)
+            database.create_review(card_id, rating, new_interval, new_ease_factor)
 
     @pyqtSlot(str, str, str)
     def browseCards(self, deck_id_str, search_query, sort_by):
@@ -480,16 +626,25 @@ class AppBridge(QObject):
         payload = json.dumps({'card': card_data, 'card_types': ct_list})
         self.web_view.page().runJavaScript(f'loadCardForEdit({payload});')
 
-    @pyqtSlot(int, int)
-    def submitRating(self, card_id, rating):
+    def _scheduleReview(self, card_id, rating, adjust_ease):
         card = database.get_card_by_id(card_id)
         if card:
             new_reps, new_ease_factor, new_interval, due_date = scheduler.calculate_next_review(
                 card.reps, card.ease_factor, card.interval, rating,
-                reference_date=database.get_srs_today()
+                reference_date=database.get_srs_today(), adjust_ease=adjust_ease
             )
             database.update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, due_date, 0)
             database.create_review(card_id, rating, new_interval, new_ease_factor)
+
+    @pyqtSlot(int, int)
+    def submitRating(self, card_id, rating):
+        self._scheduleReview(card_id, rating, adjust_ease=True)
+
+    @pyqtSlot(int, int)
+    def graduateRelearning(self, card_id, rating):
+        """Graduate a card out of relearning. Ease was already dropped at lapse
+        time, so it is frozen here rather than adjusted again."""
+        self._scheduleReview(card_id, rating, adjust_ease=False)
 
     # --- Immersion ---
 

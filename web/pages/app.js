@@ -15,6 +15,8 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge.getAppSettings();
     bridge.getDecks();
     bridge.getMediaBaseUrl();
+    bridge.getAppInfo();
+    bridge.checkForUpdates(false);  // silent startup check; backend honours the setting
 });
 
 function applyAppSettings(settings) {
@@ -35,11 +37,15 @@ function applyAppSettings(settings) {
         shortcut_key: settings.review_shortcut_key || 'Space',
         two_button_mode: settings.review_two_button_mode || false,
     };
+    currentUpdatePrefs = {
+        check_enabled: settings.update_check_enabled !== undefined ? settings.update_check_enabled : true,
+    };
     applyRatingButtonMode();
 }
 
 var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first', day_start_hour: 4 };
 var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space', two_button_mode: false };
+var currentUpdatePrefs = { check_enabled: true };
 var capturingKey = false;
 
 function getKeyDisplayName(code) {
@@ -101,6 +107,8 @@ function showAppSettings() {
     document.getElementById('review-shortcut-enabled').checked = currentReviewBehavior.shortcut_enabled;
     document.getElementById('shortcut-key-btn').textContent = getKeyDisplayName(currentReviewBehavior.shortcut_key);
     document.getElementById('review-two-button-mode').checked = currentReviewBehavior.two_button_mode;
+    var updEl = document.getElementById('update-check-enabled');
+    if (updEl) updEl.checked = currentUpdatePrefs.check_enabled;
 }
 
 function formatBytes(bytes) {
@@ -121,6 +129,92 @@ function updateDataInfo(info) {
 function previewAccent(color) {
     document.documentElement.style.setProperty('--accent', color);
     document.getElementById('settings-accent-hex').textContent = color;
+}
+
+// ===== Updates =====
+
+var currentAppVersion = '';
+var pendingUpdate = null;
+
+function applyAppInfo(info) {
+    currentAppVersion = info.version || '';
+    var el = document.getElementById('about-version');
+    if (el) el.textContent = 'Version ' + currentAppVersion;
+}
+
+function onUpdateCheckResult(data) {
+    if (data.error) {
+        if (data.manual) showAlert('Could not check for updates: ' + data.error);
+        return;
+    }
+    if (!data.available) {
+        if (data.manual) showAlert("You're running the latest version (v" + currentAppVersion + ').');
+        return;
+    }
+    pendingUpdate = data;
+    showUpdateModal(data);
+}
+
+function showUpdateModal(data) {
+    document.getElementById('update-modal-version').textContent =
+        'Version ' + data.version + ' is available (you have ' + currentAppVersion + ').';
+    var notesEl = document.getElementById('update-modal-notes');
+    notesEl.textContent = (data.notes || '').trim() || 'No release notes provided.';
+    // Reset to the prompt state (hide progress, show action buttons).
+    document.getElementById('update-modal-progress').style.display = 'none';
+    document.getElementById('update-modal-actions').style.display = 'flex';
+    document.getElementById('update-modal-status').textContent = '';
+    var bar = document.getElementById('update-modal-bar');
+    bar.style.width = '0%';
+    var modalEl = document.getElementById('update-modal');
+    blurActiveElement(modalEl);
+    new bootstrap.Modal(modalEl).show();
+}
+
+function updateNow() {
+    if (!pendingUpdate || !bridge) return;
+    // Switch to the downloading state.
+    document.getElementById('update-modal-actions').style.display = 'none';
+    document.getElementById('update-modal-progress').style.display = 'block';
+    document.getElementById('update-modal-status').textContent =
+        pendingUpdate.download_url ? 'Downloading update…' : 'Opening download page…';
+    bridge.downloadUpdate(pendingUpdate.download_url || '', pendingUpdate.asset_name || '');
+    if (!pendingUpdate.download_url) {
+        // No installer asset for this platform - the backend opened the page.
+        var modal = bootstrap.Modal.getInstance(document.getElementById('update-modal'));
+        if (modal) modal.hide();
+    }
+}
+
+function onUpdateDownloadProgress(received, total) {
+    var bar = document.getElementById('update-modal-bar');
+    if (total > 0) {
+        var pct = Math.round((received / total) * 100);
+        bar.style.width = pct + '%';
+        document.getElementById('update-modal-status').textContent =
+            'Downloading update… ' + pct + '% (' + formatBytes(received) + ' / ' + formatBytes(total) + ')';
+    } else {
+        document.getElementById('update-modal-status').textContent =
+            'Downloading update… ' + formatBytes(received);
+    }
+}
+
+function onUpdateDownloadComplete() {
+    document.getElementById('update-modal-bar').style.width = '100%';
+    document.getElementById('update-modal-status').textContent =
+        'Download complete. Launching installer — the app will now close.';
+}
+
+function onUpdateDownloadError(message) {
+    document.getElementById('update-modal-progress').style.display = 'none';
+    document.getElementById('update-modal-actions').style.display = 'flex';
+    showAlert(message || 'Update failed.');
+}
+
+function skipThisVersion() {
+    if (pendingUpdate && bridge) bridge.skipUpdateVersion(pendingUpdate.version);
+    var modal = bootstrap.Modal.getInstance(document.getElementById('update-modal'));
+    if (modal) modal.hide();
 }
 
 function applyRatingButtonMode() {
@@ -150,6 +244,7 @@ function buildSettings(overrides) {
         review_shortcut_enabled: currentReviewBehavior.shortcut_enabled,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
         review_two_button_mode: currentReviewBehavior.two_button_mode,
+        update_check_enabled: currentUpdatePrefs.check_enabled,
     }, overrides);
 }
 
@@ -167,6 +262,7 @@ function saveAppSettings() {
         review_shortcut_enabled: document.getElementById('review-shortcut-enabled').checked,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
         review_two_button_mode: document.getElementById('review-two-button-mode').checked,
+        update_check_enabled: document.getElementById('update-check-enabled').checked,
     });
     applyAppSettings(settings);
     if (bridge) bridge.saveAppSettings(JSON.stringify(settings));
@@ -1272,12 +1368,23 @@ function showNextCard() {
     updateReviewCounts();
 }
 
+// Mirrors src/scheduler.py:calculate_next_review so button labels match the
+// interval the backend will actually schedule. Keep the two in sync.
+var SM2_HARD_MULTIPLIER = 1.2;
+var SM2_EASY_BONUS = 1.3;
+var SM2_EASY_GRADUATING_INTERVAL = 4;
 function sm2Interval(reps, easeFactor, currentInterval, rating) {
     if (rating < 3) return 1;
     var r = reps || 0;
-    if (r === 0) return 1;
-    if (r === 1) return 6;
-    return Math.ceil((currentInterval || 1) * (easeFactor || 2.5));
+    var ivl = currentInterval || 1;
+    var ease = easeFactor || 2.5;
+    if (r === 0) return rating === 5 ? SM2_EASY_GRADUATING_INTERVAL : 1;
+    if (r === 1) return rating === 5 ? Math.ceil(6 * SM2_EASY_BONUS) : 6;
+    var next;
+    if (rating === 3) next = Math.ceil(ivl * SM2_HARD_MULTIPLIER);
+    else if (rating === 4) next = Math.ceil(ivl * ease);
+    else next = Math.ceil(ivl * ease * SM2_EASY_BONUS);
+    return Math.max(ivl + 1, next);
 }
 
 function formatIntervalLabel(minutes) {
@@ -1426,8 +1533,9 @@ function rateCard(rating) {
         }
 
         if (newStep >= relearnSteps.length) {
-            // Graduated from relearning
-            bridge.submitRating(currentCard.id, rating);
+            // Graduated from relearning - ease was already dropped at lapse, so
+            // graduateRelearning freezes it instead of adjusting it again.
+            bridge.graduateRelearning(currentCard.id, rating);
         } else {
             // Schedule card to return after the relearn step's real-time delay
             bridge.updateCardLearningStep(currentCard.id, newStep);
@@ -1435,10 +1543,15 @@ function rateCard(rating) {
             learningQueue.push({ card: requeueCard, showAfter: Date.now() + relearnSteps[newStep] * 60 * 1000 });
         }
     } else if (!currentCard.is_new && rating === 1 && currentDeckRelearnSteps.length > 0) {
-        // Card lapsed - record the failure then start relearning steps
+        // Card lapsed - record the failure then start relearning steps.
+        // Mirror the backend lapse reset (logLapse) so the graduation button
+        // labels reflect the reduced interval/ease, not the pre-lapse values.
         bridge.logLapse(currentCard.id, rating);
         bridge.updateCardLearningStep(currentCard.id, 0);
-        var requeueCard = Object.assign({}, currentCard, { learning_step: 0, is_relearning: true });
+        var lapsedEase = Math.max(1.3, (currentCard.ease_factor || 2.5) - 0.20);
+        var requeueCard = Object.assign({}, currentCard, {
+            learning_step: 0, is_relearning: true, reps: 0, interval: 1, ease_factor: lapsedEase
+        });
         learningQueue.push({ card: requeueCard, showAfter: Date.now() + currentDeckRelearnSteps[0] * 60 * 1000 });
     } else {
         bridge.submitRating(currentCard.id, rating);
