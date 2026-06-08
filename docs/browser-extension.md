@@ -70,6 +70,8 @@ text. A popup appears at the cursor with:
 - The word's reading and kanji form
 - Part of speech and definitions
 - Frequency and common-word tags
+- **Pitch accent** graph and downstep number (when a Yomitan pitch-accent
+  dictionary is installed in `data/dicts/` — see the README)
 - Deinflection (it recognises conjugated forms and shows the dictionary word)
 
 Move the mouse onto the popup to scroll long entries; release the key or move away to

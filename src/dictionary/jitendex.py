@@ -90,6 +90,96 @@ def _load_freq_dicts() -> dict[str, int]:
     return freq
 
 
+def _load_pitch_dicts() -> dict[str, list[dict]]:
+    """Scan data/dicts/ for Yomitan pitch-accent dictionaries.
+
+    Pitch dicts use the same term_meta_bank format as frequency dicts, but with
+    'pitch' rows: [term, 'pitch', {reading, pitches:[{position:int, ...}]}].
+    Returns term → [{'reading': str, 'positions': [int]}], merging duplicate
+    readings and dicts. 'position' is the downstep mora index (0 = heiban).
+    """
+    pitch: dict[str, list[dict]] = {}
+    seen: set[str] = set()
+    for dicts_dir in _dicts_dirs():
+        if not dicts_dir.exists():
+            continue
+        for zip_path in sorted(dicts_dir.glob('*.zip')):
+            if zip_path.name in seen:  # user dir wins over the bundled copy
+                continue
+            seen.add(zip_path.name)
+            try:
+                with zipfile.ZipFile(str(zip_path)) as zf:
+                    bank_names = sorted(
+                        n for n in zf.namelist()
+                        if re.match(r'term_meta_bank_\d+\.json', n.split('/')[-1])
+                    )
+                    if not bank_names:
+                        continue
+                    for name in bank_names:
+                        with zf.open(name) as f:
+                            rows = json.loads(f.read())
+                        for row in rows:
+                            if not isinstance(row, list) or len(row) < 3 or row[1] != 'pitch':
+                                continue
+                            term = row[0]
+                            data = row[2]
+                            if not isinstance(data, dict):
+                                continue
+                            reading = data.get('reading')
+                            if not reading:
+                                continue
+                            positions = [
+                                p['position'] for p in (data.get('pitches') or [])
+                                if isinstance(p, dict) and isinstance(p.get('position'), int)
+                            ]
+                            if not positions:
+                                continue
+                            _add_pitch(pitch, term, reading, positions)
+            except Exception:
+                continue
+    return pitch
+
+
+def _add_pitch(pitch: dict[str, list[dict]], term: str, reading: str, positions: list[int]) -> None:
+    bucket = pitch.setdefault(term, [])
+    for existing in bucket:
+        if existing['reading'] == reading:
+            for p in positions:
+                if p not in existing['positions']:
+                    existing['positions'].append(p)
+            return
+    bucket.append({'reading': reading, 'positions': list(positions)})
+
+
+def _attach_pitch(entries: list[dict], pitch: dict[str, list[dict]] | None) -> None:
+    """Attach matching pitch-accent data to each entry in-place as entry['pitch'].
+
+    A pitch record is kept only when its reading is one of the entry's own
+    readings, so an ambiguous kanji doesn't pick up an unrelated reading's accent.
+    """
+    if not pitch:
+        return
+    for e in entries:
+        readings = e.get('reading_forms') or []
+        if not readings:
+            continue
+        reading_set = set(readings)
+        terms = (e.get('kanji_forms') or []) + readings
+        found: list[dict] = []
+        seen: set[tuple] = set()
+        for t in terms:
+            for pa in pitch.get(t, []):
+                if pa['reading'] not in reading_set:
+                    continue
+                key = (pa['reading'], tuple(pa['positions']))
+                if key in seen:
+                    continue
+                seen.add(key)
+                found.append({'reading': pa['reading'], 'positions': list(pa['positions'])})
+        if found:
+            e['pitch'] = found
+
+
 class JitendexModule(DictionaryModule):
     """Jitendex Japanese-English dictionary backed by a local SQLite file.
 
@@ -102,6 +192,7 @@ class JitendexModule(DictionaryModule):
         self._lock = threading.Lock()
         self._cache: OrderedDict[str, dict] = OrderedDict()
         self._freq: dict[str, int] = _load_freq_dicts()
+        self._pitch: dict[str, list[dict]] = _load_pitch_dicts()
 
     @property
     def name(self) -> str:
@@ -175,6 +266,7 @@ class JitendexModule(DictionaryModule):
 
             matched_reason, entries = _query_batch(candidates, con, self._freq)
             if entries:
+                _attach_pitch(entries, self._pitch)
                 result = {'matched': word, 'entries': entries}
                 if matched_reason:
                     result['reason'] = matched_reason
