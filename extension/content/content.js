@@ -32,6 +32,10 @@
   // Remembered mining config: { deckId, typeId, fieldMaps: { typeId: {slot:field} } }
   let mineSettings      = { deckId: null, typeId: null, fieldMaps: {} };
   const MINE_SETTINGS_KEY = 'imm_mine_settings';
+
+  // Known-words set (manually curated, lives in the desktop DB). Lemmas.
+  let knownSet          = new Set();
+  let knownLoaded       = false;
   let popupHovered      = false;
   let lastChunk         = null;   // chunk currently shown / in flight
   let latestLookupChunk = null;   // staleness guard for async responses
@@ -342,7 +346,11 @@
       html += _renderHeadword(kanji.slice(0, 3), readings.slice(0, 3));
       if (reason) html += `<span class="reason">${esc(reason)}</span>`;
       html += '</div>';
+      const lemma = kanji[0] || readings[0] || (data.matched || '');
+      const isKnown = !!lemma && knownSet.has(lemma);
       html += '<div class="mine-actions-inline">'
+        + `<button class="known-btn${isKnown ? ' is-known' : ''}" data-entry="${entryIdx}" `
+        + `title="${isKnown ? 'Known — click to unmark' : 'Mark as known'}">${isKnown ? '✓' : '○'}</button>`
         + `<button class="mine-btn" data-entry="${entryIdx}" title="Add this word as a card">＋</button>`
         + `<button class="mine-config" data-entry="${entryIdx}" title="Mining options">⚙</button>`
         + '</div>';
@@ -435,6 +443,17 @@
     .kanji-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 
     .mine-actions-inline { display: flex; gap: 4px; flex: 0 0 auto; }
+    .known-btn {
+      appearance: none; border: 1px solid rgba(22, 163, 74, 0.30);
+      background: rgba(22, 163, 74, 0.08); color: #16a34a;
+      font-size: 13px; line-height: 1; cursor: pointer;
+      width: 26px; height: 26px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background .14s ease, color .14s ease, transform .14s ease;
+    }
+    .known-btn:hover { background: rgba(22, 163, 74, 0.18); transform: translateY(-1px); }
+    .known-btn.is-known { background: #16a34a; color: #fff; border-color: transparent; }
+    .known-btn:disabled { opacity: .6; cursor: default; transform: none; }
     .mine-btn, .mine-config {
       appearance: none; border: 1px solid rgba(170, 0, 255, 0.25);
       background: rgba(170, 0, 255, 0.08); color: #aa00ff;
@@ -612,17 +631,19 @@
     contentEl.id = 'popup-content';
     popupEl.appendChild(contentEl);
 
-    // Delegated handling for the per-entry mine (＋) and config (⚙) buttons.
+    // Delegated handling for the per-entry known (○/✓), mine (＋) and config (⚙) buttons.
     contentEl.addEventListener('click', (e) => {
+      const knownBtn = e.target.closest('.known-btn');
       const cfgBtn = e.target.closest('.mine-config');
       const mineBtn = e.target.closest('.mine-btn');
-      const btn = cfgBtn || mineBtn;
+      const btn = knownBtn || cfgBtn || mineBtn;
       if (!btn) return;
       e.stopPropagation();
       const entry = currentLookup && currentLookup.entries
         && currentLookup.entries[Number(btn.dataset.entry)];
       if (!entry) return;
-      if (cfgBtn || !mineConfigured()) openMinePanel(entry);
+      if (knownBtn) toggleKnown(entry, knownBtn);
+      else if (cfgBtn || !mineConfigured()) openMinePanel(entry);
       else quickMine(entry, mineBtn);
     });
 
@@ -645,6 +666,7 @@
     currentAnchor = { x, y, textNode, offset };
     currentSentence = getSentenceContext(textNode, offset);
     miningOpen = false;
+    if (!knownLoaded) loadKnownWords();
 
     const renderKey = (data.matched || '') + '|' + (data.reason || '');
     const wasHidden = popupEl.style.display === 'none' || popupEl.style.display === '';
@@ -808,6 +830,8 @@
     });
   } catch (_) { /* no storage permission in some contexts */ }
 
+  loadKnownWords();
+
   // ── Sentence extraction (for the mined card's context field) ───────────────
   const SENT_MAX    = 140;                       // chars gathered each direction
   const SENT_ENDERS = /[。．.!?！？…\n]/;          // sentence boundaries
@@ -858,6 +882,46 @@
       if (SENT_ENDERS.test(after[i])) { end = i + 1; break; }
     }
     return (before.slice(start) + after.slice(0, end)).replace(/\s+/g, ' ').trim();
+  }
+
+  // ── Known words ────────────────────────────────────────────────────────────
+  function loadKnownWords() {
+    chrome.runtime.sendMessage({ action: 'get_known_words' }).then((r) => {
+      if (r && !r.error && Array.isArray(r.known)) {
+        knownSet = new Set(r.known);
+        knownLoaded = true;
+      }
+    }).catch(() => {});
+  }
+
+  function entryLemma(entry) {
+    const kanji = entry.kanji_forms || [];
+    const readings = entry.reading_forms || [];
+    return kanji[0] || readings[0] || (currentLookup && currentLookup.matched) || '';
+  }
+
+  async function toggleKnown(entry, btn) {
+    const lemma = entryLemma(entry);
+    if (!lemma) return;
+    const makeKnown = !knownSet.has(lemma);
+    btn.disabled = true;
+    let resp;
+    try {
+      resp = await chrome.runtime.sendMessage({ action: 'set_known_word', term: lemma, known: makeKnown });
+    } catch (_) {
+      btn.disabled = false;
+      return;
+    }
+    btn.disabled = false;
+    if (!resp || resp.error) return;
+    if (makeKnown) knownSet.add(lemma); else knownSet.delete(lemma);
+    btn.classList.toggle('is-known', makeKnown);
+    btn.textContent = makeKnown ? '✓' : '○';
+    btn.title = makeKnown ? 'Known — click to unmark' : 'Mark as known';
+    // Tell the YouTube layer (same page) so it can recolour the sub bar live.
+    try {
+      window.dispatchEvent(new CustomEvent('imm-known-changed', { detail: { term: lemma, known: makeKnown } }));
+    } catch (_) {}
   }
 
   // ── Mining (build a card from the hovered entry) ───────────────────────────

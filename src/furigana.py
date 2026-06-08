@@ -103,6 +103,55 @@ def tokenize_sentence(text: str) -> dict:
     return {'tokens': _coalesce_plain(out)}
 
 
+# Major POS categories not worth colouring as vocabulary.
+_SKIP_POS = {'助詞', '助動詞', '補助記号', '記号', '空白', '接続詞'}
+
+
+def _has_japanese(s: str) -> bool:
+    return any(_is_kanji(c) or _is_kana(c) for c in s)
+
+
+def analyze_sentence(text: str) -> dict:
+    """Word-level analysis for known/unknown colouring.
+
+    Returns {tokens: [{lemma, content, ruby: [{text, reading}]}]} where:
+      - lemma   : dictionary (base) form, used to match the known-words set so
+                  conjugated forms (食べた → 食べる) resolve correctly
+      - content : True for content words worth colouring (not particles,
+                  auxiliaries, punctuation, …)
+      - ruby    : furigana segments for the surface (same shape as `tokenize`)
+    """
+    if not text or not text.strip():
+        return {'tokens': []}
+
+    err = _ensure_tokenizer()
+    if err:
+        return {'error': err, 'tokens': []}
+
+    try:
+        morphemes = list(_tokenizer.tokenize(text, _split_mode))
+    except Exception as exc:  # noqa: BLE001
+        return {'error': f'analyze failed: {exc}', 'tokens': []}
+
+    tokens: list[dict] = []
+    for m in morphemes:
+        surface = m.surface()
+        if not surface:
+            continue
+        reading_hira = _kata_to_hira(m.reading_form() or '')
+        try:
+            pos0 = m.part_of_speech()[0]
+        except Exception:  # noqa: BLE001
+            pos0 = ''
+        lemma = m.dictionary_form() or surface
+        tokens.append({
+            'lemma': lemma,
+            'content': pos0 not in _SKIP_POS and _has_japanese(surface),
+            'ruby': _align_token(surface, reading_hira),
+        })
+    return {'tokens': tokens}
+
+
 def _align_token(surface: str, reading: str) -> list[dict]:
     """Split a single morpheme into [(kanji_run, reading), (kana_run, '')] pairs.
 

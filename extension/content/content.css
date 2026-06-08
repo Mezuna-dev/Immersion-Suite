@@ -73,6 +73,19 @@
 .imm-yt-subbar-text rt::selection,
 .imm-yt-subbar-text rp::selection { background: transparent; }
 
+/* ── Known / unknown word colouring ────────────────────────────────────── */
+
+/* Unknown content words are highlighted so they stand out at a glance; known
+   words recede. Toggled by the 語 toolbar button / options page. */
+.imm-yt-subbar-text .imm-word.imm-unknown {
+  background: rgba(170, 0, 255, 0.30);
+  border-radius: 4px;
+  padding: 0 2px;
+}
+.imm-yt-subbar-text .imm-word.imm-known {
+  opacity: 0.62;
+}
+
 /* ── Toolbar ────────────────────────────────────────────────────────────── */
 
 .imm-yt-toolbar {

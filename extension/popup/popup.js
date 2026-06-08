@@ -8,7 +8,7 @@ const TOKEN_KEY = 'imm_ws_token';       // pairing secret - background.js
 // Defaults must mirror the content scripts so the form shows the real behaviour
 // before the user has ever changed anything.
 const DICT_DEFAULTS = { enabled: true, modifier: 'shift' };
-const YT_DEFAULTS = { furigana: false, autoPause: false, audioStartPadMs: 0, audioEndPadMs: 400 };
+const YT_DEFAULTS = { furigana: false, autoPause: false, knownColoring: false, audioStartPadMs: 0, audioEndPadMs: 400 };
 
 const $ = (id) => document.getElementById(id);
 
@@ -90,6 +90,7 @@ function loadSettings() {
 
     $('ytFurigana').checked = !!yt.furigana;
     $('ytAutoPause').checked = !!yt.autoPause;
+    $('ytKnownColoring').checked = !!yt.knownColoring;
     $('ytAudioStart').value = clampPad(yt.audioStartPadMs, YT_DEFAULTS.audioStartPadMs);
     $('ytAudioEnd').value   = clampPad(yt.audioEndPadMs, YT_DEFAULTS.audioEndPadMs);
   });
@@ -118,6 +119,7 @@ function saveYt() {
       ...(data[YT_KEY] || {}),
       furigana: $('ytFurigana').checked,
       autoPause: $('ytAutoPause').checked,
+      knownColoring: $('ytKnownColoring').checked,
       audioStartPadMs: clampPad($('ytAudioStart').value, YT_DEFAULTS.audioStartPadMs),
       audioEndPadMs: clampPad($('ytAudioEnd').value, YT_DEFAULTS.audioEndPadMs),
     };
@@ -130,6 +132,7 @@ function wireInputs() {
   $('lookupModifier').addEventListener('change', saveDict);
   $('ytFurigana').addEventListener('change', saveYt);
   $('ytAutoPause').addEventListener('change', saveYt);
+  $('ytKnownColoring').addEventListener('change', saveYt);
   // Normalise number fields to the clamped value on save so the box reflects it.
   for (const id of ['ytAudioStart', 'ytAudioEnd']) {
     $(id).addEventListener('change', () => {

@@ -20,6 +20,9 @@
   let autoPauseEnabled = false; // pause playback at the end of the active sub
   let furiganaEnabled = false;  // show ruby annotations above kanji
   let furiganaAvailable = true; // flips off after a backend tokenize failure
+  let knownColoring = false;    // colour words by known/unknown status
+  let knownSet = new Set();     // known lemmas (from the desktop DB)
+  let knownLoaded = false;
 
   // Audio-clip padding around the active cue, in ms. Subs are usually
   // timed at or slightly before the audio they describe, so we use zero
@@ -44,6 +47,9 @@
   // Last text we asked the backend to tokenize, used to drop stale responses
   // when the sub changes while a request is in flight.
   let lastTokenizeRequest = '';
+  // Word-level analysis cache (for known/unknown colouring): text → tokens.
+  const analyzeCache = new Map();
+  let lastAnalyzeRequest = '';
 
   // Queue (sidebar) state. queueRows[i] is the DOM row for cues[i]; in
   // DOM-mirror mode an extra "pending" row may live at queueRows[cues.length]
@@ -68,15 +74,18 @@
         if (!s) return;
         autoPauseEnabled = !!s.autoPause;
         furiganaEnabled = !!s.furigana;
+        knownColoring = !!s.knownColoring;
         queueOpen = !!s.queueOpen;
         if (Number.isFinite(s.audioStartPadMs)) audioStartPadMs = s.audioStartPadMs;
         if (Number.isFinite(s.audioEndPadMs))   audioEndPadMs   = s.audioEndPadMs;
         if (Number.isFinite(s.subOffsetMs))     subOffsetMs     = s.subOffsetMs;
         syncAutoPauseButton();
         syncFuriganaButton();
+        syncKnownButton();
         syncQueueButton();
         syncQueueVisibility();
         syncOffsetDisplay();
+        if (knownColoring && !knownLoaded) loadKnownWords();
         renderText();
       });
     } catch (_) { /* no storage permission in some contexts */ }
@@ -88,6 +97,7 @@
         [SETTINGS_KEY]: {
           autoPause: autoPauseEnabled,
           furigana: furiganaEnabled,
+          knownColoring,
           queueOpen,
           audioStartPadMs,
           audioEndPadMs,
@@ -108,6 +118,25 @@
       if (!s) return;
       if (Number.isFinite(s.audioStartPadMs)) audioStartPadMs = s.audioStartPadMs;
       if (Number.isFinite(s.audioEndPadMs))   audioEndPadMs   = s.audioEndPadMs;
+      // Known-colouring toggle from the options page applies live.
+      if (typeof s.knownColoring === 'boolean' && s.knownColoring !== knownColoring) {
+        knownColoring = s.knownColoring;
+        syncKnownButton();
+        if (knownColoring && !knownLoaded) loadKnownWords();
+        else renderText();
+      }
+    });
+  } catch (_) {}
+
+  // The popup (content.js, same page) fires this when the user marks a word
+  // known/unknown, so the sub bar recolours without a round-trip to the backend.
+  try {
+    window.addEventListener('imm-known-changed', (e) => {
+      const d = e.detail || {};
+      if (!d.term) return;
+      if (d.known) knownSet.add(d.term);
+      else knownSet.delete(d.term);
+      if (knownColoring) renderText();
     });
   } catch (_) {}
 
@@ -250,6 +279,7 @@
     t.appendChild(makeButton('imm-yt-btn-next',   '⏭', 'Next sub (D)',      nextCue));
     t.appendChild(makeButton('imm-yt-btn-pause',  '⏸', 'Auto-pause at end of sub', toggleAutoPause));
     t.appendChild(makeButton('imm-yt-btn-furi',   'あ', 'Show furigana',     toggleFurigana));
+    t.appendChild(makeButton('imm-yt-btn-known',  '語', 'Colour known / unknown words', toggleKnownColoring));
     t.appendChild(makeButton('imm-yt-btn-card',   '＋', 'Make card from sub', toggleCardPanel));
     t.appendChild(makeButton('imm-yt-btn-queue',  '☰', 'Show subtitle queue', toggleQueue));
 
@@ -295,12 +325,44 @@
         : 'Show furigana';
   }
 
+  function syncKnownButton() {
+    const btn = toolbarEl && toolbarEl.querySelector('#imm-yt-btn-known');
+    if (!btn) return;
+    btn.classList.toggle('is-on', knownColoring);
+    btn.classList.toggle('is-unavailable', !furiganaAvailable);  // same tokenizer
+    btn.title = !furiganaAvailable
+      ? 'Word colouring unavailable - restart the desktop app or install sudachipy'
+      : knownColoring
+        ? 'Hide known/unknown colouring'
+        : 'Colour known / unknown words';
+  }
+
+  function toggleKnownColoring() {
+    knownColoring = !knownColoring;
+    syncKnownButton();
+    saveSettings();
+    if (knownColoring && !knownLoaded) loadKnownWords();
+    else renderText();
+  }
+
+  function loadKnownWords() {
+    sendBackground({ action: 'get_known_words' }).then((r) => {
+      if (r && !r.error && Array.isArray(r.known)) {
+        knownSet = new Set(r.known);
+        knownLoaded = true;
+        if (knownColoring) renderText();
+      }
+    });
+  }
+
   // Current sub text in plain form (no markup). The bar's actual DOM may
   // contain <ruby> annotations when furigana is on.
   let currentText = '';
 
   function setText(text) {
-    if (currentText === text && textEl && textEl.dataset.lastFurigana === String(furiganaEnabled)) return;
+    if (currentText === text && textEl &&
+        textEl.dataset.lastFurigana === String(furiganaEnabled) &&
+        textEl.dataset.lastKnown === (knownColoring ? '1' : '0')) return;
     currentText = text;
     renderText();
   }
@@ -313,10 +375,26 @@
     if (!textEl) return;
     const text = currentText;
     textEl.dataset.lastFurigana = String(furiganaEnabled);
+    textEl.dataset.lastKnown = knownColoring ? '1' : '0';
 
     if (!text) {
       textEl.textContent = '';
       if (barEl) barEl.style.display = cardPanelOpen() ? 'flex' : 'none';
+      return;
+    }
+
+    // Known/unknown colouring uses word-level analysis (which also carries the
+    // furigana ruby), so it owns rendering whenever it's on. Same tokenizer
+    // availability as furigana.
+    if (knownColoring && furiganaAvailable) {
+      const atoks = analyzeCache.get(text);
+      if (atoks) {
+        paintWords(atoks);
+      } else {
+        textEl.textContent = text;
+        requestAnalyze(text);
+      }
+      if (barEl) barEl.style.display = 'flex';
       return;
     }
 
@@ -334,6 +412,53 @@
       requestFurigana(text);
     }
     if (barEl) barEl.style.display = 'flex';
+  }
+
+  // Render word-level tokens (from `analyze`): each content word is wrapped in a
+  // span classed known/unknown; ruby is included when furigana is also on.
+  function paintWords(tokens) {
+    if (!textEl) return;
+    const parts = [];
+    for (const tok of tokens) {
+      let inner = '';
+      for (const seg of (tok.ruby || [])) {
+        const safe = escapeHtml(seg.text);
+        inner += (furiganaEnabled && seg.reading)
+          ? `<ruby>${safe}<rt>${escapeHtml(seg.reading)}</rt></ruby>`
+          : safe;
+      }
+      if (tok.content) {
+        const cls = knownSet.has(tok.lemma) ? 'imm-known' : 'imm-unknown';
+        parts.push(`<span class="imm-word ${cls}">${inner}</span>`);
+      } else {
+        parts.push(inner);
+      }
+    }
+    textEl.innerHTML = parts.join('');
+  }
+
+  function requestAnalyze(text) {
+    if (lastAnalyzeRequest === text) return;  // already in flight
+    lastAnalyzeRequest = text;
+    sendBackground({ action: 'analyze', text }).then((resp) => {
+      if (currentText !== text) return;  // moved on to a newer sub
+      if (resp.error) {
+        if (/sudachi/i.test(resp.error) || /not installed/i.test(resp.error)) {
+          furiganaAvailable = false;
+          syncFuriganaButton();
+          syncKnownButton();
+        }
+        if (textEl && currentText === text) textEl.textContent = text;
+        return;
+      }
+      const tokens = resp.tokens || [];
+      if (analyzeCache.size >= TOKEN_CACHE_MAX) {
+        const firstKey = analyzeCache.keys().next().value;
+        if (firstKey !== undefined) analyzeCache.delete(firstKey);
+      }
+      analyzeCache.set(text, tokens);
+      if (knownColoring) paintWords(tokens);
+    });
   }
 
   function paintTokens(tokens) {

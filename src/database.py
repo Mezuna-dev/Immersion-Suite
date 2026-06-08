@@ -332,6 +332,13 @@ def migrate_database():
             Date_Created TEXT NOT NULL,
             FOREIGN KEY (Item_ID) REFERENCES MediaItem(ID)
         )""",
+        # Words the user has explicitly marked "known" (separate from the SRS
+        # deck) - used by the browser extension to colour known vs unknown text.
+        """CREATE TABLE IF NOT EXISTS KnownWord (
+            ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
+            Term TEXT NOT NULL UNIQUE,
+            Date_Created TEXT NOT NULL
+        )""",
     ]:
         try:
             cur.execute(tbl_stmt)
@@ -670,6 +677,62 @@ def delete_card_type(card_type_id: int):
     """, (card_type_id,))
     con.commit()
     con.close()
+
+# --- Known Word Functions --------------------------
+# A manually-curated vocabulary set, independent of the SRS deck. The browser
+# extension uses it to colour known vs unknown words while reading.
+
+def get_known_words() -> list:
+    """Return all known terms as a list of strings."""
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT Term FROM KnownWord")
+        rows = cur.fetchall()
+    finally:
+        con.close()
+    return [r[0] for r in rows]
+
+
+def add_known_word(term: str) -> None:
+    term = (term or '').strip()
+    if not term:
+        return
+    creation_date = date.today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute(
+            "INSERT OR IGNORE INTO KnownWord (Term, Date_Created) VALUES (?, ?)",
+            (term, creation_date),
+        )
+        con.commit()
+    finally:
+        con.close()
+
+
+def remove_known_word(term: str) -> None:
+    term = (term or '').strip()
+    if not term:
+        return
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("DELETE FROM KnownWord WHERE Term = ?", (term,))
+        con.commit()
+    finally:
+        con.close()
+
+
+def count_known_words() -> int:
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM KnownWord")
+        return cur.fetchone()[0]
+    finally:
+        con.close()
+
 
 # --- Card Functions --------------------------------
 

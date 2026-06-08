@@ -12,6 +12,12 @@ All notable changes to Immersion Suite are documented here. The format is based 
 Work in progress toward 1.4.0.
 
 ### Added
+- **Known / unknown word tracking.** Mark words as known from the hover dictionary
+  (the ○/✓ button), kept in a separate list independent of your SRS deck. With
+  colouring on (語 button in the YouTube toolbar, or the options page), unknown words
+  in the subtitle bar are highlighted so you can gauge a line's difficulty at a glance;
+  marking a word known updates the colouring instantly. Conjugated forms resolve to
+  their dictionary form, so 食べた counts as 食べる.
 - **Mine words from any web page.** The hover dictionary now has a **＋** button on
   each entry that creates a flashcard from the word's expression, reading,
   definition, and the **sentence it appeared in** — no more leaving the page. A **⚙**

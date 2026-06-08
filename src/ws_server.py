@@ -190,6 +190,16 @@ async def _dispatch(action, msg):
         text = msg.get('text', '')
         return await loop.run_in_executor(None, _tokenize, text)
 
+    if action == 'analyze':
+        text = msg.get('text', '')
+        return await loop.run_in_executor(None, _analyze, text)
+
+    if action == 'get_known_words':
+        return await loop.run_in_executor(None, _get_known_words)
+
+    if action == 'set_known_word':
+        return await loop.run_in_executor(None, _set_known_word, msg)
+
     if action == 'get_youtube_subs':
         return await loop.run_in_executor(None, _get_youtube_subs, msg)
 
@@ -199,6 +209,29 @@ async def _dispatch(action, msg):
 def _tokenize(text: str) -> dict:
     from furigana import tokenize_sentence
     return tokenize_sentence(text)
+
+
+def _analyze(text: str) -> dict:
+    from furigana import analyze_sentence
+    return analyze_sentence(text)
+
+
+def _get_known_words() -> dict:
+    import database
+    return {'known': database.get_known_words()}
+
+
+def _set_known_word(msg: dict) -> dict:
+    import database
+    term = (msg.get('term') or '').strip()
+    if not term:
+        return {'error': 'term is required'}
+    known = bool(msg.get('known'))
+    if known:
+        database.add_known_word(term)
+    else:
+        database.remove_known_word(term)
+    return {'term': term, 'known': known, 'count': database.count_known_words()}
 
 
 # ── Lookup (existing) ────────────────────────────────────────────────────────

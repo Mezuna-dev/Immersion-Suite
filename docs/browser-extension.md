@@ -82,6 +82,10 @@ can mine while reading anything, not just YouTube. The first time, use the **⚙
 button to pick the deck, card type, and which fields receive each piece; after that
 **＋** adds a card in one click.
 
+**Mark a word known** — the **○ / ✓** button on each entry tracks which words you
+already know, in a list kept separate from your SRS deck. This drives the
+known/unknown colouring in the YouTube subtitle bar (below).
+
 **Options** — click the extension's toolbar icon to enable/disable the dictionary,
 change the lookup key (Shift / Alt / Ctrl / hover-only), and set YouTube defaults
 (furigana, auto-pause, audio padding).
@@ -109,6 +113,11 @@ Jump between subtitle lines without hunting for the scrubber:
 moving on.
 
 **Furigana** (あ) toggles kana readings above the kanji in the subtitle bar.
+
+**Known/unknown colouring** (語) highlights the words in the subtitle bar that aren't
+in your known list, so you can see how hard a line is at a glance. Mark words known
+with the ○/✓ button in the hover popup; the bar recolours immediately. Your known
+list is separate from the SRS deck.
 
 **Sentence mining** (＋) turns the current line into a flashcard. It captures a
 screenshot of the frame and an audio clip of the line, then lets you choose the deck,
@@ -224,6 +233,8 @@ concurrent requests route correctly. The available actions:
 | `auth` | Present the pairing token (required first message) |
 | `lookup` | Dictionary lookup for a span of text |
 | `tokenize` | Furigana tokenization (SudachiPy) |
+| `analyze` | Word-level analysis (lemma + content flag) for known/unknown colouring |
+| `get_known_words` / `set_known_word` | Read / update the known-words list |
 | `get_decks` / `get_card_types` | Populate the mining form |
 | `create_card` | Create a text-only card (popup mining) |
 | `create_card_with_media` | Create a card with screenshot + audio clip |
