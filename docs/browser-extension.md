@@ -45,24 +45,46 @@ browser once, as an unpacked / temporary add-on.
    (Firefox clears temporary add-ons when it restarts, so you reload it the same way
    next session.)
 
-Make sure the desktop app is open. The extension connects automatically; no
-configuration is needed.
+### Pairing the extension with the app
+
+For security, the desktop app only accepts connections from an extension that
+presents a one-time **pairing token** (this stops other websites or programs on your
+machine from reaching the app). You pair once:
+
+1. In the desktop app, open **Settings → Browser Extension** and click **Copy**.
+2. Click the extension's toolbar icon to open its popup, find the **Pairing**
+   section, paste the token, and click **Save**.
+
+The status badge at the top of the popup turns to **Connected**. If it shows **Not
+authorized**, the token is missing or wrong — re-copy it from the app. If it shows
+**Not running**, start the desktop app. (Existing users updating from an earlier
+version need to pair once after the update.)
 
 ---
 
 ## The popup dictionary
 
-On any webpage, hold **Shift** and hover over Japanese text. A popup appears at the
-cursor with:
+On any webpage, hold the **lookup key** (Shift by default) and hover over Japanese
+text. A popup appears at the cursor with:
 
 - The word's reading and kanji form
 - Part of speech and definitions
 - Frequency and common-word tags
 - Deinflection (it recognises conjugated forms and shows the dictionary word)
 
-Move the mouse onto the popup to scroll long entries; release Shift or move away to
+Move the mouse onto the popup to scroll long entries; release the key or move away to
 dismiss it. The popup is rendered in an isolated layer, so it never clashes with the
 page's own styling.
+
+**Mine a word** — each entry has a **＋** button that creates a flashcard from the
+word (expression, reading, definition) plus the **sentence it appeared in**, so you
+can mine while reading anything, not just YouTube. The first time, use the **⚙**
+button to pick the deck, card type, and which fields receive each piece; after that
+**＋** adds a card in one click.
+
+**Options** — click the extension's toolbar icon to enable/disable the dictionary,
+change the lookup key (Shift / Alt / Ctrl / hover-only), and set YouTube defaults
+(furigana, auto-pause, audio padding).
 
 ---
 
@@ -110,6 +132,41 @@ keep working even when YouTube restricts its caption endpoint:
 
 ---
 
+## Where the dictionary can't reach
+
+The popup finds the word under your cursor using the browser's "caret from point"
+APIs. A few kinds of text are off-limits to a browser extension, so Shift-hover does
+nothing there — it's a browser sandbox limit, not a bug or a connection problem:
+
+- **Text inside iframes.** The dictionary currently runs only in the **top frame** of
+  a page, so text inside any embedded frame isn't covered. Frames from *another* site
+  (some embedded readers, players, and ad frames) are isolated by the browser and
+  can't be read at all, even in principle.
+- **Closed Shadow DOM.** Some sites build their UI inside a *closed* shadow root,
+  which hides its text from the caret APIs. (Ordinary pages and open shadow roots
+  work fine.)
+- **Text that isn't selectable text.** Words painted onto a `<canvas>`, baked into
+  images, shown in the browser's built-in PDF viewer, or rendered by DRM video
+  players aren't real page text and can't be looked up.
+
+If a site mostly works but one region never triggers a lookup, it's usually one of
+the above.
+
+### Developer notes (future work)
+
+- **Same-origin iframes:** add `"all_frames": true` to the `content/content.js` entry
+  in `manifest.json`. Each frame then injects its own popup instance — verify
+  positioning across frame boundaries and that the YouTube layer (`youtube.js`,
+  matched to `*.youtube.com`) isn't double-injected into nested players.
+- **Open shadow trees:** the composed-tree caret APIs (`getComposedRanges`, and
+  `caretPositionFromPoint`'s `shadowRoots` option) may reach into open shadow roots
+  more reliably as browser support matures; see `caretAt`/`getChunkAtPoint` in
+  `content.js`.
+- **Cross-origin frames** can't be bridged from a content script; the browser injects
+  per-frame, but their text can never be merged into a single parent-page popup.
+
+---
+
 ## Privacy
 
 Everything stays on your machine. The extension talks to the desktop app over a local
@@ -120,9 +177,14 @@ collects no telemetry.
 
 ## Troubleshooting
 
-**The popup says it can't connect.**
+**The popup says it can't connect / "Not running".**
 The desktop app isn't running, or it started after the page loaded. Open the app and try
 again; the extension reconnects on the next lookup.
+
+**The popup says "Not authorized".**
+The pairing token is missing or doesn't match. Open the desktop app's **Settings →
+Browser Extension**, click **Copy**, then paste it into the extension popup's
+**Pairing** field and **Save**. See [Pairing the extension with the app](#pairing-the-extension-with-the-app).
 
 **Furigana won't turn on.**
 Furigana needs the tokenizer that ships with the desktop app. If the toggle shows as
@@ -151,14 +213,19 @@ Browser                                   Desktop app (Python / PyQt6)
 +----------------------------------+      +------------------------------+
 ```
 
-Messages are JSON, each tagged with an `id` so concurrent requests route correctly.
-The available actions:
+The server checks the connection's `Origin` (only the extension's own origin is
+allowed, never websites) and then requires `{action:'auth', token}` as the first
+message before any other action runs; the token is generated on first run and stored
+in `data/ws_token.txt`. After that, messages are JSON, each tagged with an `id` so
+concurrent requests route correctly. The available actions:
 
 | Action | Purpose |
 |--------|---------|
+| `auth` | Present the pairing token (required first message) |
 | `lookup` | Dictionary lookup for a span of text |
 | `tokenize` | Furigana tokenization (SudachiPy) |
 | `get_decks` / `get_card_types` | Populate the mining form |
+| `create_card` | Create a text-only card (popup mining) |
 | `create_card_with_media` | Create a card with screenshot + audio clip |
 | `get_youtube_subs` | Fetch a video's subtitle track via the desktop app |
 | `ping` | Connection check |
