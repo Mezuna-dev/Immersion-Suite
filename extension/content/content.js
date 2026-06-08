@@ -9,6 +9,7 @@
   const SCAN_LEN    = 25;   // characters to extract from the caret position
   const DEBOUNCE_MS = 16;   // ~one frame - coalesces rapid mousemoves
   const CACHE_MAX   = 512;  // LRU cap for lookup results
+  const DICT_SETTINGS_KEY = 'imm_dict_settings';  // shared with the popup/options page
 
   // ── State ──────────────────────────────────────────────────────────────────
   let shadowHost        = null;
@@ -17,7 +18,9 @@
   let contentEl         = null;
   let debounceTimer     = null;
   let hideTimer         = null;
-  let shiftHeld         = false;
+  let modHeld           = false;   // the configured lookup modifier is currently held
+  let dictEnabled       = true;    // master on/off (popup setting)
+  let lookupModifier    = 'shift'; // 'shift' | 'alt' | 'ctrl' | 'none'
   let popupHovered      = false;
   let lastChunk         = null;   // chunk currently shown / in flight
   let latestLookupChunk = null;   // staleness guard for async responses
@@ -544,7 +547,7 @@
     });
     popupEl.addEventListener('mouseleave', () => {
       popupHovered = false;
-      if (!shiftHeld) scheduleHide(200);
+      if (!modHeld) scheduleHide(200);
     });
   }
 
@@ -666,11 +669,50 @@
     showPopup(data, x, y, textNode, offset);
   }
 
+  // ── Settings (shared with the popup/options page) ──────────────────────────
+  // Is the configured lookup modifier active for this event? 'none' means the
+  // popup fires on plain hover (no key held).
+  function modifierActive(e) {
+    switch (lookupModifier) {
+      case 'alt':  return e.altKey;
+      case 'ctrl': return e.ctrlKey;
+      case 'none': return true;
+      case 'shift':
+      default:     return e.shiftKey;
+    }
+  }
+
+  // Does this KeyboardEvent.key correspond to the configured modifier?
+  function isModifierKey(key) {
+    return (lookupModifier === 'shift' && key === 'Shift')
+        || (lookupModifier === 'alt'   && key === 'Alt')
+        || (lookupModifier === 'ctrl'  && key === 'Control');
+  }
+
+  function applyDictSettings(s) {
+    if (!s) return;
+    if (typeof s.enabled === 'boolean') dictEnabled = s.enabled;
+    if (typeof s.modifier === 'string') lookupModifier = s.modifier;
+    if (!dictEnabled) hidePopup();
+  }
+
+  try {
+    chrome.storage.local.get(DICT_SETTINGS_KEY, (data) => {
+      applyDictSettings(data && data[DICT_SETTINGS_KEY]);
+    });
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && changes[DICT_SETTINGS_KEY]) {
+        applyDictSettings(changes[DICT_SETTINGS_KEY].newValue);
+      }
+    });
+  } catch (_) { /* no storage permission in some contexts */ }
+
   // ── Event wiring ───────────────────────────────────────────────────────────
   document.addEventListener('mousemove', (e) => {
-    shiftHeld = e.shiftKey;
+    const active = dictEnabled && modifierActive(e);
+    modHeld = active;
 
-    if (!e.shiftKey) {
+    if (!active) {
       clearTimeout(debounceTimer);
       if (popupEl && popupEl.style.display === 'block' && !popupHovered) {
         scheduleHide(150);
@@ -681,6 +723,9 @@
     const x = e.clientX;
     const y = e.clientY;
     clearTimeout(debounceTimer);
+    // Without a held key the popup would chase every pixel of movement, so
+    // debounce harder in no-key mode to avoid lookup spam.
+    const debounce = lookupModifier === 'none' ? 120 : DEBOUNCE_MS;
     debounceTimer = setTimeout(() => {
       const hit = getChunkAtPoint(x, y);
       if (!hit) {
@@ -695,16 +740,16 @@
       }
       lastChunk = hit.chunk;
       doLookup(hit.chunk, x, y, hit.textNode, hit.offset);
-    }, DEBOUNCE_MS);
+    }, debounce);
   });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Shift') shiftHeld = true;
+    if (isModifierKey(e.key)) modHeld = true;
   });
 
   document.addEventListener('keyup', (e) => {
-    if (e.key === 'Shift') {
-      shiftHeld = false;
+    if (isModifierKey(e.key)) {
+      modHeld = false;
       if (!popupHovered) scheduleHide(200);
     }
   });

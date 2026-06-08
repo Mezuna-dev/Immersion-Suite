@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Immersion Suite</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="hero">
+    <span class="hero-dot"></span>
+    <div class="hero-titles">
+      <h1 class="hero-title">Immersion Suite</h1>
+      <span class="hero-version" id="version">v–</span>
+    </div>
+  </header>
+
+  <!-- Connection status -->
+  <section class="card status-card">
+    <div class="status-line">
+      <span class="status-badge is-checking" id="statusBadge">
+        <span class="status-pip"></span>
+        <span id="statusText">Checking…</span>
+      </span>
+      <button class="icon-btn" id="refreshBtn" type="button" title="Re-check connection">↻</button>
+    </div>
+    <p class="status-hint" id="statusHint">Looking for the desktop app…</p>
+  </section>
+
+  <!-- Hover dictionary -->
+  <section class="card">
+    <h2 class="card-title">Hover Dictionary</h2>
+
+    <label class="row toggle-row">
+      <span class="row-label">Enabled</span>
+      <span class="switch">
+        <input type="checkbox" id="dictEnabled">
+        <span class="slider"></span>
+      </span>
+    </label>
+
+    <label class="row">
+      <span class="row-label">
+        Lookup key
+        <span class="row-sub">Hold this while hovering a word</span>
+      </span>
+      <select class="select" id="lookupModifier">
+        <option value="shift">Shift</option>
+        <option value="alt">Alt</option>
+        <option value="ctrl">Ctrl</option>
+        <option value="none">No key (hover only)</option>
+      </select>
+    </label>
+  </section>
+
+  <!-- YouTube immersion -->
+  <section class="card">
+    <h2 class="card-title">YouTube Immersion</h2>
+
+    <label class="row toggle-row">
+      <span class="row-label">
+        Furigana by default
+        <span class="row-sub">Show readings above kanji</span>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="ytFurigana">
+        <span class="slider"></span>
+      </span>
+    </label>
+
+    <label class="row toggle-row">
+      <span class="row-label">
+        Auto-pause by default
+        <span class="row-sub">Pause at the end of each subtitle</span>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="ytAutoPause">
+        <span class="slider"></span>
+      </span>
+    </label>
+
+    <label class="row">
+      <span class="row-label">
+        Audio pre-roll
+        <span class="row-sub">ms added before each mined clip</span>
+      </span>
+      <input type="number" class="num" id="ytAudioStart" min="0" max="5000" step="50">
+    </label>
+
+    <label class="row">
+      <span class="row-label">
+        Audio post-roll
+        <span class="row-sub">ms added after each mined clip</span>
+      </span>
+      <input type="number" class="num" id="ytAudioEnd" min="0" max="5000" step="50">
+    </label>
+  </section>
+
+  <footer class="foot">
+    <span id="savedNote" class="saved-note"></span>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>

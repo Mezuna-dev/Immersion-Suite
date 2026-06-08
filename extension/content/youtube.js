@@ -97,6 +97,20 @@
     } catch (_) {}
   }
 
+  // Pick up audio-padding changes from the options page live (they're read at
+  // clip time, so no re-render is needed). Furigana / auto-pause defaults are
+  // applied on the next video load by loadSettings(), to avoid fighting the
+  // in-player toggle buttons mid-session.
+  try {
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local' || !changes[SETTINGS_KEY]) return;
+      const s = changes[SETTINGS_KEY].newValue;
+      if (!s) return;
+      if (Number.isFinite(s.audioStartPadMs)) audioStartPadMs = s.audioStartPadMs;
+      if (Number.isFinite(s.audioEndPadMs))   audioEndPadMs   = s.audioEndPadMs;
+    });
+  } catch (_) {}
+
   // ── Page-script injection ───────────────────────────────────────────────
   // Runs in the page's JS world so it can read window.ytInitialPlayerResponse.
   function injectPageScript() {

@@ -10,6 +10,16 @@
     "128": "icons/128.png"
   },
 
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_title": "Immersion Suite"
+  },
+
+  "options_ui": {
+    "page": "popup/index.html",
+    "open_in_tab": true
+  },
+
   "background": {
     "service_worker": "background/background.js",
     "type": "module"

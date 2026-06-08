@@ -11,6 +11,13 @@ All notable changes to Immersion Suite are documented here. The format is based 
 
 Work in progress toward 1.4.0.
 
+### Added
+- **Toolbar popup & options page.** Clicking the extension icon now shows whether
+  the desktop app is connected and a settings panel: enable/disable the hover
+  dictionary, choose the **lookup key** (Shift / Alt / Ctrl / hover-only), and set
+  YouTube defaults (furigana, auto-pause, and audio pre/post-roll padding for
+  mined clips). Settings apply live where possible.
+
 ### Security
 - **Browser-extension bridge now rejects web origins.** The desktop app's local
   WebSocket (`127.0.0.1:8765`) is reachable by any page the browser visits; it
