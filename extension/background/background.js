@@ -77,7 +77,16 @@ async function request(payload, { timeoutMs } = {}) {
       resolve(result);
     });
 
-    socket.send(JSON.stringify({ id, ...payload }));
+    // The socket can close in the gap between ensureConnected() and here; a
+    // throwing send() would otherwise reject this promise instead of resolving
+    // a clean { error } like every other failure path.
+    try {
+      socket.send(JSON.stringify({ id, ...payload }));
+    } catch (e) {
+      clearTimeout(timer);
+      pending.delete(id);
+      resolve({ id, error: `Could not reach Immersion Suite: ${e.message}` });
+    }
   });
 }
 

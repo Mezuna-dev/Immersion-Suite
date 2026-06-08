@@ -25,13 +25,18 @@
   const _cache          = new Map();
 
   // ── Japanese character detection ───────────────────────────────────────────
-  function isJapanese(ch) {
-    const c = ch.charCodeAt(0);
+  // Tests the first *codepoint* of `str` (codePointAt handles surrogate pairs,
+  // so Supplementary-plane kanji like CJK Ext B trigger correctly - charCodeAt
+  // would only see the lone high surrogate).
+  function isJapanese(str) {
+    const c = str.codePointAt(0);
     return (
+      (c >= 0x3005 && c <= 0x3007) || // 々 〆 〇 iteration / closing / number marks
       (c >= 0x3040 && c <= 0x30FF) || // Hiragana + Katakana
-      (c >= 0x4E00 && c <= 0x9FFF) || // CJK unified ideographs
       (c >= 0x3400 && c <= 0x4DBF) || // CJK Extension A
-      (c >= 0xFF65 && c <= 0xFF9F)    // Halfwidth Katakana
+      (c >= 0x4E00 && c <= 0x9FFF) || // CJK unified ideographs
+      (c >= 0xFF65 && c <= 0xFF9F) || // Halfwidth Katakana
+      (c >= 0x20000 && c <= 0x3FFFF)  // CJK Ext B-F (Supplementary Ideographic Plane)
     );
   }
 
@@ -120,7 +125,7 @@
       chunk += collectForwardText(textNode, SCAN_LEN - chunk.length);
     }
 
-    if (!chunk || !isJapanese(chunk[0])) return null;
+    if (!chunk || !isJapanese(chunk)) return null;
     return { chunk, textNode, offset };
   }
 

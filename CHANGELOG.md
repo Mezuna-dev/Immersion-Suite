@@ -29,6 +29,12 @@ Work in progress toward 1.4.0.
 - **Long audio clips no longer drop mid-download.** The extension keeps the MV3
   service worker alive with a periodic ping while a download/sub-fetch is in
   flight, preventing "Connection to Immersion Suite was lost" on 60-80s clips.
+- **Lookups trigger on more characters.** The hover dictionary now recognises the
+  iteration marks 々 〆 〇 and Supplementary-plane kanji (CJK Ext B+) as the first
+  character of a hovered word.
+- **Cleaner handling of a dropped connection.** If the bridge socket closes at the
+  instant a request is sent, the extension now returns a normal error instead of
+  an unhandled rejection.
 
 ## [1.3.1] - 2026-06-08
 
