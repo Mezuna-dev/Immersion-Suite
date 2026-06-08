@@ -223,15 +223,20 @@ def _get_known_words() -> dict:
 
 def _set_known_word(msg: dict) -> dict:
     import database
-    term = (msg.get('term') or '').strip()
-    if not term:
+    # Accept either a single `term` or a list of `terms` (all spellings/readings
+    # of one word) so a kana-written form still matches the tokenizer's lemma.
+    raw = msg.get('terms')
+    terms = raw if isinstance(raw, list) else [msg.get('term')]
+    terms = [str(t).strip() for t in terms if t and str(t).strip()]
+    if not terms:
         return {'error': 'term is required'}
     known = bool(msg.get('known'))
-    if known:
-        database.add_known_word(term)
-    else:
-        database.remove_known_word(term)
-    return {'term': term, 'known': known, 'count': database.count_known_words()}
+    for t in terms:
+        if known:
+            database.add_known_word(t)
+        else:
+            database.remove_known_word(t)
+    return {'terms': terms, 'known': known, 'count': database.count_known_words()}
 
 
 # ── Lookup (existing) ────────────────────────────────────────────────────────

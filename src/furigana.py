@@ -146,6 +146,7 @@ def analyze_sentence(text: str) -> dict:
         lemma = m.dictionary_form() or surface
         tokens.append({
             'lemma': lemma,
+            'pos': pos0,
             'content': pos0 not in _SKIP_POS and _has_japanese(surface),
             'ruby': _align_token(surface, reading_hira),
         })

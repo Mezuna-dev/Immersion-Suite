@@ -133,9 +133,9 @@
   try {
     window.addEventListener('imm-known-changed', (e) => {
       const d = e.detail || {};
-      if (!d.term) return;
-      if (d.known) knownSet.add(d.term);
-      else knownSet.delete(d.term);
+      const terms = Array.isArray(d.terms) ? d.terms : (d.term ? [d.term] : []);
+      if (!terms.length) return;
+      for (const t of terms) { if (d.known) knownSet.add(t); else knownSet.delete(t); }
       if (knownColoring) renderText();
     });
   } catch (_) {}
@@ -429,21 +429,25 @@
     return inner;
   }
 
-  // Render word-level tokens (from `analyze`): content words are wrapped in a
-  // span classed known/unknown; ruby is included when furigana is also on.
-  //
-  // The dictionary and Sudachi don't always agree on word boundaries (e.g. the
-  // dict treats この間 as one word, Sudachi splits it into この + 間), so we
-  // greedily merge adjacent tokens whose combined surface is a known term -
-  // otherwise a word marked known in the popup would never match here.
+  // POS categories that are inflection/derivation tails - they belong to the
+  // preceding content word, not standalone (た in 食べた, ない in 高くない).
+  const TAIL_POS = new Set(['助動詞', '接尾辞']);
   const MAX_KNOWN_SPAN = 6;
+
+  // Render word-level tokens (from `analyze`): each word is one span classed
+  // known/unknown; ruby is included when furigana is also on. Two reconciliations
+  // bridge the dictionary↔Sudachi boundary mismatch:
+  //   1. merge adjacent tokens whose combined surface is a known term (この間 =
+  //      この + 間), and
+  //   2. absorb inflection tails into the content word so 食べた (食べ + た) is one
+  //      span coloured by the head's dictionary form (食べる).
   function paintWords(tokens) {
     if (!textEl) return;
     const surfaces = tokens.map(tokenSurface);
     const parts = [];
     let i = 0;
     while (i < tokens.length) {
-      // Longest run of tokens (>=2) whose combined surface is a known term.
+      // 1. Longest run (>=2) whose combined surface is a known term.
       let runLen = 0;
       let combined = '';
       for (let j = i; j < Math.min(tokens.length, i + MAX_KNOWN_SPAN); j++) {
@@ -457,15 +461,23 @@
         i += runLen;
         continue;
       }
-      const tok = tokens[i];
-      const inner = tokenInnerHtml(tok);
-      if (tok.content) {
-        const known = knownSet.has(tok.lemma) || knownSet.has(surfaces[i]);
-        parts.push(`<span class="imm-word ${known ? 'imm-known' : 'imm-unknown'}">${inner}</span>`);
-      } else {
-        parts.push(inner);
+
+      const head = tokens[i];
+      if (!head.content) {  // particle, punctuation, … → plain
+        parts.push(tokenInnerHtml(head));
+        i++;
+        continue;
       }
-      i++;
+
+      // 2. Content word + its inflection tail(s) as one unit.
+      let j = i + 1;
+      while (j < tokens.length && TAIL_POS.has(tokens[j].pos)) j++;
+      let inner = '';
+      let unitSurface = '';
+      for (let k = i; k < j; k++) { inner += tokenInnerHtml(tokens[k]); unitSurface += surfaces[k]; }
+      const known = knownSet.has(head.lemma) || knownSet.has(surfaces[i]) || knownSet.has(unitSurface);
+      parts.push(`<span class="imm-word ${known ? 'imm-known' : 'imm-unknown'}">${inner}</span>`);
+      i = j;
     }
     textEl.innerHTML = parts.join('');
   }

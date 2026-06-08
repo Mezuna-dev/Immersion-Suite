@@ -346,8 +346,9 @@
       html += _renderHeadword(kanji.slice(0, 3), readings.slice(0, 3));
       if (reason) html += `<span class="reason">${esc(reason)}</span>`;
       html += '</div>';
-      const lemma = kanji[0] || readings[0] || (data.matched || '');
-      const isKnown = !!lemma && knownSet.has(lemma);
+      const forms = [...new Set([...kanji, ...readings].filter(Boolean))];
+      if (!forms.length && data.matched) forms.push(data.matched);
+      const isKnown = forms.some(f => knownSet.has(f));
       html += '<div class="mine-actions-inline">'
         + `<button class="known-btn${isKnown ? ' is-known' : ''}" data-entry="${entryIdx}" `
         + `title="${isKnown ? 'Known — click to unmark' : 'Mark as known'}">${isKnown ? '✓' : '○'}</button>`
@@ -894,33 +895,36 @@
     }).catch(() => {});
   }
 
-  function entryLemma(entry) {
-    const kanji = entry.kanji_forms || [];
-    const readings = entry.reading_forms || [];
-    return kanji[0] || readings[0] || (currentLookup && currentLookup.matched) || '';
+  // All spellings/readings of an entry. Storing every form means a word marked
+  // known still matches the tokenizer's lemma whether the text writes it in
+  // kanji or kana (e.g. 為る / する, 綺麗 / きれい).
+  function entryForms(entry) {
+    const forms = [...new Set([...(entry.kanji_forms || []), ...(entry.reading_forms || [])].filter(Boolean))];
+    if (!forms.length && currentLookup && currentLookup.matched) forms.push(currentLookup.matched);
+    return forms;
   }
 
   async function toggleKnown(entry, btn) {
-    const lemma = entryLemma(entry);
-    if (!lemma) return;
-    const makeKnown = !knownSet.has(lemma);
+    const forms = entryForms(entry);
+    if (!forms.length) return;
+    const makeKnown = !forms.some(f => knownSet.has(f));
     btn.disabled = true;
     let resp;
     try {
-      resp = await chrome.runtime.sendMessage({ action: 'set_known_word', term: lemma, known: makeKnown });
+      resp = await chrome.runtime.sendMessage({ action: 'set_known_word', terms: forms, known: makeKnown });
     } catch (_) {
       btn.disabled = false;
       return;
     }
     btn.disabled = false;
     if (!resp || resp.error) return;
-    if (makeKnown) knownSet.add(lemma); else knownSet.delete(lemma);
+    for (const f of forms) { if (makeKnown) knownSet.add(f); else knownSet.delete(f); }
     btn.classList.toggle('is-known', makeKnown);
     btn.textContent = makeKnown ? '✓' : '○';
     btn.title = makeKnown ? 'Known — click to unmark' : 'Mark as known';
     // Tell the YouTube layer (same page) so it can recolour the sub bar live.
     try {
-      window.dispatchEvent(new CustomEvent('imm-known-changed', { detail: { term: lemma, known: makeKnown } }));
+      window.dispatchEvent(new CustomEvent('imm-known-changed', { detail: { terms: forms, known: makeKnown } }));
     } catch (_) {}
   }
 
