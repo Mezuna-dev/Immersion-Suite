@@ -48,6 +48,23 @@ _COLS = ("e.score, e.seq, e.kanji_json, e.reading_json, e.meanings_json, "
          "COALESCE(e.forms_json, 'null') AS forms_json")
 
 
+def _read_zip_member(zf: zipfile.ZipFile, name: str) -> bytes:
+    """Read a zip member, tolerating the wrong CRC-32 values some Yomitan
+    dictionaries ship with.
+
+    Browser zip readers (Yomitan/JSZip) don't verify CRC-32, so a number of
+    popular dictionaries are packaged with incorrect CRCs. They work fine in
+    Yomitan but make Python's strict zipfile raise BadZipFile on every member.
+    The DEFLATE-compressed data itself is valid, so we disable the CRC check.
+    """
+    ef = zf.open(name)
+    try:
+        ef._expected_crc = None  # CPython-internal but long-stable: skips CRC check
+    except Exception:
+        pass
+    return ef.read()
+
+
 def _load_freq_dicts() -> dict[str, int]:
     """Scan data/dicts/ for Yomitan frequency dictionaries and return a term→rank map.
 
@@ -72,8 +89,10 @@ def _load_freq_dicts() -> dict[str, int]:
                     if not bank_names:
                         continue
                     for name in bank_names:
-                        with zf.open(name) as f:
-                            rows = json.loads(f.read())
+                        try:
+                            rows = json.loads(_read_zip_member(zf, name))
+                        except Exception:
+                            continue  # skip an unreadable bank, keep the rest
                         for row in rows:
                             if not isinstance(row, list) or len(row) < 3 or row[1] != 'freq':
                                 continue
@@ -116,8 +135,10 @@ def _load_pitch_dicts() -> dict[str, list[dict]]:
                     if not bank_names:
                         continue
                     for name in bank_names:
-                        with zf.open(name) as f:
-                            rows = json.loads(f.read())
+                        try:
+                            rows = json.loads(_read_zip_member(zf, name))
+                        except Exception:
+                            continue  # skip an unreadable bank, keep the rest
                         for row in rows:
                             if not isinstance(row, list) or len(row) < 3 or row[1] != 'pitch':
                                 continue
