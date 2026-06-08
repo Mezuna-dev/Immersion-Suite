@@ -12,6 +12,11 @@ All notable changes to Immersion Suite are documented here. The format is based 
 Work in progress toward 1.4.0.
 
 ### Added
+- **Mine words from any web page.** The hover dictionary now has a **＋** button on
+  each entry that creates a flashcard from the word's expression, reading,
+  definition, and the **sentence it appeared in** — no more leaving the page. A **⚙**
+  button picks the deck, card type, and field mapping; after the first setup, **＋**
+  adds a card in one click. (Previously mining only worked on YouTube.)
 - **Toolbar popup & options page.** Clicking the extension icon now shows whether
   the desktop app is connected and a settings panel: enable/disable the hover
   dictionary, choose the **lookup key** (Shift / Alt / Ctrl / hover-only), and set

@@ -183,6 +183,9 @@ async def _dispatch(action, msg):
     if action == 'create_card_with_media':
         return await loop.run_in_executor(None, _create_card_with_media, msg)
 
+    if action == 'create_card':
+        return await loop.run_in_executor(None, _create_card, msg)
+
     if action == 'tokenize':
         text = msg.get('text', '')
         return await loop.run_in_executor(None, _tokenize, text)
@@ -332,6 +335,46 @@ def _create_card_with_media(msg: dict) -> dict:
         'audio_filename': audio_filename,
         'audio_skipped': audio_skipped,
     }
+
+
+def _create_card(msg: dict) -> dict:
+    """Create a text-only card from a field-name → value map. Used by the hover
+    dictionary's mine button (no media). Front/back follow the same convention as
+    _create_card_with_media: front = first field's value, back = the rest."""
+    import database
+
+    deck_id = msg.get('deck_id')
+    type_id = msg.get('card_type_id')
+    fields_in = msg.get('fields') or {}
+
+    if not deck_id or not type_id:
+        return {'error': 'deck_id and card_type_id are required'}
+    if not isinstance(fields_in, dict):
+        return {'error': 'fields must be an object'}
+
+    card_type = database.get_card_type_by_id(int(type_id))
+    if not card_type:
+        return {'error': f'card type {type_id} not found'}
+
+    # Keep only fields that actually belong to the card type, in its order.
+    fields = {f: str(fields_in.get(f, '')) for f in card_type.fields}
+    field_values = list(fields.values())
+    if not any(v.strip() for v in field_values):
+        return {'error': 'no field values provided'}
+
+    front = field_values[0] if field_values else ''
+    back = ' / '.join(v for v in field_values[1:] if v) if len(field_values) > 1 else ''
+    if not front:
+        front = next((v for v in field_values if v), '')
+
+    card_id = database.create_card(
+        deck_id=int(deck_id),
+        front=front,
+        back=back,
+        card_type_id=int(type_id),
+        fields_json=json.dumps(fields, ensure_ascii=False),
+    )
+    return {'card_id': card_id}
 
 
 def _build_fields(field_map: dict, sentence: str, image_file: str, audio_file: str) -> dict:

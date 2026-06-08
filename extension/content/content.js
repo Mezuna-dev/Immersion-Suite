@@ -21,6 +21,17 @@
   let modHeld           = false;   // the configured lookup modifier is currently held
   let dictEnabled       = true;    // master on/off (popup setting)
   let lookupModifier    = 'shift'; // 'shift' | 'alt' | 'ctrl' | 'none'
+
+  // Mining (hover popup → flashcard) state
+  let currentLookup     = null;    // last lookup data shown, for the mine button
+  let currentSentence   = '';      // sentence context captured at show time
+  let currentAnchor     = null;    // {x, y, textNode, offset} for repositioning
+  let miningOpen        = false;   // mining panel open → suppress auto-hide
+  let decksCache        = null;
+  let cardTypesCache    = null;
+  // Remembered mining config: { deckId, typeId, fieldMaps: { typeId: {slot:field} } }
+  let mineSettings      = { deckId: null, typeId: null, fieldMaps: {} };
+  const MINE_SETTINGS_KEY = 'imm_mine_settings';
   let popupHovered      = false;
   let lastChunk         = null;   // chunk currently shown / in flight
   let latestLookupChunk = null;   // staleness guard for async responses
@@ -319,7 +330,9 @@
 
     let html = '<div class="list">';
 
+    let entryIdx = -1;
     for (const entry of entries) {
+      entryIdx += 1;
       html += '<div class="entry">';
 
       const kanji    = entry.kanji_forms   || [];
@@ -328,7 +341,12 @@
       html += '<div class="word-head"><div class="kanji-row">';
       html += _renderHeadword(kanji.slice(0, 3), readings.slice(0, 3));
       if (reason) html += `<span class="reason">${esc(reason)}</span>`;
-      html += '</div></div>';
+      html += '</div>';
+      html += '<div class="mine-actions-inline">'
+        + `<button class="mine-btn" data-entry="${entryIdx}" title="Add this word as a card">＋</button>`
+        + `<button class="mine-config" data-entry="${entryIdx}" title="Mining options">⚙</button>`
+        + '</div>';
+      html += '</div>';
 
       const entryTags = entry.tags || [];
       if (entryTags.length) {
@@ -413,8 +431,61 @@
     .entry { padding: 14px 20px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
     .entry:last-child { border-bottom: none; }
 
-    .word-head { margin-bottom: 10px; }
+    .word-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
     .kanji-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+
+    .mine-actions-inline { display: flex; gap: 4px; flex: 0 0 auto; }
+    .mine-btn, .mine-config {
+      appearance: none; border: 1px solid rgba(170, 0, 255, 0.25);
+      background: rgba(170, 0, 255, 0.08); color: #aa00ff;
+      font-size: 14px; line-height: 1; cursor: pointer;
+      width: 26px; height: 26px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background .14s ease, color .14s ease, transform .14s ease;
+    }
+    .mine-config { font-size: 12px; }
+    .mine-btn:hover, .mine-config:hover {
+      background: linear-gradient(135deg, #aa00ff, #cc66ff); color: #fff; transform: translateY(-1px);
+    }
+    .mine-btn:disabled { opacity: .6; cursor: default; transform: none; }
+
+    /* Mining panel */
+    .mine-panel { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+    .mine-loading { font-size: 12.5px; color: #6b5f8a; }
+    .mine-head { display: flex; align-items: center; gap: 8px; }
+    .mine-back {
+      appearance: none; border: none; background: rgba(0, 0, 0, 0.05); color: #1a1133;
+      width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1;
+    }
+    .mine-back:hover { background: rgba(170, 0, 255, 0.12); }
+    .mine-title { font-size: 16px; font-weight: 700; color: #1a1133; word-break: break-all; }
+    .mine-row { display: flex; align-items: center; gap: 10px; }
+    .mine-label { flex: 0 0 92px; font-size: 11.5px; color: #6b5f8a; font-weight: 600; }
+    .mine-select {
+      flex: 1; min-width: 0; appearance: none;
+      background: #faf8ff; color: #1a1133; border: 1px solid rgba(170, 0, 255, 0.20);
+      border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12.5px;
+    }
+    .mine-select:focus { outline: none; border-color: #aa00ff; }
+    .mine-select-sm { font-size: 12px; padding: 5px 7px; }
+    .mine-fieldmap {
+      display: flex; flex-direction: column; gap: 7px;
+      padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
+    }
+    .mine-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 8px; }
+    .mine-status { font-size: 12px; color: #6b5f8a; }
+    .mine-status[data-level="ok"]  { color: #16a34a; font-weight: 600; }
+    .mine-status[data-level="err"] { color: #dc2626; }
+    .mine-add {
+      appearance: none; border: none; cursor: pointer;
+      background: linear-gradient(135deg, #aa00ff, #cc66ff); color: #fff;
+      font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+      transition: transform .14s cubic-bezier(0.34, 1.4, 0.64, 1), filter .15s ease;
+    }
+    .mine-add:hover { filter: brightness(1.06); transform: translateY(-2px); }
+    .mine-add:active { transform: scale(0.96); }
+    .mine-add:disabled { opacity: .7; cursor: default; transform: none; }
 
     .head-ruby  { font-size: 26px; font-weight: 700; color: #1a1133; letter-spacing: .02em; ruby-position: over; line-height: 2.2; }
     .head-ruby rt { font-size: 13px; font-weight: 600; color: #6b5f8a; letter-spacing: .04em; margin-bottom: 6px; }
@@ -541,19 +612,39 @@
     contentEl.id = 'popup-content';
     popupEl.appendChild(contentEl);
 
+    // Delegated handling for the per-entry mine (＋) and config (⚙) buttons.
+    contentEl.addEventListener('click', (e) => {
+      const cfgBtn = e.target.closest('.mine-config');
+      const mineBtn = e.target.closest('.mine-btn');
+      const btn = cfgBtn || mineBtn;
+      if (!btn) return;
+      e.stopPropagation();
+      const entry = currentLookup && currentLookup.entries
+        && currentLookup.entries[Number(btn.dataset.entry)];
+      if (!entry) return;
+      if (cfgBtn || !mineConfigured()) openMinePanel(entry);
+      else quickMine(entry, mineBtn);
+    });
+
     popupEl.addEventListener('mouseenter', () => {
       popupHovered = true;
       clearTimeout(hideTimer);
     });
     popupEl.addEventListener('mouseleave', () => {
       popupHovered = false;
-      if (!modHeld) scheduleHide(200);
+      if (!modHeld && !miningOpen) scheduleHide(200);
     });
   }
 
   // ── Show / position / hide ─────────────────────────────────────────────────
   function showPopup(data, x, y, textNode, offset) {
     ensurePopup();
+
+    // Capture context for the mine button (valid even when we skip re-rendering).
+    currentLookup = data;
+    currentAnchor = { x, y, textNode, offset };
+    currentSentence = getSentenceContext(textNode, offset);
+    miningOpen = false;
 
     const renderKey = (data.matched || '') + '|' + (data.reason || '');
     const wasHidden = popupEl.style.display === 'none' || popupEl.style.display === '';
@@ -633,9 +724,16 @@
     if (popupEl)    { popupEl.style.display = 'none'; }
     if (shadowHost) { shadowHost.style.pointerEvents = 'none'; }
     popupHovered = false;
+    miningOpen   = false;
     lastChunk    = null;
     lastShownKey = null;
     clearHighlight();
+  }
+
+  function reposition() {
+    if (currentAnchor) {
+      positionPopup(currentAnchor.x, currentAnchor.y, currentAnchor.textNode, currentAnchor.offset);
+    }
   }
 
   // ── Lookup via background WebSocket connection ─────────────────────────────
@@ -697,8 +795,11 @@
   }
 
   try {
-    chrome.storage.local.get(DICT_SETTINGS_KEY, (data) => {
+    chrome.storage.local.get([DICT_SETTINGS_KEY, MINE_SETTINGS_KEY], (data) => {
       applyDictSettings(data && data[DICT_SETTINGS_KEY]);
+      if (data && data[MINE_SETTINGS_KEY]) {
+        mineSettings = { fieldMaps: {}, ...data[MINE_SETTINGS_KEY] };
+      }
     });
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes[DICT_SETTINGS_KEY]) {
@@ -707,8 +808,320 @@
     });
   } catch (_) { /* no storage permission in some contexts */ }
 
+  // ── Sentence extraction (for the mined card's context field) ───────────────
+  const SENT_MAX    = 140;                       // chars gathered each direction
+  const SENT_ENDERS = /[。．.!?！？…\n]/;          // sentence boundaries
+
+  // Walk text nodes backward from (startNode, startOffset), gathering up to
+  // maxLen characters. Mirrors collectForwardText but in reverse.
+  function collectBackwardText(startNode, startOffset, maxLen) {
+    let root = startNode.parentNode;
+    while (root && root !== document.body && _INLINE.has(root.nodeName)) {
+      root = root.parentNode;
+    }
+    if (!root) root = document.body;
+
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode(node) {
+        let el = node.parentNode;
+        while (el && el !== root) {
+          if (el.nodeName === 'RT' || el.nodeName === 'RP') return NodeFilter.FILTER_REJECT;
+          el = el.parentNode;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
+
+    let text = startNode.textContent.slice(0, startOffset);
+    walker.currentNode = startNode;
+    while (text.length < maxLen && walker.previousNode()) {
+      text = walker.currentNode.textContent + text;
+    }
+    return text.slice(-maxLen);
+  }
+
+  function getSentenceContext(textNode, offset) {
+    if (!textNode || offset == null) return '';
+    let before, after;
+    try {
+      before = collectBackwardText(textNode, offset, SENT_MAX);
+      after  = textNode.textContent.slice(offset) + collectForwardText(textNode, SENT_MAX);
+    } catch (_) {
+      return '';
+    }
+    let start = 0;
+    for (let i = before.length - 1; i >= 0; i--) {
+      if (SENT_ENDERS.test(before[i])) { start = i + 1; break; }
+    }
+    let end = after.length;
+    for (let i = 0; i < after.length; i++) {
+      if (SENT_ENDERS.test(after[i])) { end = i + 1; break; }
+    }
+    return (before.slice(start) + after.slice(0, end)).replace(/\s+/g, ' ').trim();
+  }
+
+  // ── Mining (build a card from the hovered entry) ───────────────────────────
+  const MINE_SLOTS = [
+    { key: 'expression', label: 'Expression' },
+    { key: 'reading',    label: 'Reading' },
+    { key: 'definition', label: 'Definition' },
+    { key: 'sentence',   label: 'Sentence' },
+  ];
+
+  function saveMineSettings() {
+    try { chrome.storage.local.set({ [MINE_SETTINGS_KEY]: mineSettings }); } catch (_) {}
+  }
+
+  function mineConfigured() {
+    return !!(mineSettings.deckId && mineSettings.typeId &&
+      mineSettings.fieldMaps && mineSettings.fieldMaps[mineSettings.typeId]);
+  }
+
+  // Map mining slots → a card type's field names by fuzzy name match.
+  function autoMapDict(fields) {
+    const norm = (s) => s.toLowerCase().replace(/[^a-z]/g, '');
+    const find = (...keys) => fields.find(f => keys.includes(norm(f)));
+    return {
+      expression: find('expression', 'word', 'kanji', 'vocab', 'vocabulary', 'term', 'front') || fields[0] || '',
+      reading:    find('reading', 'kana', 'furigana', 'pronunciation', 'yomigana', 'yomi') || '',
+      definition: find('definition', 'meaning', 'gloss', 'glosses', 'english', 'back', 'translation', 'sense') || '',
+      sentence:   find('sentence', 'example', 'context', 'sentences') || '',
+    };
+  }
+
+  function entryDefinition(entry) {
+    const out = [];
+    (entry.senses || []).slice(0, 5).forEach(s => {
+      const { defs } = _cleanSense(s);
+      if (defs.length) out.push(defs.slice(0, 3).join('; '));
+    });
+    return out.join(' / ');
+  }
+
+  function mineValues(entry) {
+    const kanji = entry.kanji_forms || [];
+    const readings = entry.reading_forms || [];
+    return {
+      expression: kanji[0] || readings[0] || (currentLookup && currentLookup.matched) || '',
+      reading: readings[0] || '',
+      definition: entryDefinition(entry),
+      sentence: currentSentence || '',
+    };
+  }
+
+  function fieldsFromMap(entry, slotMap) {
+    const vals = mineValues(entry);
+    const fields = {};
+    for (const slot of MINE_SLOTS) {
+      const f = slotMap[slot.key];
+      if (f && vals[slot.key]) fields[f] = vals[slot.key];
+    }
+    return fields;
+  }
+
+  async function ensureDeckData() {
+    if (!decksCache) {
+      const r = await chrome.runtime.sendMessage({ action: 'get_decks' });
+      if (!r || r.error) throw new Error((r && r.error) || 'no decks available');
+      decksCache = r.decks || [];
+    }
+    if (!cardTypesCache) {
+      const r = await chrome.runtime.sendMessage({ action: 'get_card_types' });
+      if (!r || r.error) throw new Error((r && r.error) || 'no card types available');
+      cardTypesCache = r.card_types || [];
+    }
+  }
+
+  function _el(tag, cls, text) {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function _labeledRow(label, control, title) {
+    const row = _el('div', 'mine-row');
+    if (title) row.title = title;
+    row.appendChild(_el('label', 'mine-label', label));
+    row.appendChild(control);
+    return row;
+  }
+
+  // One-click mine using the remembered deck / type / field map.
+  async function quickMine(entry, btn) {
+    try { await ensureDeckData(); } catch (_) { return openMinePanel(entry); }
+    const slotMap = mineSettings.fieldMaps[mineSettings.typeId];
+    const haveDeck = decksCache.some(d => String(d.id) === String(mineSettings.deckId));
+    const haveType = cardTypesCache.some(t => String(t.id) === String(mineSettings.typeId));
+    const fields = slotMap ? fieldsFromMap(entry, slotMap) : {};
+    if (!haveDeck || !haveType || !Object.keys(fields).length) return openMinePanel(entry);
+
+    const original = btn.textContent;
+    btn.disabled = true; btn.textContent = '…';
+    let resp;
+    try {
+      resp = await chrome.runtime.sendMessage({
+        action: 'create_card',
+        deck_id: Number(mineSettings.deckId),
+        card_type_id: Number(mineSettings.typeId),
+        fields,
+      });
+    } catch (_) {
+      btn.disabled = false; btn.textContent = '⚠'; btn.title = 'Could not reach Immersion Suite';
+      setTimeout(() => { btn.textContent = original; btn.title = 'Add this word as a card'; }, 1600);
+      return;
+    }
+    btn.disabled = false;
+    if (!resp || resp.error) {
+      btn.textContent = '⚠'; btn.title = (resp && resp.error) || 'Failed to add';
+      setTimeout(() => { btn.textContent = original; btn.title = 'Add this word as a card'; }, 1600);
+      return;
+    }
+    btn.textContent = '✓';
+    setTimeout(() => { btn.textContent = original; }, 1400);
+  }
+
+  async function openMinePanel(entry) {
+    miningOpen = true;
+    clearTimeout(hideTimer);
+    const panel = _el('div', 'mine-panel');
+    panel.appendChild(_el('div', 'mine-loading', 'Loading decks…'));
+    contentEl.replaceChildren(panel);
+    reposition();
+
+    try {
+      await ensureDeckData();
+    } catch (e) {
+      panel.replaceChildren(_el('div', 'mine-status', 'Could not reach Immersion Suite. Is it running?'));
+      panel.querySelector('.mine-status').dataset.level = 'err';
+      return;
+    }
+    if (!miningOpen) return;  // panel was closed while loading
+    buildMinePanel(panel, entry);
+  }
+
+  function buildMinePanel(panel, entry) {
+    const vals = mineValues(entry);
+    panel.replaceChildren();
+
+    const head = _el('div', 'mine-head');
+    const back = _el('button', 'mine-back', '←');
+    back.title = 'Back';
+    back.addEventListener('click', (e) => { e.stopPropagation(); closeMinePanel(); });
+    head.appendChild(back);
+    head.appendChild(_el('span', 'mine-title', vals.expression || 'Mine word'));
+    panel.appendChild(head);
+
+    const deckSel = _el('select', 'mine-select');
+    for (const d of decksCache) {
+      const o = _el('option', null, d.name); o.value = String(d.id);
+      if (String(mineSettings.deckId) === String(d.id)) o.selected = true;
+      deckSel.appendChild(o);
+    }
+    const typeSel = _el('select', 'mine-select');
+    for (const t of cardTypesCache) {
+      const o = _el('option', null, t.name); o.value = String(t.id);
+      if (String(mineSettings.typeId) === String(t.id)) o.selected = true;
+      typeSel.appendChild(o);
+    }
+    panel.appendChild(_labeledRow('Deck', deckSel));
+    panel.appendChild(_labeledRow('Type', typeSel));
+
+    const mapWrap = _el('div', 'mine-fieldmap');
+    panel.appendChild(mapWrap);
+
+    const renderMap = () => {
+      mapWrap.replaceChildren();
+      const t = cardTypesCache.find(t => String(t.id) === typeSel.value);
+      if (!t) return;
+      const fields = t.fields || [];
+      const stored = (mineSettings.fieldMaps && mineSettings.fieldMaps[t.id]) || autoMapDict(fields);
+      for (const slot of MINE_SLOTS) {
+        const sub = _el('select', 'mine-select mine-select-sm');
+        sub.dataset.slot = slot.key;
+        const none = _el('option', null, '— skip —'); none.value = '';
+        sub.appendChild(none);
+        for (const f of fields) {
+          const o = _el('option', null, f); o.value = f;
+          if (stored[slot.key] === f) o.selected = true;
+          sub.appendChild(o);
+        }
+        mapWrap.appendChild(_labeledRow(slot.label, sub, vals[slot.key] || '(empty)'));
+      }
+    };
+    typeSel.addEventListener('change', renderMap);
+    renderMap();
+
+    const status = _el('div', 'mine-status');
+    const addBtn = _el('button', 'mine-add', '＋ Add card');
+    addBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      submitMine(entry, { deckSel, typeSel, mapWrap, status, addBtn });
+    });
+    const actions = _el('div', 'mine-actions');
+    actions.appendChild(status);
+    actions.appendChild(addBtn);
+    panel.appendChild(actions);
+
+    reposition();
+  }
+
+  async function submitMine(entry, ui) {
+    const { deckSel, typeSel, mapWrap, status, addBtn } = ui;
+    const deckId = deckSel.value, typeId = typeSel.value;
+    if (!deckId || !typeId) { _mineStatus(status, 'Pick a deck and card type.', 'err'); return; }
+
+    const slotMap = {};
+    for (const sel of mapWrap.querySelectorAll('select[data-slot]')) slotMap[sel.dataset.slot] = sel.value;
+    const fields = fieldsFromMap(entry, slotMap);
+    if (!Object.keys(fields).length) { _mineStatus(status, 'Map at least one field.', 'err'); return; }
+
+    addBtn.disabled = true;
+    _mineStatus(status, 'Adding…');
+    let resp;
+    try {
+      resp = await chrome.runtime.sendMessage({
+        action: 'create_card', deck_id: Number(deckId), card_type_id: Number(typeId), fields,
+      });
+    } catch (_) {
+      addBtn.disabled = false; _mineStatus(status, 'Could not reach Immersion Suite.', 'err'); return;
+    }
+    addBtn.disabled = false;
+    if (!resp || resp.error) { _mineStatus(status, (resp && resp.error) || 'Failed to add.', 'err'); return; }
+
+    // Remember for one-click next time.
+    mineSettings.deckId = deckId;
+    mineSettings.typeId = typeId;
+    mineSettings.fieldMaps = mineSettings.fieldMaps || {};
+    mineSettings.fieldMaps[typeId] = slotMap;
+    saveMineSettings();
+
+    _mineStatus(status, '✓ Added', 'ok');
+    addBtn.textContent = '✓ Added';
+    setTimeout(closeMinePanel, 750);
+  }
+
+  function _mineStatus(el, msg, level) {
+    el.textContent = msg || '';
+    el.dataset.level = level || '';
+  }
+
+  function closeMinePanel() {
+    miningOpen = false;
+    if (currentLookup) {
+      const html = renderEntries(currentLookup);
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      contentEl.replaceChildren(...Array.from(doc.body.childNodes));
+      reposition();
+      if (!popupHovered && !modHeld) scheduleHide(500);
+    } else {
+      hidePopup();
+    }
+  }
+
   // ── Event wiring ───────────────────────────────────────────────────────────
   document.addEventListener('mousemove', (e) => {
+    if (miningOpen) return;  // don't start new lookups while the panel is open
     const active = dictEnabled && modifierActive(e);
     modHeld = active;
 
@@ -750,18 +1163,18 @@
   document.addEventListener('keyup', (e) => {
     if (isModifierKey(e.key)) {
       modHeld = false;
-      if (!popupHovered) scheduleHide(200);
+      if (!popupHovered && !miningOpen) scheduleHide(200);
     }
   });
 
   // Dismiss on click outside the popup.
   document.addEventListener('click', () => {
-    if (!popupHovered) hidePopup();
+    if (!popupHovered && !miningOpen) hidePopup();
   }, true);
 
   // Dismiss on scroll - popup position becomes stale.
   document.addEventListener('scroll', () => {
-    if (!popupHovered) hidePopup();
+    if (!popupHovered && !miningOpen) hidePopup();
   }, true);
 
 })();
