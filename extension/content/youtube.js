@@ -446,24 +446,31 @@
 
   function tick() {
     rafHandle = null;
-    if (!videoEl || !cues.length) {
+    updateActiveCueForTime();
+    // Keep the rAF loop running only while the video is actively playing with
+    // cues loaded. A paused/ended tab - or DOM-mirror mode, which has no cues[]
+    // and is driven by a MutationObserver instead - rests until a play/seek
+    // event re-arms us (see wireVideoEvents). This stops a perpetual ~60fps
+    // loop running on every YouTube tab for the page's whole lifetime.
+    if (videoEl && cues.length && !videoEl.paused && !videoEl.ended) {
       scheduleTick();
-      return;
     }
+  }
+
+  // Recompute and apply the active cue for the current playhead. Safe to call
+  // ad-hoc from video events (play/pause/seeked) as well as from the rAF loop.
+  function updateActiveCueForTime() {
+    if (!videoEl || !cues.length) return;
     const t = effectiveTime();
     let idx = activeCueIndex;
     if (idx >= 0 && idx < cues.length) {
       const c = cues[idx];
       const end = cueEnd(idx);
-      if (t >= c.start && t < end) {
-        scheduleTick();
-        return;
-      }
+      if (t >= c.start && t < end) return;
       if (idx + 1 < cues.length) {
         const n = cues[idx + 1];
         if (t >= n.start && t < cueEnd(idx + 1)) {
           setActiveCue(idx + 1);
-          scheduleTick();
           return;
         }
       }
@@ -472,13 +479,11 @@
       // on a small window past the cue's end.
       if (autoPauseEnabled && t >= end && t < end + 0.5 && !videoEl.paused) {
         try { videoEl.pause(); } catch (_) {}
-        scheduleTick();
         return;
       }
     }
     idx = findCueIndex(t);
     if (idx !== activeCueIndex) setActiveCue(idx);
-    scheduleTick();
   }
 
   function setActiveCue(idx) {
@@ -498,6 +503,34 @@
       cancelAnimationFrame(rafHandle);
       rafHandle = null;
     }
+  }
+
+  // Drive the rAF loop off the video's own play state: arm it on play, let it
+  // stop itself on pause/ended (tick() won't reschedule), and resync the active
+  // cue immediately on pause/seek so the subtitle is correct without polling.
+  let wiredVideoEl = null;
+  function onVideoPlay() { scheduleTick(); }
+  function onVideoPauseOrEnd() { stopTick(); updateActiveCueForTime(); }
+  function onVideoSeeked() {
+    updateActiveCueForTime();
+    if (videoEl && !videoEl.paused && !videoEl.ended) scheduleTick();
+  }
+  function wireVideoEvents() {
+    if (videoEl === wiredVideoEl) return;  // YouTube reuses the <video> element
+    if (wiredVideoEl) {
+      wiredVideoEl.removeEventListener('play', onVideoPlay);
+      wiredVideoEl.removeEventListener('playing', onVideoPlay);
+      wiredVideoEl.removeEventListener('pause', onVideoPauseOrEnd);
+      wiredVideoEl.removeEventListener('ended', onVideoPauseOrEnd);
+      wiredVideoEl.removeEventListener('seeked', onVideoSeeked);
+    }
+    wiredVideoEl = videoEl;
+    if (!videoEl) return;
+    videoEl.addEventListener('play', onVideoPlay);
+    videoEl.addEventListener('playing', onVideoPlay);
+    videoEl.addEventListener('pause', onVideoPauseOrEnd);
+    videoEl.addEventListener('ended', onVideoPauseOrEnd);
+    videoEl.addEventListener('seeked', onVideoSeeked);
   }
 
   // ── Navigation ──────────────────────────────────────────────────────────
@@ -603,6 +636,7 @@
     if (!trackUrl) return;
 
     videoEl = document.querySelector('#movie_player video') || document.querySelector('video');
+    wireVideoEvents();
     ensureBar();
 
     let parsed = null;
@@ -1125,7 +1159,7 @@
 
     const offsetGroup = document.createElement('div');
     offsetGroup.className = 'imm-yt-queue-offset';
-    offsetGroup.title = 'Subtitle timing offset - , and . to nudge ±100ms';
+    offsetGroup.title = 'Subtitle timing offset - while this queue is open, , / . nudge ±100ms ( < / > = ±500ms, 0 resets)';
 
     const offsetMinus = document.createElement('button');
     offsetMinus.type = 'button';
@@ -1436,12 +1470,17 @@
     if (k === 'a') { prevCue(); e.preventDefault(); }
     else if (k === 's') { replayCue(); e.preventDefault(); }
     else if (k === 'd') { nextCue(); e.preventDefault(); }
-    // Sub-timing offset: , and . nudge by ±100ms; < and > by ±500ms; 0 resets.
-    else if (e.key === ',') { nudgeOffset(-100); e.preventDefault(); }
-    else if (e.key === '<') { nudgeOffset(-500); e.preventDefault(); }
-    else if (e.key === '.') { nudgeOffset(+100); e.preventDefault(); }
-    else if (e.key === '>') { nudgeOffset(+500); e.preventDefault(); }
-    else if (k === '0') { resetOffset(); e.preventDefault(); }
+    // Sub-timing offset keys are only consumed while the queue panel is open,
+    // so during normal viewing they don't shadow YouTube's native shortcuts:
+    // , / . = frame-step (paused), < / > = playback speed, 0-9 = seek. The
+    // on-screen −/+ buttons adjust the offset regardless of panel state.
+    else if (queueOpen) {
+      if (e.key === ',') { nudgeOffset(-100); e.preventDefault(); }
+      else if (e.key === '<') { nudgeOffset(-500); e.preventDefault(); }
+      else if (e.key === '.') { nudgeOffset(+100); e.preventDefault(); }
+      else if (e.key === '>') { nudgeOffset(+500); e.preventDefault(); }
+      else if (k === '0') { resetOffset(); e.preventDefault(); }
+    }
   }, true);
 
   // ── Message bridge from page-script ─────────────────────────────────────

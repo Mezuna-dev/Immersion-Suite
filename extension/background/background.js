@@ -85,6 +85,34 @@ async function request(payload, { timeoutMs } = {}) {
 // on those so the WS request doesn't get killed before yt-dlp finishes.
 const LONG_ACTIONS = new Set(['create_card_with_media', 'get_youtube_subs']);
 
+// MV3 tears the service worker down after ~30s idle. An open WebSocket only
+// keeps it alive *while messages flow*, so during a long, silent yt-dlp job
+// (clips can run 60-80s) Chrome can suspend the worker and drop the socket
+// mid-download. While any long action is in flight we send a ping every 20s;
+// each ping/pong is WebSocket activity that resets the idle timer, and the
+// server already answers ping → pong cheaply.
+const KEEPALIVE_MS = 20000;
+let longActionsInFlight = 0;
+let keepaliveTimer = null;
+
+function startKeepalive() {
+  longActionsInFlight += 1;
+  if (keepaliveTimer != null) return;
+  keepaliveTimer = setInterval(() => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(JSON.stringify({ id: 'keepalive', action: 'ping' })); } catch {}
+    }
+  }, KEEPALIVE_MS);
+}
+
+function stopKeepalive() {
+  longActionsInFlight = Math.max(0, longActionsInFlight - 1);
+  if (longActionsInFlight === 0 && keepaliveTimer != null) {
+    clearInterval(keepaliveTimer);
+    keepaliveTimer = null;
+  }
+}
+
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== 'object' || !msg.action) return;
 
@@ -102,7 +130,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
 
   // Generic pass-through for YouTube-integration actions.
   const { action, ...rest } = msg;
-  const opts = LONG_ACTIONS.has(action) ? { timeoutMs: LONG_TIMEOUT_MS } : {};
-  request({ action, ...rest }, opts).then(sendResponse);
+  const isLong = LONG_ACTIONS.has(action);
+  const opts = isLong ? { timeoutMs: LONG_TIMEOUT_MS } : {};
+  if (isLong) startKeepalive();
+  request({ action, ...rest }, opts).then((r) => {
+    if (isLong) stopKeepalive();
+    sendResponse(r);
+  });
   return true; // keep the message channel open for the async reply
 });

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import http
 import json
 import os
 import shutil
@@ -19,6 +20,43 @@ PORT = 8765
 MAX_CLIP_SECONDS = 30
 # Cap on yt-dlp + ffmpeg runtime; the WS callsite uses 90s on its end.
 MEDIA_TIMEOUT_SECONDS = 75
+
+
+# ── Connection origin gate ───────────────────────────────────────────────────
+# The bridge listens on 127.0.0.1, but "localhost" is reachable by every page
+# the user visits. Without this gate any website could open ws://127.0.0.1:8765
+# and invoke every action - including create_card_with_media, which feeds an
+# arbitrary URL into yt-dlp and writes files to disk (drive-by card-spam /
+# download vector). Browsers set the Origin header on WebSocket handshakes and
+# page JavaScript cannot override it, so rejecting web origins reliably shuts
+# the website attack out.
+#
+# The extension's background service worker connects with a chrome-extension://
+# or moz-extension:// origin, which we allow. A missing Origin (some non-browser
+# clients / older extension runtimes) is allowed too so we never silently break
+# the extension. Hardening against *local non-browser* clients needs a shared
+# token; that lands with the options page (roadmap item #7) which can surface the
+# token for the user to paste.
+
+_ALLOWED_ORIGIN_SCHEMES = ('chrome-extension://', 'moz-extension://')
+
+
+def _origin_allowed(origin) -> bool:
+    if not origin:
+        return True
+    return origin.startswith(_ALLOWED_ORIGIN_SCHEMES)
+
+
+async def _process_request(path, request_headers):
+    """Reject the handshake before the WS opens if the Origin isn't allowed.
+
+    Legacy-server signature: return None to proceed, or an
+    (status, headers, body) tuple to reject.
+    """
+    origin = request_headers.get('Origin')
+    if not _origin_allowed(origin):
+        return http.HTTPStatus.FORBIDDEN, [], b'origin not allowed\n'
+    return None
 
 
 # ── Action dispatch ──────────────────────────────────────────────────────────
@@ -656,7 +694,9 @@ def _parse_subs_vtt(text: str) -> list:
 # ── Boot ─────────────────────────────────────────────────────────────────────
 
 async def _run():
-    async with serve(_handle, HOST, PORT, origins=None, max_size=8 * 1024 * 1024):
+    async with serve(_handle, HOST, PORT, origins=None,
+                     process_request=_process_request,
+                     max_size=8 * 1024 * 1024):
         await asyncio.Future()
 
 

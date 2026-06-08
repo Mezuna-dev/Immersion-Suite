@@ -11,6 +11,25 @@ All notable changes to Immersion Suite are documented here. The format is based 
 
 Work in progress toward 1.4.0.
 
+### Security
+- **Browser-extension bridge now rejects web origins.** The desktop app's local
+  WebSocket (`127.0.0.1:8765`) is reachable by any page the browser visits; it
+  now refuses handshakes whose `Origin` isn't the extension's
+  (`chrome-extension://` / `moz-extension://`), closing a drive-by vector where a
+  website could create cards or trigger downloads.
+
+### Fixed
+- **YouTube tabs no longer run a perpetual ~60fps loop.** The subtitle update
+  loop now rests while the video is paused/ended and re-arms on play, seek, and
+  cue load.
+- **YouTube native keys work again.** Subtitle-offset keys (`,` `.` `<` `>` `0`)
+  are only consumed while the immersion queue panel is open, so frame-step, speed,
+  and seek shortcuts are unaffected during normal viewing. The on-screen −/+
+  buttons still adjust the offset anytime.
+- **Long audio clips no longer drop mid-download.** The extension keeps the MV3
+  service worker alive with a periodic ping while a download/sub-fetch is in
+  flight, preventing "Connection to Immersion Suite was lost" on 60-80s clips.
+
 ## [1.3.1] - 2026-06-08
 
 A maintenance release focused on correct SRS scheduling, a useful menu bar, and
