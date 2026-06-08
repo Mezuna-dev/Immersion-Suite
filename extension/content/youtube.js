@@ -414,25 +414,58 @@
     if (barEl) barEl.style.display = 'flex';
   }
 
-  // Render word-level tokens (from `analyze`): each content word is wrapped in a
+  function tokenSurface(tok) {
+    return (tok.ruby || []).map(s => s.text).join('');
+  }
+
+  function tokenInnerHtml(tok) {
+    let inner = '';
+    for (const seg of (tok.ruby || [])) {
+      const safe = escapeHtml(seg.text);
+      inner += (furiganaEnabled && seg.reading)
+        ? `<ruby>${safe}<rt>${escapeHtml(seg.reading)}</rt></ruby>`
+        : safe;
+    }
+    return inner;
+  }
+
+  // Render word-level tokens (from `analyze`): content words are wrapped in a
   // span classed known/unknown; ruby is included when furigana is also on.
+  //
+  // The dictionary and Sudachi don't always agree on word boundaries (e.g. the
+  // dict treats この間 as one word, Sudachi splits it into この + 間), so we
+  // greedily merge adjacent tokens whose combined surface is a known term -
+  // otherwise a word marked known in the popup would never match here.
+  const MAX_KNOWN_SPAN = 6;
   function paintWords(tokens) {
     if (!textEl) return;
+    const surfaces = tokens.map(tokenSurface);
     const parts = [];
-    for (const tok of tokens) {
-      let inner = '';
-      for (const seg of (tok.ruby || [])) {
-        const safe = escapeHtml(seg.text);
-        inner += (furiganaEnabled && seg.reading)
-          ? `<ruby>${safe}<rt>${escapeHtml(seg.reading)}</rt></ruby>`
-          : safe;
+    let i = 0;
+    while (i < tokens.length) {
+      // Longest run of tokens (>=2) whose combined surface is a known term.
+      let runLen = 0;
+      let combined = '';
+      for (let j = i; j < Math.min(tokens.length, i + MAX_KNOWN_SPAN); j++) {
+        combined += surfaces[j];
+        if (knownSet.has(combined)) runLen = j - i + 1;
       }
+      if (runLen >= 2) {
+        let inner = '';
+        for (let k = i; k < i + runLen; k++) inner += tokenInnerHtml(tokens[k]);
+        parts.push(`<span class="imm-word imm-known">${inner}</span>`);
+        i += runLen;
+        continue;
+      }
+      const tok = tokens[i];
+      const inner = tokenInnerHtml(tok);
       if (tok.content) {
-        const cls = knownSet.has(tok.lemma) ? 'imm-known' : 'imm-unknown';
-        parts.push(`<span class="imm-word ${cls}">${inner}</span>`);
+        const known = knownSet.has(tok.lemma) || knownSet.has(surfaces[i]);
+        parts.push(`<span class="imm-word ${known ? 'imm-known' : 'imm-unknown'}">${inner}</span>`);
       } else {
         parts.push(inner);
       }
+      i++;
     }
     textEl.innerHTML = parts.join('');
   }
