@@ -212,6 +212,53 @@ body {
 }
 .select option { background: #1a1a22; color: #fff; }
 
+/* ── Pairing ───────────────────────────────────────────────────────────── */
+.pair-hint {
+  margin: 0 0 10px;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--text-dimmer);
+}
+.pair-hint b { color: var(--text-dim); font-weight: 700; }
+
+.pair-input-row { display: flex; gap: 8px; }
+
+.text-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 12px;
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+.text-input:focus {
+  outline: none;
+  border-color: var(--accent-2);
+  background: rgba(170, 0, 255, 0.1);
+}
+
+.save-btn {
+  flex: 0 0 auto;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 16px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+  transition: transform 0.14s cubic-bezier(0.34, 1.4, 0.64, 1), filter 0.15s ease, box-shadow 0.18s ease;
+}
+.save-btn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(170, 0, 255, 0.45); }
+.save-btn:active { transform: scale(0.96); box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35); }
+
 /* ── Footer ────────────────────────────────────────────────────────────── */
 .foot {
   min-height: 16px;

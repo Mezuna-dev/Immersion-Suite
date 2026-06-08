@@ -1,6 +1,7 @@
 const WS_URL = 'ws://127.0.0.1:8765';
 const DEFAULT_TIMEOUT_MS = 5000;
 const LONG_TIMEOUT_MS = 90000;  // for media downloads
+const TOKEN_KEY = 'imm_ws_token';  // shared secret, pasted in the options page
 
 // Live WebSocket instance, or null when disconnected.
 let ws = null;
@@ -8,6 +9,16 @@ let ws = null;
 let connecting = null;
 // Pending requests: id → resolve callback.
 const pending = new Map();
+
+function getToken() {
+  return new Promise((resolve) => {
+    try {
+      chrome.storage.local.get(TOKEN_KEY, (data) => resolve((data && data[TOKEN_KEY]) || ''));
+    } catch {
+      resolve('');
+    }
+  });
+}
 
 function onMessage(event) {
   let msg;
@@ -31,11 +42,26 @@ function onClose() {
 function connect() {
   if (connecting) return connecting;
   connecting = new Promise((resolve, reject) => {
-    const socket = new WebSocket(WS_URL);
-    socket.onopen = () => {
-      ws = socket;
+    let socket;
+    try {
+      socket = new WebSocket(WS_URL);
+    } catch {
       connecting = null;
-      resolve(socket);
+      reject(new Error('Could not connect to Immersion Suite. Is the app running?'));
+      return;
+    }
+
+    // The desktop app requires a shared token as the first message. We don't
+    // treat the socket as usable until it replies { action:'auth', ok:true }.
+    socket.onopen = async () => {
+      const token = await getToken();
+      try {
+        socket.send(JSON.stringify({ id: 'auth', action: 'auth', token }));
+      } catch {
+        connecting = null;
+        try { socket.close(); } catch {}
+        reject(new Error('Could not authenticate with Immersion Suite.'));
+      }
     };
     socket.onerror = (event) => {
       console.error('[immersion] WebSocket error:', event);
@@ -43,7 +69,29 @@ function connect() {
       reject(new Error('Could not connect to Immersion Suite. Is the app running?'));
     };
     socket.onclose = onClose;
-    socket.onmessage = onMessage;
+    socket.onmessage = (event) => {
+      // Intercept the one-time auth reply before normal request routing.
+      if (!socket._authed) {
+        let m;
+        try { m = JSON.parse(event.data); } catch { return; }
+        if (m && m.action === 'auth') {
+          if (m.ok) {
+            socket._authed = true;
+            ws = socket;
+            connecting = null;
+            resolve(socket);
+          } else {
+            connecting = null;
+            try { socket.close(); } catch {}
+            reject(new Error(
+              'Not authorized. Paste the pairing token from the app ' +
+              '(Settings → Browser Extension) into the extension options.'));
+          }
+        }
+        return;  // ignore any other traffic until authenticated
+      }
+      onMessage(event);
+    };
   });
   return connecting;
 }
@@ -124,6 +172,15 @@ function stopKeepalive() {
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (!msg || typeof msg !== 'object' || !msg.action) return;
+
+  // Options page changed the token: drop the live socket so the next request
+  // reconnects and re-authenticates with the new value.
+  if (msg.action === '__imm_reconnect') {
+    try { if (ws) ws.close(); } catch {}
+    ws = null;
+    connecting = null;
+    return;  // no async response needed
+  }
 
   // Legacy popup-lookup path: { action: 'lookup', text }
   if (msg.action === 'lookup') {

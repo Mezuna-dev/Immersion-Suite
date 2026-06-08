@@ -225,6 +225,23 @@ class AppBridge(QObject):
         info = {'version': version.__version__}
         self.web_view.page().runJavaScript(f'applyAppInfo({json.dumps(info)});')
 
+    # --- Browser extension pairing ---
+
+    @pyqtSlot()
+    def getExtensionToken(self):
+        import ws_server
+        token = ws_server.get_or_create_token()
+        self.web_view.page().runJavaScript(f'applyExtensionToken({json.dumps(token)});')
+
+    @pyqtSlot()
+    def copyExtensionToken(self):
+        import ws_server
+        from PyQt6.QtWidgets import QApplication
+        token = ws_server.get_or_create_token()
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(token)
+
     @pyqtSlot(bool)
     def checkForUpdates(self, manual):
         # Automatic (startup) checks honour the user's preference; manual checks

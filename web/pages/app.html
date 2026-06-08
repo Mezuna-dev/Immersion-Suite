@@ -935,6 +935,22 @@
                         </div>
                     </div>
 
+                    <!-- Browser Extension -->
+                    <div class="card mb-4 settings-card" style="max-width: 560px;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Browser Extension</h2>
+                            <small class="settings-hint" style="margin-bottom: 1rem; display: block;">
+                                Paste this pairing token into the browser extension's options
+                                (click the extension icon &rarr; <b>Pairing</b>) so it can talk to this app.
+                                Keep it private &mdash; anything with this token can add cards and download clips.
+                            </small>
+                            <div class="d-flex align-items-center gap-2" style="flex-wrap: nowrap;">
+                                <code id="ext-token-value" style="flex: 1; min-width: 0; font-size: 0.8rem; word-break: break-all; background: rgba(255,255,255,0.05); padding: 0.5rem 0.7rem; border-radius: 8px; opacity: 0.95;">&hellip;</code>
+                                <button id="ext-token-copy" class="btn btn-dark btn-accent" style="flex: 0 0 auto;" onclick="copyExtensionToken()">Copy</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Updates -->
                     <div class="card mb-4 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">

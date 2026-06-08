@@ -16,6 +16,7 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge.getDecks();
     bridge.getMediaBaseUrl();
     bridge.getAppInfo();
+    bridge.getExtensionToken();
     bridge.checkForUpdates(false);  // silent startup check; backend honours the setting
 });
 
@@ -140,6 +141,21 @@ function applyAppInfo(info) {
     currentAppVersion = info.version || '';
     var el = document.getElementById('about-version');
     if (el) el.textContent = 'Version ' + currentAppVersion;
+}
+
+function applyExtensionToken(token) {
+    var el = document.getElementById('ext-token-value');
+    if (el) el.textContent = token || '(unavailable)';
+}
+
+function copyExtensionToken() {
+    if (bridge) bridge.copyExtensionToken();
+    var btn = document.getElementById('ext-token-copy');
+    if (btn) {
+        var original = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(function() { btn.textContent = original; }, 1400);
+    }
 }
 
 function onUpdateCheckResult(data) {

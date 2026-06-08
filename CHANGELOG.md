@@ -24,6 +24,11 @@ Work in progress toward 1.4.0.
   now refuses handshakes whose `Origin` isn't the extension's
   (`chrome-extension://` / `moz-extension://`), closing a drive-by vector where a
   website could create cards or trigger downloads.
+- **Pairing token required.** Beyond the origin check, the bridge now requires a
+  shared secret as the first message before any action runs, blocking other local
+  extensions and processes. The token is generated on first run and shown in
+  **Settings → Browser Extension**; paste it into the extension's options
+  (**Pairing**) to connect. **Existing installs must pair once after updating.**
 
 ### Fixed
 - **YouTube tabs no longer run a perpetual ~60fps loop.** The subtitle update

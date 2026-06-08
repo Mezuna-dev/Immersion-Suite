@@ -1,8 +1,10 @@
 import asyncio
 import base64
+import hmac
 import http
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -20,6 +22,80 @@ PORT = 8765
 MAX_CLIP_SECONDS = 30
 # Cap on yt-dlp + ffmpeg runtime; the WS callsite uses 90s on its end.
 MEDIA_TIMEOUT_SECONDS = 75
+# A client must present the shared token within this window of connecting.
+AUTH_TIMEOUT_SECONDS = 5
+
+
+# ── Shared-token authentication ──────────────────────────────────────────────
+# The origin gate (below) stops *websites* reaching the bridge, but other local
+# extensions connect with their own chrome-extension:// origin and any local
+# process can speak WebSocket. A shared secret - generated on first run, shown to
+# the user in the app's Settings → Browser Extension, and pasted into the
+# extension's options - is required as the first message before any action runs.
+
+_token_cache = None
+
+
+def _token_path() -> Path:
+    import database
+    return database.BASE_DIR / 'data' / 'ws_token.txt'
+
+
+def get_or_create_token() -> str:
+    """Return the shared secret, generating and persisting it on first use."""
+    global _token_cache
+    if _token_cache:
+        return _token_cache
+    path = _token_path()
+    try:
+        if path.exists():
+            tok = path.read_text(encoding='utf-8').strip()
+            if tok:
+                _token_cache = tok
+                return tok
+    except OSError:
+        pass
+    tok = secrets.token_urlsafe(32)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(tok, encoding='utf-8')
+    except OSError:
+        pass
+    _token_cache = tok
+    return tok
+
+
+async def _authenticate(websocket) -> bool:
+    """Require a valid `{action:'auth', token}` as the first message. Sends an
+    explicit auth reply either way so the extension can distinguish a bad token
+    from the app simply not running (a rejected WS handshake is opaque to JS)."""
+    expected = get_or_create_token()
+    try:
+        raw = await asyncio.wait_for(websocket.recv(), timeout=AUTH_TIMEOUT_SECONDS)
+    except Exception:  # noqa: BLE001 - timeout or early close → not authenticated
+        return False
+
+    try:
+        msg = json.loads(raw)
+    except (json.JSONDecodeError, ValueError):
+        msg = {}
+    if not isinstance(msg, dict):
+        msg = {}
+
+    msg_id = msg.get('id', '')
+    token = str(msg.get('token', ''))
+    if msg.get('action') == 'auth' and hmac.compare_digest(token, expected):
+        await websocket.send(json.dumps({'action': 'auth', 'ok': True, 'id': msg_id}))
+        return True
+
+    try:
+        await websocket.send(json.dumps({
+            'action': 'auth', 'ok': False,
+            'error': 'invalid or missing token', 'id': msg_id,
+        }))
+    except Exception:  # noqa: BLE001 - best-effort error reply
+        pass
+    return False
 
 
 # ── Connection origin gate ───────────────────────────────────────────────────
@@ -62,6 +138,12 @@ async def _process_request(path, request_headers):
 # ── Action dispatch ──────────────────────────────────────────────────────────
 
 async def _handle(websocket):
+    if not await _authenticate(websocket):
+        try:
+            await websocket.close()
+        except Exception:  # noqa: BLE001
+            pass
+        return
     async for raw in websocket:
         try:
             msg = json.loads(raw)
