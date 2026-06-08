@@ -5,4 +5,4 @@ and extension/manifest.json on each release. The in-app updater compares this
 value against the latest GitHub release tag.
 """
 
-__version__ = "1.3.1"
+__version__ = "1.4.0"

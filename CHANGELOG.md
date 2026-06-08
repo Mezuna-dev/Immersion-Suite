@@ -7,6 +7,10 @@ All notable changes to Immersion Suite are documented here. The format is based 
 > Immersion Suite is currently in **open beta** - usable day to day, but still under
 > active development. Bug reports and feedback are very welcome.
 
+## [Unreleased]
+
+Work in progress toward 1.4.0.
+
 ## [1.3.1] - 2026-06-08
 
 A maintenance release focused on correct SRS scheduling, a useful menu bar, and
