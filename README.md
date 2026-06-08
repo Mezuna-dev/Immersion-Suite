@@ -59,7 +59,7 @@ No subscriptions. No cloud. Everything runs on your machine.
 ### 🔍 Browser Extension
 - Hold **Shift** and hover over any Japanese text in Chrome or Firefox
 - Instant popup dictionary powered by [Jitendex](https://jitendex.org/) (~295k entries)
-- Furigana, part-of-speech, frequency tags, pitch accent, and deinflection
+- Furigana, part-of-speech, frequency tags, and deinflection
 - Connects to the desktop app over a local WebSocket with no external requests
 - Works on any website
 
@@ -122,15 +122,6 @@ python scripts/build_jitendex.py
 ```
 
 This downloads the latest Jitendex release from jitendex.org and rebuilds the SQLite database (~103 MB, ~295k entries).
-
-</details>
-
-<details>
-<summary>Optional: add pitch-accent or frequency dictionaries</summary>
-
-The popup reads **Yomitan-format** frequency and pitch-accent dictionaries at runtime — just drop the `.zip` into `data/dicts/` (no rebuild needed). Any zip containing `term_meta_bank_*.json` files works; `freq` rows add frequency ranking and `pitch` rows add the pitch-accent graph shown above each entry's reading.
-
-A frequency dictionary (JPDB) ships by default. For **pitch accent**, add a free Yomitan pitch dictionary such as the Kanjium-derived **"Kanjium Pitch Accents"** build. Mind redistribution licensing before bundling one in a release — the NHK accent dictionary, for example, is **not** freely redistributable.
 
 </details>
 

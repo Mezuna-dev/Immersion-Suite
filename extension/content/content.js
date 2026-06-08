@@ -321,53 +321,6 @@
     return html;
   }
 
-  // ── Pitch accent ───────────────────────────────────────────────────────────
-  const _SMALL_KANA = 'ぁぃぅぇぉゃゅょゎゕゖァィゥェォャュョヮ';
-
-  // Split a kana reading into mora (small kana attach to the preceding mora).
-  function _toMora(reading) {
-    const mora = [];
-    for (const ch of reading) {
-      if (_SMALL_KANA.includes(ch) && mora.length) mora[mora.length - 1] += ch;
-      else mora.push(ch);
-    }
-    return mora;
-  }
-
-  // For downstep position `pos` over `n` mora: is mora `i` high-pitched, and does
-  // the pitch fall right after it? pos 0 = heiban (no drop within the word),
-  // 1 = atamadaka, n = odaka, between = nakadaka.
-  function _moraState(i, n, pos) {
-    let high;
-    if (pos === 0)      high = i !== 0;            // L H H H … (stays high)
-    else if (pos === 1) high = i === 0;            // H L L L …
-    else                high = i !== 0 && i < pos; // L H … H ↓ L
-    const drop = pos >= 1 && i === pos - 1;        // pitch falls after this mora
-    return { high, drop };
-  }
-
-  function _renderPitch(entry) {
-    const pitches = entry.pitch || [];
-    if (!pitches.length) return '';
-    let inner = '';
-    for (const pa of pitches.slice(0, 3)) {
-      const reading = pa.reading || '';
-      const positions = (pa.positions || []).slice(0, 3);
-      if (!reading || !positions.length) continue;
-      const mora = _toMora(reading);
-      for (const pos of positions) {
-        let g = '<span class="pitch-graph">';
-        for (let i = 0; i < mora.length; i++) {
-          const { high, drop } = _moraState(i, mora.length, pos);
-          g += `<span class="pitch-mora${high ? ' is-high' : ''}${drop ? ' is-drop' : ''}">${esc(mora[i])}</span>`;
-        }
-        g += '</span>';
-        inner += `<span class="pitch-item">${g}<span class="pitch-num">${pos}</span></span>`;
-      }
-    }
-    return inner ? `<div class="pitch-row">${inner}</div>` : '';
-  }
-
   // ── Render entry list HTML ─────────────────────────────────────────────────
   function renderEntries(data) {
     const { entries, error, reason, source } = data;
@@ -403,8 +356,6 @@
         });
         html += '</div>';
       }
-
-      html += _renderPitch(entry);
 
       html += '<div class="senses">';
       (entry.senses || []).slice(0, 6).forEach((sense, i) => {
@@ -557,18 +508,6 @@
     .etag-spec   { color: #6b5f8a; background: rgba(107, 95, 138, 0.07);  border: 1px solid rgba(107, 95, 138, 0.15); }
     .etag-misc   { color: #6b5f8a; background: rgba(107, 95, 138, 0.06);  border: 1px solid rgba(107, 95, 138, 0.12); }
     .etag-prio   { color: #d97706; background: rgba(217, 119, 6, 0.08);   border: 1px solid rgba(217, 119, 6, 0.20); }
-
-    .pitch-row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 0 0 10px; }
-    .pitch-item { display: inline-flex; align-items: center; gap: 6px; }
-    .pitch-graph { display: inline-flex; align-items: flex-start; font-size: 16px; line-height: 1.1; color: #1a1133; }
-    .pitch-mora { padding: 3px 0.5px 0; border-top: 2px solid transparent; box-sizing: border-box; }
-    .pitch-mora.is-high  { border-top-color: #aa00ff; }
-    .pitch-mora.is-drop  { border-right: 2px solid #aa00ff; }
-    .pitch-num {
-      font-size: 10px; font-weight: 700; color: #aa00ff;
-      background: rgba(170, 0, 255, 0.08); border: 1px solid rgba(170, 0, 255, 0.20);
-      border-radius: 5px; padding: 1px 6px; line-height: 1.4;
-    }
 
     .senses { display: flex; flex-direction: column; gap: 10px; }
     .sense  { line-height: 1.55; }

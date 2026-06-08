@@ -12,10 +12,6 @@ All notable changes to Immersion Suite are documented here. The format is based 
 Work in progress toward 1.4.0.
 
 ### Added
-- **Pitch-accent display.** The popup dictionary now draws the standard pitch-accent
-  graph (mora overline + downstep) and the accent number above each entry's reading,
-  when a Yomitan pitch-accent dictionary is present in `data/dicts/`. Loaded at
-  runtime like frequency dictionaries — no rebuild needed.
 - **Mine words from any web page.** The hover dictionary now has a **＋** button on
   each entry that creates a flashcard from the word's expression, reading,
   definition, and the **sentence it appeared in** — no more leaving the page. A **⚙**
