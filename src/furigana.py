@@ -106,69 +106,50 @@ def tokenize_sentence(text: str) -> dict:
 # Major POS categories not worth colouring as vocabulary.
 _SKIP_POS = {'助詞', '助動詞', '補助記号', '記号', '空白', '接続詞'}
 
-# Bound morphemes that attach to the preceding content word as its
-# conjugation/derivation tail rather than starting a new vocab unit.
-_TAIL_POS = {'助動詞', '接尾辞'}
-# POS that are never trackable as words even when standalone (punctuation,
-# symbols, whitespace, and the copula/auxiliary which rides on its word).
-_NONTRACK_POS = {'補助記号', '記号', '空白', '助動詞'}
+# Morphemes that are never trackable words (punctuation, symbols, whitespace).
+_INERT_POS = {'補助記号', '記号', '空白'}
 
 
-def _is_tail(m: dict) -> bool:
-    """True if morpheme *m* belongs to the preceding word's conjugation tail.
+def _is_verblike(m: dict) -> bool:
+    """True if *m* heads a unit that carries its own inflection.
 
-    Covers auxiliary 助動詞 (た, ない, ます, です, な…), 接尾辞, a verb-form 助詞
-    (the 接続助詞 て/で in 読ん+で, plus ～たり/～ながら/～つつ), and the negation ない
-    when Sudachi tags it 形容詞・非自立可能 (比べたく+ない).  The case particle で
-    (学校で) and で+も are 格助詞/係助詞, NOT 接続助詞, so they stay as their own
-    trackable particles rather than being swallowed.
+    Verbs / i-adjectives, plus three kinds of 助動詞:
+      - verb-like auxiliaries ちゃう/じゃう/てる/でる (conj is a verb type 五段/
+        下一段…, not 助動詞-XXX) — split off as their own unit (笑っ | ちゃった).
+      - the copula だ/です (助動詞-ダ/助動詞-デス) — its own unit (元気 | です), but
+        it still absorbs its own inflection so 大変+だっ+た → 大変 | だった,
+        じゃ+ない → じゃない, rather than leaving だっ / じゃ stranded.
     """
-    if m['pos0'] in _TAIL_POS:
+    if m['pos0'] in ('動詞', '形容詞'):
         return True
-    if m['pos0'] == '助詞':
+    if m['pos0'] == '助動詞':
+        c = m.get('conj', '')
+        return (not c.startswith('助動詞-')) or c in ('助動詞-ダ', '助動詞-デス')
+    return False
+
+
+def _is_inflection(m: dict) -> bool:
+    """True if *m* is a pure inflectional ending that stays glued to its
+    verb/adjective stem (so 比べたくない / 食べました / 言って are one unit each):
+
+      - 接続助詞 て/で (読ん+で), plus ～たり/～ながら/～つつ
+      - the 補助形容詞 negation ない (比べたく+ない)
+      - inflectional 助動詞 (助動詞-タ/マス/タイ/ナイ/ウ…)
+
+    NOT the copula (助動詞-デス/助動詞-ダ → です/な/だ are their own units) and NOT
+    verb-like auxiliaries (ちゃう), which start their own unit.
+    """
+    p0 = m['pos0']
+    if p0 == '助詞':
         if m['surface'] in ('て', 'で'):
             return m.get('pos1') == '接続助詞'
-        if m['surface'] in ('たり', 'ながら', 'つつ'):
-            return True
-    return (m['pos0'] == '形容詞' and m.get('pos1') == '非自立可能'
-            and m['lemma'] == 'ない')
-
-
-def _is_head(m: dict) -> bool:
-    """True if morpheme *m* can start a vocab chunk (a content word).
-
-    Excludes particles/aux/punctuation (_SKIP_POS), conjugation tails
-    (_TAIL_POS), and 接頭辞 prefixes (which attach to the following word instead).
-    """
-    return (m['pos0'] not in _SKIP_POS
-            and m['pos0'] not in _TAIL_POS
-            and m['pos0'] != '接頭辞'
-            and _has_japanese(m['surface']))
-
-
-def _build_chunk(raw: list[dict], lead: list[int], tail_start: int, n: int):
-    """Assemble one chunk: the `lead` morphemes plus any following conjugation
-    tail. Returns (ruby, base_surface, next_index).
-
-    `base_surface` is the word WITHOUT its inflectional tail — head + 接頭辞/
-    接尾辞 only (タイ人, 人たち, お元気) — so it matches the dictionary word the
-    popup stores, even though the chunk also carries the copula/inflection
-    (タイ人で). Inflectional tails (助動詞/助詞/補助形容詞) don't extend the base.
-    """
-    ruby: list[dict] = []
-    base = ''
-    for k in lead:
-        m = raw[k]
-        ruby += _align_token(m['surface'], m['reading'])
-        base += m['surface']
-    j = tail_start
-    while j < n and _is_tail(raw[j]):
-        m = raw[j]
-        ruby += _align_token(m['surface'], m['reading'])
-        if m['pos0'] == '接尾辞':
-            base += m['surface']
-        j += 1
-    return ruby, base, j
+        return m['surface'] in ('たり', 'だり', 'ながら', 'つつ')
+    if p0 == '形容詞':
+        return m.get('pos1') == '非自立可能' and m['lemma'] == 'ない'
+    if p0 == '助動詞':
+        c = m.get('conj', '')
+        return c.startswith('助動詞-') and c not in ('助動詞-デス', '助動詞-ダ')
+    return False
 
 
 def _has_japanese(s: str) -> bool:
@@ -226,91 +207,76 @@ def analyze_sentence(text: str) -> dict:
             'reading': reading,
             'pos0': pos0,
             'pos1': pos1,
+            'conj': pos[4] if len(pos) > 4 else '',
             'lemma': lemma,
             'norm': m.normalized_form() or surface,
         })
 
     # Word-unit chunking: each content word starts a unit and absorbs only
-    # its OWN conjugation tail — auxiliary 助動詞 (た, ない, ます…), 接尾辞, and a
-    # trailing て/で connective.  A following verb (even a bound auxiliary like
-    # くれる/いる) begins a NEW unit, and standalone particles (を, が, は…) and
-    # punctuation stay separate.  So 共感してくれて → 共感 | して | くれて.
+    # Morpheme-level chunking (matches the competitor): split at every boundary
+    # EXCEPT a verb/i-adjective keeps its own inflection (比べたくない, 言って).
+    # Prefixes (お), suffixes (人), copula (です/な) and particles (か) are each
+    # their own trackable unit; auxiliary verbs (くれる) and ちゃう split off.
+    def _emit(lemma, pos, norm, content, ruby, base):
+        tokens.append({'lemma': lemma, 'pos': pos, 'norm': norm,
+                       'content': content, 'ruby': ruby, 'base': base})
+
     tokens: list[dict] = []
     i, n = 0, len(raw)
     while i < n:
         cur = raw[i]
         nxt = raw[i + 1] if i + 1 < n else None
 
-        # Fixed ～いう expressions Sudachi over-splits: the quotative って/と + 言う
-        # (という / っていう) and the demonstratives そう/こう/ああ + 言う
-        # (そういう / こういう). Keep each as one unit headed by 言う so it's a
-        # single word for comprehension and colours by 言う. (どういう is already a
-        # single 連体詞 in Sudachi, so it needs no handling.)
+        # でも / では: Sudachi splits these compound particles into で + も/は; keep
+        # them as one unit (matches the dictionary entry the popup stores).
+        if (cur['pos0'] == '助詞' and cur['surface'] == 'で' and nxt is not None
+                and nxt['pos0'] == '助詞' and nxt['surface'] in ('も', 'は')):
+            surf = cur['surface'] + nxt['surface']
+            ruby = (_align_token(cur['surface'], cur['reading'])
+                    + _align_token(nxt['surface'], nxt['reading']))
+            _emit(surf, '助詞', surf, True, ruby, surf)
+            i += 2
+            continue
+
+        # Fixed ～いう expressions Sudachi over-splits: quotative って/と + 言う
+        # (という / っていう) and demonstrative そう/こう/ああ + 言う (そういう /
+        # こういう). One unit headed by 言う. (どういう is already a single 連体詞.)
         _iu_lead = ((cur['pos0'] == '助詞' and cur['surface'] in ('って', 'と'))
                     or (cur['pos0'] == '副詞' and cur['surface'] in ('そう', 'こう', 'ああ')))
         if (_iu_lead and nxt is not None and nxt['pos0'] == '動詞'
                 and nxt['lemma'] in ('言う', 'いう')):
-            ruby, base, j = _build_chunk(raw, [i, i + 1], i + 2, n)
-            tokens.append({
-                'lemma': nxt['lemma'], 'pos': nxt['pos0'], 'norm': nxt['norm'],
-                'content': True, 'ruby': ruby, 'base': base,
-            })
+            ruby = (_align_token(cur['surface'], cur['reading'])
+                    + _align_token(nxt['surface'], nxt['reading']))
+            surf = cur['surface'] + nxt['surface']
+            j = i + 2
+            while j < n and _is_inflection(raw[j]):
+                ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
+                surf += raw[j]['surface']
+                j += 1
+            _emit(nxt['lemma'], nxt['pos0'], nxt['norm'], True, ruby, surf)
             i = j
             continue
 
-        # 接頭辞 prefix (お/ご/…) attaches to the following content word so お元気
-        # is one unit headed by 元気, not a stray, mis-coloured お.
-        if cur['pos0'] == '接頭辞' and nxt is not None and _is_head(nxt):
-            ruby, base, j = _build_chunk(raw, [i, i + 1], i + 2, n)
-            tokens.append({
-                'lemma': nxt['lemma'], 'pos': nxt['pos0'], 'norm': nxt['norm'],
-                'content': True, 'ruby': ruby, 'base': base,
-            })
+        # Verb / i-adjective / verb-like auxiliary: keep its inflection attached.
+        if _is_verblike(cur):
+            ruby = _align_token(cur['surface'], cur['reading'])
+            j = i + 1
+            while j < n and _is_inflection(raw[j]):
+                ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
+                j += 1
+            _emit(cur['lemma'], cur['pos0'], cur['norm'], True, ruby, cur['surface'])
             i = j
             continue
 
-        is_head = _is_head(cur)
-        if not is_head:
-            # Not a content head: particles, conjunctions, standalone counters,
-            # copula, punctuation. Per the "track everything" preference, Japanese
-            # function words are still trackable (coloured by known status); only
-            # punctuation/symbols/numbers/copula stay inert.
-            if cur['pos0'] == '助詞':
-                # Merge a run of consecutive 助詞 so compound particles (でも, では,
-                # には) form one chunk matching the dictionary entry the popup
-                # stores (it returns でも, not で + も).
-                ruby = _align_token(cur['surface'], cur['reading'])
-                surf = cur['surface']
-                j = i + 1
-                while j < n and raw[j]['pos0'] == '助詞':
-                    ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
-                    surf += raw[j]['surface']
-                    j += 1
-                tokens.append({
-                    'lemma': surf, 'pos': '助詞', 'norm': surf,
-                    'content': True, 'ruby': ruby, 'base': surf,
-                })
-                i = j
-                continue
-            trackable = (cur['pos0'] not in _NONTRACK_POS
-                         and _has_japanese(cur['surface']))
-            tokens.append({
-                'lemma': cur['lemma'],
-                'pos': cur['pos0'],
-                'norm': cur['norm'],
-                'content': trackable,
-                'ruby': _align_token(cur['surface'], cur['reading']),
-                'base': cur['surface'],
-            })
-            i += 1
-            continue
-
-        ruby, base, j = _build_chunk(raw, [i], i + 1, n)
-        tokens.append({
-            'lemma': cur['lemma'], 'pos': cur['pos0'], 'norm': cur['norm'],
-            'content': True, 'ruby': ruby, 'base': base,
-        })
-        i = j
+        # Every other morpheme is its own unit: nouns, 形状詞, prefixes (お),
+        # suffixes (人), copula (です/な), particles, conjunctions. All trackable
+        # except punctuation/symbols and bare numbers.
+        is_num = cur['pos1'] == '数詞' or cur['surface'].isdigit()
+        content = (cur['pos0'] not in _INERT_POS and not is_num
+                   and _has_japanese(cur['surface']))
+        _emit(cur['lemma'], cur['pos0'], cur['norm'], content,
+              _align_token(cur['surface'], cur['reading']), cur['surface'])
+        i += 1
 
     # Attach the full kana reading + plain surface of each chunk (used for
     # known-word matching and homograph keying). Plain tokens have no base.

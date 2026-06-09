@@ -310,7 +310,28 @@ def _lookup(text: str) -> dict:
             'matched': None,
             'entries': [],
         }
-    return module.lookup_text(text)
+    result = module.lookup_text(text)
+
+    # Attach the morpheme under the cursor (first analyze chunk of the hovered
+    # text) as the mark target. The definition is the longest dictionary match
+    # (タイ人), but marking known/ignored tracks just that morpheme (タイ),
+    # separately from 人 — the chunk keys the colouring matches on.
+    try:
+        from furigana import analyze_sentence
+        toks = analyze_sentence(text).get('tokens') or []
+        if toks:
+            t0 = toks[0]
+            forms = []
+            for k in (t0.get('surface'), t0.get('lemma'), t0.get('norm')):
+                if k and k not in forms:
+                    forms.append(k)
+            if forms and isinstance(result, dict):
+                result = dict(result)
+                result['mark'] = forms
+                result['mark_word'] = t0.get('surface') or forms[0]
+    except Exception:  # noqa: BLE001 — marking falls back to entry forms client-side
+        pass
+    return result
 
 
 # ── Decks + card types ───────────────────────────────────────────────────────

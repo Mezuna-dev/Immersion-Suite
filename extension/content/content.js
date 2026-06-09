@@ -349,13 +349,18 @@
       html += '</div>';
       const forms = [...new Set([...kanji, ...readings].filter(Boolean))];
       if (!forms.length && data.matched) forms.push(data.matched);
-      const isKnown = forms.some(f => knownSet.has(f));
-      const isIgnored = forms.some(f => ignoredSet.has(f));
+      // Known/ignored status reflects the MORPHEME under the cursor (タイ), not
+      // the whole looked-up entry (タイ人) — tracking is per-morpheme. The button
+      // tooltips name that morpheme so it's clear what gets marked.
+      const markForms = (Array.isArray(data.mark) && data.mark.length) ? data.mark : forms;
+      const isKnown = markForms.some(f => knownSet.has(f));
+      const isIgnored = markForms.some(f => ignoredSet.has(f));
+      const mw = esc(data.mark_word || markForms[0] || '');
       html += '<div class="mine-actions-inline">'
         + `<button class="known-btn${isKnown ? ' is-known' : ''}" data-entry="${entryIdx}" `
-        + `title="${isKnown ? 'Known — click to unmark' : 'Mark as known'}">${isKnown ? '✓' : '○'}</button>`
+        + `title="${isKnown ? `「${mw}」 known — click to unmark` : `Mark 「${mw}」 as known`}">${isKnown ? '✓' : '○'}</button>`
         + `<button class="ignore-btn${isIgnored ? ' is-ignored' : ''}" data-entry="${entryIdx}" `
-        + `title="${isIgnored ? 'Ignored — click to unmark' : 'Ignore (exclude from comprehension)'}">⊘</button>`
+        + `title="${isIgnored ? `「${mw}」 ignored — click to unmark` : `Ignore 「${mw}」 (exclude from comprehension)`}">⊘</button>`
         + `<button class="mine-btn" data-entry="${entryIdx}" title="Add this word as a card">＋</button>`
         + `<button class="mine-config" data-entry="${entryIdx}" title="Mining options">⚙</button>`
         + '</div>';
@@ -915,11 +920,21 @@
 
   // All spellings/readings of an entry. Storing every form means a word marked
   // known still matches the tokenizer's lemma whether the text writes it in
-  // kanji or kana (e.g. 為る / する, 綺麗 / きれい).
+  // kanji or kana (e.g. 為る / する, 綺麗 / きれい). Used for card mining.
   function entryForms(entry) {
     const forms = [...new Set([...(entry.kanji_forms || []), ...(entry.reading_forms || [])].filter(Boolean))];
     if (!forms.length && currentLookup && currentLookup.matched) forms.push(currentLookup.matched);
     return forms;
+  }
+
+  // Known/ignored marking targets the MORPHEME under the cursor (タイ in タイ人),
+  // not the whole looked-up entry — tracking is per-morpheme like the colouring.
+  // Falls back to entry forms if the backend didn't supply a mark target.
+  function markForms(entry) {
+    if (currentLookup && Array.isArray(currentLookup.mark) && currentLookup.mark.length) {
+      return currentLookup.mark;
+    }
+    return entryForms(entry);
   }
 
   // Set a status across all forms of an entry and sync local sets + the YouTube
@@ -945,7 +960,7 @@
   }
 
   async function toggleKnown(entry, btn) {
-    const forms = entryForms(entry);
+    const forms = markForms(entry);
     if (!forms.length) return;
     const makeKnown = !forms.some(f => knownSet.has(f));
     btn.disabled = true;
@@ -964,7 +979,7 @@
   }
 
   async function toggleIgnore(entry, btn) {
-    const forms = entryForms(entry);
+    const forms = markForms(entry);
     if (!forms.length) return;
     const makeIgnored = !forms.some(f => ignoredSet.has(f));
     btn.disabled = true;
