@@ -200,6 +200,9 @@ async def _dispatch(action, msg):
     if action == 'set_known_word':
         return await loop.run_in_executor(None, _set_known_word, msg)
 
+    if action == 'comprehension':
+        return await loop.run_in_executor(None, _comprehension, msg)
+
     if action == 'get_youtube_subs':
         return await loop.run_in_executor(None, _get_youtube_subs, msg)
 
@@ -216,9 +219,36 @@ def _analyze(text: str) -> dict:
     return analyze_sentence(text)
 
 
-def _get_known_words() -> dict:
+# The effective known set = manually-known ∪ words from SRS cards − ignored.
+# Building it tokenizes every card expression, so cache it and rebuild only when
+# a status changes or a card is created.
+_known_cache: dict | None = None
+
+
+def _invalidate_known_cache() -> None:
+    global _known_cache
+    _known_cache = None
+
+
+def _effective_known() -> tuple[set, set]:
+    """Return (known_set, ignored_set) for colouring and comprehension."""
+    global _known_cache
     import database
-    return {'known': database.get_known_words()}
+    sig = database.comprehension_signature()
+    if _known_cache is not None and _known_cache.get('sig') == sig:
+        return _known_cache['known'], _known_cache['ignored']
+    from furigana import expand_card_words
+    manual = set(database.get_known_words())
+    ignored = set(database.get_ignored_words())
+    cards = expand_card_words(database.get_card_words())
+    known = (manual | cards) - ignored
+    _known_cache = {'known': known, 'ignored': ignored, 'sig': sig}
+    return known, ignored
+
+
+def _get_known_words() -> dict:
+    known, ignored = _effective_known()
+    return {'known': sorted(known), 'ignored': sorted(ignored)}
 
 
 def _set_known_word(msg: dict) -> dict:
@@ -230,13 +260,43 @@ def _set_known_word(msg: dict) -> dict:
     terms = [str(t).strip() for t in terms if t and str(t).strip()]
     if not terms:
         return {'error': 'term is required'}
-    known = bool(msg.get('known'))
+    # status: 'known' | 'ignored' | 'unknown' (clear). Falls back to the legacy
+    # boolean `known` flag (true → known, false → clear).
+    status = msg.get('status')
+    if status not in ('known', 'ignored', 'unknown'):
+        status = 'known' if msg.get('known', True) else 'unknown'
     for t in terms:
-        if known:
-            database.add_known_word(t)
+        if status in ('known', 'ignored'):
+            database.set_word_status(t, status)
         else:
             database.remove_known_word(t)
-    return {'terms': terms, 'known': known, 'count': database.count_known_words()}
+    _invalidate_known_cache()
+    return {'terms': terms, 'status': status,
+            'known': status == 'known',
+            'count': database.count_known_words()}
+
+
+def _comprehension(msg: dict) -> dict:
+    """Estimate comprehension for one `text` or a list of `texts`.
+
+    Single text → per-sentence metrics. Multiple → aggregate coverage over all
+    scoreable tokens plus a count of i+1 (single-unknown) lines.
+    """
+    from furigana import comprehension
+    known, ignored = _effective_known()
+    texts = msg.get('texts')
+    if isinstance(texts, list):
+        total = known_n = one_t = 0
+        for txt in texts:
+            r = comprehension(str(txt or ''), known, ignored)
+            total += r['total']
+            known_n += r['known']
+            one_t += 1 if r['one_t'] else 0
+        unknown_n = total - known_n
+        return {'total': total, 'known': known_n, 'unknown': unknown_n,
+                'percent': round(known_n / total * 100, 1) if total else None,
+                'one_t_lines': one_t, 'lines': len(texts)}
+    return comprehension(str(msg.get('text', '') or ''), known, ignored)
 
 
 # ── Lookup (existing) ────────────────────────────────────────────────────────
@@ -366,6 +426,7 @@ def _create_card_with_media(msg: dict) -> dict:
         card_type_id=int(type_id),
         fields_json=json.dumps(fields, ensure_ascii=False),
     )
+    _invalidate_known_cache()  # the mined word now counts as known
 
     return {
         'card_id': card_id,
@@ -412,6 +473,7 @@ def _create_card(msg: dict) -> dict:
         card_type_id=int(type_id),
         fields_json=json.dumps(fields, ensure_ascii=False),
     )
+    _invalidate_known_cache()  # the mined word now counts as known
     return {'card_id': card_id}
 
 

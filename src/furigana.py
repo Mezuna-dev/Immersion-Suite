@@ -222,6 +222,12 @@ def analyze_sentence(text: str) -> dict:
         })
         i = j
 
+    # Attach the full kana reading + plain surface of each chunk (used for
+    # known-word matching and homograph keying).
+    for t in tokens:
+        t['surface'] = chunk_surface(t['ruby'])
+        t['reading'] = chunk_reading(t['ruby'])
+
     return {'tokens': tokens}
 
 
@@ -302,3 +308,80 @@ def _coalesce_plain(segs: Iterable[dict]) -> list[dict]:
         else:
             out.append(s)
     return out
+
+
+# ── Known-word / comprehension helpers ───────────────────────────────────────
+
+def chunk_surface(ruby: list[dict]) -> str:
+    """Plain surface text of an analyze chunk (the visible word)."""
+    return ''.join(seg.get('text', '') for seg in ruby)
+
+
+def chunk_reading(ruby: list[dict]) -> str:
+    """Full kana reading of an analyze chunk (reading for kanji runs, text else)."""
+    return ''.join(seg.get('reading') or seg.get('text', '') for seg in ruby)
+
+
+def expand_card_words(words: Iterable[str]) -> set:
+    """Turn raw card expressions into known-set keys.
+
+    A single-word card contributes its surface + dictionary lemma (so a 食べる
+    card matches the chunk 食べて). A multi-token (sentence) card contributes only
+    its raw string, which won't match individual tokens - sentence cards
+    therefore don't over-credit every word they contain.
+    """
+    err = _ensure_tokenizer()
+    keys: set = set()
+    for w in words:
+        w = (w or '').strip()
+        if not w:
+            continue
+        keys.add(w)
+        if err:
+            continue
+        try:
+            morphs = [m for m in _tokenizer.tokenize(w, _split_mode) if m.surface().strip()]
+        except Exception:  # noqa: BLE001
+            continue
+        content = [m for m in morphs
+                   if (m.part_of_speech()[0] if m.part_of_speech() else '') not in _SKIP_POS]
+        if len(content) == 1:
+            m = content[0]
+            keys.add(m.surface())
+            keys.add(m.dictionary_form() or m.surface())
+    return keys
+
+
+def comprehension(text: str, known: set, ignored: set | None = None) -> dict:
+    """Estimate comprehension of *text* against a *known* set.
+
+    Counts content (scoreable) chunks only; 'ignored' chunks are dropped from
+    both numerator and denominator. Returns coverage %, the unknown lemmas, and
+    an i+1 flag (exactly one unknown word).
+    """
+    ignored = ignored or set()
+    res = analyze_sentence(text)
+    if res.get('error'):
+        return {'error': res['error'], 'total': 0, 'known': 0, 'unknown': 0,
+                'percent': None, 'unknown_terms': [], 'one_t': False}
+
+    total = known_n = 0
+    unknown_terms: list[str] = []
+    for t in res.get('tokens', []):
+        if not t.get('content'):
+            continue
+        surface = t.get('surface') or chunk_surface(t.get('ruby', []))
+        lemma = t.get('lemma') or surface
+        if lemma in ignored or surface in ignored:
+            continue
+        total += 1
+        if lemma in known or surface in known:
+            known_n += 1
+        else:
+            unknown_terms.append(lemma)
+
+    unknown_n = total - known_n
+    percent = round(known_n / total * 100, 1) if total else None
+    return {'total': total, 'known': known_n, 'unknown': unknown_n,
+            'percent': percent, 'unknown_terms': unknown_terms,
+            'one_t': unknown_n == 1}

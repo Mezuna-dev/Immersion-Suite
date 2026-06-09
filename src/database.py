@@ -332,11 +332,13 @@ def migrate_database():
             Date_Created TEXT NOT NULL,
             FOREIGN KEY (Item_ID) REFERENCES MediaItem(ID)
         )""",
-        # Words the user has explicitly marked "known" (separate from the SRS
-        # deck) - used by the browser extension to colour known vs unknown text.
+        # Words with a manual status, independent of the SRS deck. Status is
+        # 'known' (count toward comprehension) or 'ignored' (excluded from it).
+        # Used by the browser extension to colour text and estimate comprehension.
         """CREATE TABLE IF NOT EXISTS KnownWord (
             ID INTEGER NOT NULL UNIQUE PRIMARY KEY AUTOINCREMENT,
             Term TEXT NOT NULL UNIQUE,
+            Status TEXT NOT NULL DEFAULT 'known',
             Date_Created TEXT NOT NULL
         )""",
     ]:
@@ -345,6 +347,13 @@ def migrate_database():
             con.commit()
         except sqlite3.OperationalError:
             pass
+
+    # Add the Status column to KnownWord tables created before it existed.
+    try:
+        cur.execute("ALTER TABLE KnownWord ADD COLUMN Status TEXT NOT NULL DEFAULT 'known'")
+        con.commit()
+    except sqlite3.OperationalError:
+        pass  # column already present
 
     # Migrate legacy MediaEntry rows into MediaItem + MediaSession
     cur.execute("SELECT COUNT(*) FROM MediaItem")
@@ -679,39 +688,61 @@ def delete_card_type(card_type_id: int):
     con.close()
 
 # --- Known Word Functions --------------------------
-# A manually-curated vocabulary set, independent of the SRS deck. The browser
-# extension uses it to colour known vs unknown words while reading.
+# A manually-curated vocabulary status table, independent of the SRS deck.
+# Status is 'known' (counts toward comprehension) or 'ignored' (excluded). The
+# effective known set used for colouring/comprehension also unions in the words
+# the user has SRS cards for (see get_card_words) - assembled in the WS layer.
 
 def get_known_words() -> list:
-    """Return all known terms as a list of strings."""
+    """Return all manually marked-known terms as a list of strings."""
     con = create_db_connection()
     cur = con.cursor()
     try:
-        cur.execute("SELECT Term FROM KnownWord")
+        cur.execute("SELECT Term FROM KnownWord WHERE Status = 'known'")
         rows = cur.fetchall()
     finally:
         con.close()
     return [r[0] for r in rows]
 
 
-def add_known_word(term: str) -> None:
+def get_ignored_words() -> list:
+    """Return all terms the user marked 'ignored' (excluded from comprehension)."""
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT Term FROM KnownWord WHERE Status = 'ignored'")
+        rows = cur.fetchall()
+    finally:
+        con.close()
+    return [r[0] for r in rows]
+
+
+def set_word_status(term: str, status: str) -> None:
+    """Set a term's status to 'known' or 'ignored' (upsert)."""
     term = (term or '').strip()
-    if not term:
+    if not term or status not in ('known', 'ignored'):
         return
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
     try:
         cur.execute(
-            "INSERT OR IGNORE INTO KnownWord (Term, Date_Created) VALUES (?, ?)",
-            (term, creation_date),
+            "INSERT INTO KnownWord (Term, Status, Date_Created) VALUES (?, ?, ?) "
+            "ON CONFLICT(Term) DO UPDATE SET Status = excluded.Status",
+            (term, status, creation_date),
         )
         con.commit()
     finally:
         con.close()
 
 
+def add_known_word(term: str) -> None:
+    """Mark a term known (back-compat wrapper around set_word_status)."""
+    set_word_status(term, 'known')
+
+
 def remove_known_word(term: str) -> None:
+    """Clear any status for a term (back to implicit 'unknown')."""
     term = (term or '').strip()
     if not term:
         return
@@ -728,10 +759,93 @@ def count_known_words() -> int:
     con = create_db_connection()
     cur = con.cursor()
     try:
-        cur.execute("SELECT COUNT(*) FROM KnownWord")
+        cur.execute("SELECT COUNT(*) FROM KnownWord WHERE Status = 'known'")
         return cur.fetchone()[0]
     finally:
         con.close()
+
+
+def comprehension_signature() -> tuple:
+    """Cheap (card_count, status_row_count) fingerprint of the inputs to the
+    effective known set. Lets a cached set notice cards/statuses changed in the
+    app UI (same process as the WS server) without an explicit invalidation."""
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT COUNT(*) FROM Card")
+        cards = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(*) FROM KnownWord")
+        statuses = cur.fetchone()[0]
+    finally:
+        con.close()
+    return (cards, statuses)
+
+
+# Pull the head word out of mining/Anki card markup so cards can seed the known
+# set. Strips ruby readings (<rt>…</rt> and […]) then all HTML, then whitespace.
+def _clean_card_expression(s: str) -> str:
+    import re
+    s = s or ''
+    s = re.sub(r'<rt>.*?</rt>', '', s, flags=re.IGNORECASE | re.DOTALL)
+    s = re.sub(r'<[^>]+>', '', s)
+    s = re.sub(r'\[[^\]]*\]', '', s)        # Anki-style 漢字[かな] furigana
+    s = re.sub(r'[\s　]+', '', s)
+    return s.strip()
+
+
+# Card-type field names that typically hold the target word/expression.
+_WORD_FIELD_RE = None
+
+
+def _extract_card_word(front: str, fields_json: str) -> str:
+    import json, re
+    global _WORD_FIELD_RE
+    if _WORD_FIELD_RE is None:
+        _WORD_FIELD_RE = re.compile(
+            r'express|word|term|vocab|target|kanji|spelling|head|単語|表現|見出',
+            re.IGNORECASE,
+        )
+    val = ''
+    if fields_json:
+        try:
+            d = json.loads(fields_json)
+        except Exception:
+            d = None
+        if isinstance(d, dict) and d:
+            for k, v in d.items():
+                if _WORD_FIELD_RE.search(str(k)) and str(v).strip():
+                    val = str(v)
+                    break
+            if not val:  # fall back to the first non-empty field
+                for v in d.values():
+                    if str(v).strip():
+                        val = str(v)
+                        break
+    if not val:
+        val = front or ''
+    return _clean_card_expression(val)
+
+
+def get_card_words() -> list:
+    """Return the head word/expression of every SRS card (cleaned of markup).
+
+    These seed the comprehension known set: a word the user has a card for is
+    treated as known. Multi-token (sentence) cards yield a long string that the
+    caller's tokenizer pass simply won't match against single tokens.
+    """
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT Card_Front, Fields FROM Card")
+        rows = cur.fetchall()
+    finally:
+        con.close()
+    words = []
+    for front, fields in rows:
+        w = _extract_card_word(front, fields)
+        if w:
+            words.append(w)
+    return words
 
 
 # --- Card Functions --------------------------------

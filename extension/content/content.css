@@ -85,6 +85,29 @@
 .imm-yt-subbar-text .imm-word.imm-known {
   opacity: 0.62;
 }
+/* Ignored words (names, etc.) are excluded from the comprehension % and shown
+   neutral - neither highlighted nor dimmed. */
+.imm-yt-subbar-text .imm-word.imm-ignored {
+  opacity: 0.85;
+}
+
+/* Comprehension badge: known/total words in the current line. */
+.imm-yt-comp {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #6d28d9, #2563eb);
+  border-radius: 999px;
+  pointer-events: auto;
+  white-space: nowrap;
+}
+.imm-yt-comp.is-onet {
+  background: linear-gradient(135deg, #16a34a, #15803d);
+}
 
 /* ── Toolbar ────────────────────────────────────────────────────────────── */
 
@@ -303,8 +326,9 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 10px;
-  padding: 12px 14px 12px 16px;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  padding: 14px 14px 14px 16px;
   font-weight: 700;
   font-size: 13px;
   letter-spacing: 0.04em;
@@ -337,6 +361,39 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   background: rgba(170, 0, 255, 0.22);
   color: #e0d3ff;
   letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Whole-video comprehension estimate: its own full-width row under the header. */
+.imm-yt-queue-comp {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 16px;
+  background: rgba(109, 40, 217, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.imm-yt-comp-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbb6ff;
+  letter-spacing: 0.02em;
+}
+.imm-yt-comp-pill {
+  font-size: 12px;
+  font-weight: 800;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #6d28d9, #2563eb);
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.imm-yt-comp-sub {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  color: rgba(224, 211, 255, 0.65);
+  letter-spacing: 0.02em;
   font-variant-numeric: tabular-nums;
 }
 

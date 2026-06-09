@@ -33,8 +33,9 @@
   let mineSettings      = { deckId: null, typeId: null, fieldMaps: {} };
   const MINE_SETTINGS_KEY = 'imm_mine_settings';
 
-  // Known-words set (manually curated, lives in the desktop DB). Lemmas.
+  // Known-words set (manual marks + SRS card words, lives in the desktop DB).
   let knownSet          = new Set();
+  let ignoredSet        = new Set();   // words excluded from comprehension
   let knownLoaded       = false;
   let popupHovered      = false;
   let lastChunk         = null;   // chunk currently shown / in flight
@@ -349,9 +350,12 @@
       const forms = [...new Set([...kanji, ...readings].filter(Boolean))];
       if (!forms.length && data.matched) forms.push(data.matched);
       const isKnown = forms.some(f => knownSet.has(f));
+      const isIgnored = forms.some(f => ignoredSet.has(f));
       html += '<div class="mine-actions-inline">'
         + `<button class="known-btn${isKnown ? ' is-known' : ''}" data-entry="${entryIdx}" `
         + `title="${isKnown ? 'Known — click to unmark' : 'Mark as known'}">${isKnown ? '✓' : '○'}</button>`
+        + `<button class="ignore-btn${isIgnored ? ' is-ignored' : ''}" data-entry="${entryIdx}" `
+        + `title="${isIgnored ? 'Ignored — click to unmark' : 'Ignore (exclude from comprehension)'}">⊘</button>`
         + `<button class="mine-btn" data-entry="${entryIdx}" title="Add this word as a card">＋</button>`
         + `<button class="mine-config" data-entry="${entryIdx}" title="Mining options">⚙</button>`
         + '</div>';
@@ -455,6 +459,17 @@
     .known-btn:hover { background: rgba(22, 163, 74, 0.18); transform: translateY(-1px); }
     .known-btn.is-known { background: #16a34a; color: #fff; border-color: transparent; }
     .known-btn:disabled { opacity: .6; cursor: default; transform: none; }
+    .ignore-btn {
+      appearance: none; border: 1px solid rgba(148, 163, 184, 0.30);
+      background: rgba(148, 163, 184, 0.08); color: #94a3b8;
+      font-size: 13px; line-height: 1; cursor: pointer;
+      width: 26px; height: 26px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background .14s ease, color .14s ease, transform .14s ease;
+    }
+    .ignore-btn:hover { background: rgba(148, 163, 184, 0.20); transform: translateY(-1px); }
+    .ignore-btn.is-ignored { background: #64748b; color: #fff; border-color: transparent; }
+    .ignore-btn:disabled { opacity: .6; cursor: default; transform: none; }
     .mine-btn, .mine-config {
       appearance: none; border: 1px solid rgba(170, 0, 255, 0.25);
       background: rgba(170, 0, 255, 0.08); color: #aa00ff;
@@ -635,15 +650,17 @@
     // Delegated handling for the per-entry known (○/✓), mine (＋) and config (⚙) buttons.
     contentEl.addEventListener('click', (e) => {
       const knownBtn = e.target.closest('.known-btn');
+      const ignoreBtn = e.target.closest('.ignore-btn');
       const cfgBtn = e.target.closest('.mine-config');
       const mineBtn = e.target.closest('.mine-btn');
-      const btn = knownBtn || cfgBtn || mineBtn;
+      const btn = knownBtn || ignoreBtn || cfgBtn || mineBtn;
       if (!btn) return;
       e.stopPropagation();
       const entry = currentLookup && currentLookup.entries
         && currentLookup.entries[Number(btn.dataset.entry)];
       if (!entry) return;
       if (knownBtn) toggleKnown(entry, knownBtn);
+      else if (ignoreBtn) toggleIgnore(entry, ignoreBtn);
       else if (cfgBtn || !mineConfigured()) openMinePanel(entry);
       else quickMine(entry, mineBtn);
     });
@@ -890,6 +907,7 @@
     chrome.runtime.sendMessage({ action: 'get_known_words' }).then((r) => {
       if (r && !r.error && Array.isArray(r.known)) {
         knownSet = new Set(r.known);
+        ignoredSet = new Set(Array.isArray(r.ignored) ? r.ignored : []);
         knownLoaded = true;
       }
     }).catch(() => {});
@@ -904,28 +922,64 @@
     return forms;
   }
 
+  // Set a status across all forms of an entry and sync local sets + the YouTube
+  // layer. `status` is 'known' | 'ignored' | 'unknown' (clear).
+  async function _setEntryStatus(forms, status) {
+    let resp;
+    try {
+      resp = await chrome.runtime.sendMessage({ action: 'set_known_word', terms: forms, status });
+    } catch (_) {
+      return false;
+    }
+    if (!resp || resp.error) return false;
+    for (const f of forms) {
+      knownSet.delete(f); ignoredSet.delete(f);
+      if (status === 'known') knownSet.add(f);
+      else if (status === 'ignored') ignoredSet.add(f);
+    }
+    try {
+      window.dispatchEvent(new CustomEvent('imm-known-changed',
+        { detail: { terms: forms, status, known: status === 'known' } }));
+    } catch (_) {}
+    return true;
+  }
+
   async function toggleKnown(entry, btn) {
     const forms = entryForms(entry);
     if (!forms.length) return;
     const makeKnown = !forms.some(f => knownSet.has(f));
     btn.disabled = true;
-    let resp;
-    try {
-      resp = await chrome.runtime.sendMessage({ action: 'set_known_word', terms: forms, known: makeKnown });
-    } catch (_) {
-      btn.disabled = false;
-      return;
-    }
+    const ok = await _setEntryStatus(forms, makeKnown ? 'known' : 'unknown');
     btn.disabled = false;
-    if (!resp || resp.error) return;
-    for (const f of forms) { if (makeKnown) knownSet.add(f); else knownSet.delete(f); }
+    if (!ok) return;
     btn.classList.toggle('is-known', makeKnown);
     btn.textContent = makeKnown ? '✓' : '○';
     btn.title = makeKnown ? 'Known — click to unmark' : 'Mark as known';
-    // Tell the YouTube layer (same page) so it can recolour the sub bar live.
-    try {
-      window.dispatchEvent(new CustomEvent('imm-known-changed', { detail: { terms: forms, known: makeKnown } }));
-    } catch (_) {}
+    // Clearing/setting known may have cleared an ignored mark; resync that button.
+    const ignoreBtn = btn.parentElement && btn.parentElement.querySelector('.ignore-btn');
+    if (ignoreBtn) {
+      ignoreBtn.classList.remove('is-ignored');
+      ignoreBtn.title = 'Ignore (exclude from comprehension)';
+    }
+  }
+
+  async function toggleIgnore(entry, btn) {
+    const forms = entryForms(entry);
+    if (!forms.length) return;
+    const makeIgnored = !forms.some(f => ignoredSet.has(f));
+    btn.disabled = true;
+    const ok = await _setEntryStatus(forms, makeIgnored ? 'ignored' : 'unknown');
+    btn.disabled = false;
+    if (!ok) return;
+    btn.classList.toggle('is-ignored', makeIgnored);
+    btn.title = makeIgnored ? 'Ignored — click to unmark' : 'Ignore (exclude from comprehension)';
+    // Ignoring clears any known mark; resync that button.
+    const knownBtn = btn.parentElement && btn.parentElement.querySelector('.known-btn');
+    if (knownBtn) {
+      knownBtn.classList.remove('is-known');
+      knownBtn.textContent = '○';
+      knownBtn.title = 'Mark as known';
+    }
   }
 
   // ── Mining (build a card from the hovered entry) ───────────────────────────

@@ -13,6 +13,7 @@
   let textEl = null;
   let toolbarEl = null;
   let cardPanelEl = null;
+  let compEl = null;
   let videoEl = null;
   let captionObserver = null;   // MutationObserver used in DOM-mirror fallback
   let domMirrorActive = false;  // true when cues are being synthesized from the DOM
@@ -21,7 +22,8 @@
   let furiganaEnabled = false;  // show ruby annotations above kanji
   let furiganaAvailable = true; // flips off after a backend tokenize failure
   let knownColoring = false;    // colour words by known/unknown status
-  let knownSet = new Set();     // known lemmas (from the desktop DB)
+  let knownSet = new Set();     // known lemmas (manual + SRS cards, from the desktop DB)
+  let ignoredSet = new Set();   // ignored lemmas (excluded from comprehension)
   let knownLoaded = false;
 
   // Audio-clip padding around the active cue, in ms. Subs are usually
@@ -59,6 +61,9 @@
   let queueRows = [];
   let queueOpen = false;
   let queueLoading = false;
+  let videoCompEl = null;       // whole-video comprehension badge (queue header)
+  let videoCompReqId = 0;       // guards against stale async responses
+  let videoCompTimer = null;    // debounce for recompute on known-set changes
   // When the user manually wheels/touches the list, suspend auto-follow until
   // this timestamp (performance.now() ms). Clicking a row resets it.
   let queueScrollGuardUntil = 0;
@@ -135,8 +140,16 @@
       const d = e.detail || {};
       const terms = Array.isArray(d.terms) ? d.terms : (d.term ? [d.term] : []);
       if (!terms.length) return;
-      for (const t of terms) { if (d.known) knownSet.add(t); else knownSet.delete(t); }
+      // status: 'known' | 'ignored' | 'unknown' (cleared). Fall back to the
+      // legacy boolean `known` flag.
+      const status = d.status || (d.known ? 'known' : 'unknown');
+      for (const t of terms) {
+        knownSet.delete(t); ignoredSet.delete(t);
+        if (status === 'known') knownSet.add(t);
+        else if (status === 'ignored') ignoredSet.add(t);
+      }
       if (knownColoring) renderText();
+      scheduleVideoComprehension();   // known set changed → restated video score
     });
   } catch (_) {}
 
@@ -283,6 +296,13 @@
     t.appendChild(makeButton('imm-yt-btn-card',   '＋', 'Make card from sub', toggleCardPanel));
     t.appendChild(makeButton('imm-yt-btn-queue',  '☰', 'Show subtitle queue', toggleQueue));
 
+    compEl = document.createElement('span');
+    compEl.id = 'imm-yt-comp';
+    compEl.className = 'imm-yt-comp';
+    compEl.title = 'Comprehension: known words / scoreable words in this line';
+    compEl.style.display = 'none';
+    t.appendChild(compEl);
+
     return t;
   }
 
@@ -343,14 +363,17 @@
     saveSettings();
     if (knownColoring && !knownLoaded) loadKnownWords();
     else renderText();
+    scheduleVideoComprehension(0);
   }
 
   function loadKnownWords() {
     sendBackground({ action: 'get_known_words' }).then((r) => {
       if (r && !r.error && Array.isArray(r.known)) {
         knownSet = new Set(r.known);
+        ignoredSet = new Set(Array.isArray(r.ignored) ? r.ignored : []);
         knownLoaded = true;
         if (knownColoring) renderText();
+        scheduleVideoComprehension(0);
       }
     });
   }
@@ -377,8 +400,13 @@
     textEl.dataset.lastFurigana = String(furiganaEnabled);
     textEl.dataset.lastKnown = knownColoring ? '1' : '0';
 
+    // Comprehension badge only applies to the known-colouring view; hide it for
+    // every other render path (it's re-shown by paintWords when applicable).
+    if (compEl && !(knownColoring && furiganaAvailable)) compEl.style.display = 'none';
+
     if (!text) {
       textEl.textContent = '';
+      if (compEl) compEl.style.display = 'none';
       if (barEl) barEl.style.display = cardPanelOpen() ? 'flex' : 'none';
       return;
     }
@@ -392,6 +420,7 @@
         paintWords(atoks);
       } else {
         textEl.textContent = text;
+        if (compEl) compEl.style.display = 'none';
         requestAnalyze(text);
       }
       if (barEl) barEl.style.display = 'flex';
@@ -445,6 +474,8 @@
     if (!textEl) return;
     const surfaces = tokens.map(tokenSurface);
     const parts = [];
+    let scoreTotal = 0;   // scoreable (content, non-ignored) units
+    let scoreKnown = 0;
     let i = 0;
     while (i < tokens.length) {
       // 1. Longest run (>=2) whose combined surface is a known term.
@@ -458,6 +489,7 @@
         let inner = '';
         for (let k = i; k < i + runLen; k++) inner += tokenInnerHtml(tokens[k]);
         parts.push(`<span class="imm-word imm-known">${inner}</span>`);
+        scoreTotal++; scoreKnown++;
         i += runLen;
         continue;
       }
@@ -475,11 +507,74 @@
       let inner = '';
       let unitSurface = '';
       for (let k = i; k < j; k++) { inner += tokenInnerHtml(tokens[k]); unitSurface += surfaces[k]; }
-      const known = knownSet.has(head.lemma) || knownSet.has(surfaces[i]) || knownSet.has(unitSurface);
-      parts.push(`<span class="imm-word ${known ? 'imm-known' : 'imm-unknown'}">${inner}</span>`);
+      const keys = [head.lemma, surfaces[i], unitSurface];
+      let cls;
+      if (keys.some(k => ignoredSet.has(k))) {
+        cls = 'imm-ignored';                 // excluded from the comprehension %
+      } else if (keys.some(k => knownSet.has(k))) {
+        cls = 'imm-known'; scoreTotal++; scoreKnown++;
+      } else {
+        cls = 'imm-unknown'; scoreTotal++;
+      }
+      parts.push(`<span class="imm-word ${cls}">${inner}</span>`);
       i = j;
     }
     textEl.innerHTML = parts.join('');
+    updateComprehension(scoreKnown, scoreTotal);
+  }
+
+  // Show "known/total · NN%" for the current line; i+1 lines (one unknown) get
+  // a marker since they're the prime mining targets.
+  function updateComprehension(known, total) {
+    if (!compEl) return;
+    if (!knownColoring || total <= 0) { compEl.style.display = 'none'; return; }
+    const pct = Math.round((known / total) * 100);
+    const oneT = (total - known) === 1;
+    compEl.textContent = `${pct}%` + (oneT ? ' ·1' : '');
+    compEl.title = `Comprehension: ${known}/${total} words known in this line`
+      + (oneT ? ' — i+1 (one unknown word)' : '');
+    compEl.classList.toggle('is-onet', oneT);
+    compEl.style.display = 'inline-flex';
+  }
+
+  // Whole-video comprehension: send every cue to the backend, which scores them
+  // against the effective known set (cards ∪ manual − ignored) and aggregates.
+  // Debounced because known-set changes (marking words) fire rapidly.
+  function scheduleVideoComprehension(delay = 600) {
+    clearTimeout(videoCompTimer);
+    videoCompTimer = setTimeout(computeVideoComprehension, delay);
+  }
+
+  function computeVideoComprehension() {
+    if (!videoCompEl) return;
+    // Only worth the backend pass when the user is actually looking at it.
+    if (!(queueOpen || knownColoring) || !cues.length) {
+      videoCompEl.style.display = 'none';
+      return;
+    }
+    const texts = cues.map(c => c.text).filter(Boolean);
+    if (!texts.length) { videoCompEl.style.display = 'none'; return; }
+    const myId = ++videoCompReqId;
+    const vid = currentVideoId;
+    sendBackground({ action: 'comprehension', texts }).then((r) => {
+      if (myId !== videoCompReqId || vid !== currentVideoId || !videoCompEl) return;
+      if (!r || r.error || typeof r.percent !== 'number') {
+        videoCompEl.style.display = 'none';
+        return;
+      }
+      const pct = Math.round(r.percent);
+      const oneT = r.one_t_lines || 0;
+      videoCompEl.innerHTML =
+        '<span class="imm-yt-comp-label">Video Comprehension</span>'
+        + `<span class="imm-yt-comp-pill">${pct}%</span>`
+        + `<span class="imm-yt-comp-sub">${r.known}/${r.total} words known`
+        + (oneT ? ` · ${oneT} lines with 1 new word` : '') + '</span>';
+      videoCompEl.title =
+        `Estimated comprehension of the whole video: ${r.known} of ${r.total}`
+        + ` scoreable words are known (${pct}%), across ${r.lines} subtitle lines.`
+        + (oneT ? ` ${oneT} lines have exactly one unknown word (good mining targets).` : '');
+      videoCompEl.style.display = 'flex';
+    }).catch(() => {});
   }
 
   function requestAnalyze(text) {
@@ -816,6 +911,7 @@
     clearQueueRows();
     setText('');
     closeCardPanel();
+    if (videoCompEl) videoCompEl.style.display = 'none';  // clear last video's score
 
     if (!trackUrl) return;
 
@@ -839,6 +935,7 @@
     if (parsed && parsed.length) {
       cues = parsed;
       syncQueue();
+      computeVideoComprehension();
       if (videoEl) scheduleTick();
       return;
     }
@@ -870,6 +967,7 @@
     if (backendCues && backendCues.length) {
       cues = backendCues;
       syncQueue();
+      computeVideoComprehension();
       if (videoEl) scheduleTick();
       return;
     }
@@ -1382,6 +1480,15 @@
 
     queueEl.appendChild(header);
 
+    // Whole-video comprehension gets its own full-width row so the header isn't
+    // cramped and the label has room to be self-explanatory.
+    videoCompEl = document.createElement('div');
+    videoCompEl.className = 'imm-yt-queue-comp';
+    videoCompEl.id = '__imm_yt_video_comp';
+    videoCompEl.style.display = 'none';
+    videoCompEl.title = 'Estimated comprehension across all subtitles in this video';
+    queueEl.appendChild(videoCompEl);
+
     queueListEl = document.createElement('div');
     queueListEl.className = 'imm-yt-queue-list';
     queueListEl.addEventListener('wheel', noteUserScroll, { passive: true });
@@ -1468,6 +1575,7 @@
     saveSettings();
     if (queueOpen) {
       syncQueue();
+      computeVideoComprehension();
       // Snap to the current cue on first open so the user lands on context.
       queueScrollGuardUntil = 0;
       updateActiveRow(true);
