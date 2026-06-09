@@ -106,6 +106,21 @@ def tokenize_sentence(text: str) -> dict:
 # Major POS categories not worth colouring as vocabulary.
 _SKIP_POS = {'助詞', '助動詞', '補助記号', '記号', '空白', '接続詞'}
 
+# Bound morphemes that attach to the preceding content word as its
+# conjugation/derivation tail rather than starting a new vocab unit.
+_TAIL_POS = {'助動詞', '接尾辞'}
+
+
+def _is_tail(m: dict) -> bool:
+    """True if morpheme *m* belongs to the preceding word's conjugation tail.
+
+    Covers auxiliary 助動詞 (た, ない, ます…) and 接尾辞, plus a trailing て/で
+    connective so a verb keeps its own te-form (して, くれて) as one unit.
+    """
+    if m['pos0'] in _TAIL_POS:
+        return True
+    return m['pos0'] == '助詞' and m['surface'] in ('て', 'で')
+
 
 def _has_japanese(s: str) -> bool:
     return any(_is_kanji(c) or _is_kana(c) for c in s)
@@ -133,23 +148,80 @@ def analyze_sentence(text: str) -> dict:
     except Exception as exc:  # noqa: BLE001
         return {'error': f'analyze failed: {exc}', 'tokens': []}
 
-    tokens: list[dict] = []
+    # Flatten the morphemes first so the grouping pass below can look ahead
+    # (Sudachi splits e.g. 共感してくれて into 共感 / し / て / くれ / て).
+    raw: list[dict] = []
     for m in morphemes:
         surface = m.surface()
         if not surface:
             continue
-        reading_hira = _kata_to_hira(m.reading_form() or '')
-        try:
-            pos0 = m.part_of_speech()[0]
-        except Exception:  # noqa: BLE001
-            pos0 = ''
-        lemma = m.dictionary_form() or surface
-        tokens.append({
-            'lemma': lemma,
-            'pos': pos0,
-            'content': pos0 not in _SKIP_POS and _has_japanese(surface),
-            'ruby': _align_token(surface, reading_hira),
+        pos = m.part_of_speech()
+        raw.append({
+            'surface': surface,
+            'reading': _kata_to_hira(m.reading_form() or ''),
+            'pos0': pos[0] if pos else '',
+            'lemma': m.dictionary_form() or surface,
         })
+
+    # Word-unit chunking: each content word starts a unit and absorbs only
+    # its OWN conjugation tail — auxiliary 助動詞 (た, ない, ます…), 接尾辞, and a
+    # trailing て/で connective.  A following verb (even a bound auxiliary like
+    # くれる/いる) begins a NEW unit, and standalone particles (を, が, は…) and
+    # punctuation stay separate.  So 共感してくれて → 共感 | して | くれて.
+    tokens: list[dict] = []
+    i, n = 0, len(raw)
+    while i < n:
+        cur = raw[i]
+        nxt = raw[i + 1] if i + 1 < n else None
+
+        # Quotative って / と + 言う is the という / っていう expression. Sudachi
+        # splits off the って/と as a particle, which would leave only いう
+        # coloured; keep the whole thing as one unit headed by 言う.
+        if (cur['pos0'] == '助詞' and cur['surface'] in ('って', 'と')
+                and nxt is not None and nxt['pos0'] == '動詞'
+                and nxt['lemma'] in ('言う', 'いう')):
+            ruby = (_align_token(cur['surface'], cur['reading'])
+                    + _align_token(nxt['surface'], nxt['reading']))
+            j = i + 2
+            while j < n and _is_tail(raw[j]):
+                ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
+                j += 1
+            tokens.append({
+                'lemma': nxt['lemma'],
+                'pos': nxt['pos0'],
+                'content': True,
+                'ruby': ruby,
+            })
+            i = j
+            continue
+
+        is_head = (cur['pos0'] not in _SKIP_POS
+                   and cur['pos0'] not in _TAIL_POS
+                   and _has_japanese(cur['surface']))
+        if not is_head:
+            # Particle / punctuation / stray tail → its own plain token.
+            tokens.append({
+                'lemma': cur['lemma'],
+                'pos': cur['pos0'],
+                'content': False,
+                'ruby': _align_token(cur['surface'], cur['reading']),
+            })
+            i += 1
+            continue
+
+        ruby = _align_token(cur['surface'], cur['reading'])
+        j = i + 1
+        while j < n and _is_tail(raw[j]):
+            ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
+            j += 1
+        tokens.append({
+            'lemma': cur['lemma'],
+            'pos': cur['pos0'],
+            'content': True,
+            'ruby': ruby,
+        })
+        i = j
+
     return {'tokens': tokens}
 
 

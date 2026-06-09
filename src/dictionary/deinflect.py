@@ -44,25 +44,16 @@ def _build_rules() -> list[tuple[str, str, str]]:
         rules.append((e + 'ば', d, 'conditional'))
         rules.append((e, d, 'imperative'))
         rules.append((ta + 'ら', d, 'conditional'))
-        # Progressive / auxiliary chains
-        rules.append((te + 'いる', d, 'progressive'))
-        rules.append((te + 'いた', d, 'progressive past'))
-        rules.append((te + 'いない', d, 'progressive negative'))
-        rules.append((te + 'る', d, 'progressive'))      # contracted
-        rules.append((te + 'た', d, 'progressive past'))  # contracted
-        rules.append((te + 'ある', d, 'resultative'))
-        rules.append((te + 'しまう', d, 'completive'))
-        rules.append((te + 'しまった', d, 'completive past'))
-        rules.append((te + 'みる', d, 'try'))
-        rules.append((te + 'くる', d, 'come to'))
-        rules.append((te + 'いく', d, 'go on'))
-        rules.append((te + 'くれる', d, 'do for me'))
-        rules.append((te + 'もらう', d, 'have done'))
-        rules.append((te + 'あげる', d, 'do for'))
         # Want-to
         rules.append((i + 'たい', d, 'want to'))
         rules.append((i + 'たかった', d, 'wanted to'))
         rules.append((i + 'たくない', d, 'don\'t want to'))
+        # NB: auxiliary chains (ている, てくれる, てしまう, …) are NOT folded into
+        # the verb classes. They are handled generically by the te-form
+        # auxiliary rules below, which strip the auxiliary down to the bare
+        # て/で-form; iteration then reduces that form via the rules above.
+        # This is what lets する/くる auxiliaries work (してくれる → して → する)
+        # instead of being mis-parsed as ichidan (してくれる → しる/汁).
 
     # ── Ichidan verbs (drop る, add inflection) ──────────────────────────────
     _ichidan = [
@@ -74,26 +65,14 @@ def _build_rules() -> list[tuple[str, str, str]]:
         ('ました', 'る', 'polite past'),
         ('ません', 'る', 'polite negative'),
         ('られる', 'る', 'potential'),
+        ('れる', 'る', 'passive'),          # ら-nuki potential / passive
         ('させる', 'る', 'causative'),
         ('させられる', 'る', 'causative passive'),
         ('ろ', 'る', 'imperative'),
+        ('よ', 'る', 'imperative'),
         ('よう', 'る', 'volitional'),
         ('れば', 'る', 'conditional'),
         ('たら', 'る', 'conditional'),
-        ('ている', 'る', 'progressive'),
-        ('ていた', 'る', 'progressive past'),
-        ('ていない', 'る', 'progressive negative'),
-        ('てる', 'る', 'progressive'),       # contracted
-        ('てた', 'る', 'progressive past'),   # contracted
-        ('てある', 'る', 'resultative'),
-        ('てしまう', 'る', 'completive'),
-        ('てしまった', 'る', 'completive past'),
-        ('てみる', 'る', 'try'),
-        ('てくる', 'る', 'come to'),
-        ('ていく', 'る', 'go on'),
-        ('てくれる', 'る', 'do for me'),
-        ('てもらう', 'る', 'have done'),
-        ('てあげる', 'る', 'do for'),
         ('たい', 'る', 'want to'),
         ('たかった', 'る', 'wanted to'),
         ('たくない', 'る', 'don\'t want to'),
@@ -117,13 +96,9 @@ def _build_rules() -> list[tuple[str, str, str]]:
         ('したら', 'する', 'conditional'),
         ('しろ', 'する', 'imperative'),
         ('せよ', 'する', 'imperative'),
-        ('している', 'する', 'progressive'),
-        ('していた', 'する', 'progressive past'),
-        ('してる', 'する', 'progressive'),
-        ('してた', 'する', 'progressive past'),
         ('したい', 'する', 'want to'),
-        ('してしまう', 'する', 'completive'),
-        ('してしまった', 'する', 'completive past'),
+        ('したかった', 'する', 'wanted to'),
+        ('したくない', 'する', 'don\'t want to'),
     ]
     rules.extend(_suru)
 
@@ -142,8 +117,6 @@ def _build_rules() -> list[tuple[str, str, str]]:
         ('くれば', 'くる', 'conditional'),
         ('きたら', 'くる', 'conditional'),
         ('こい', 'くる', 'imperative'),
-        ('きている', 'くる', 'progressive'),
-        ('きていた', 'くる', 'progressive past'),
         ('きたい', 'くる', 'want to'),
     ]
     rules.extend(_kuru)
@@ -163,8 +136,6 @@ def _build_rules() -> list[tuple[str, str, str]]:
         ('来れば', '来る', 'conditional'),
         ('来たら', '来る', 'conditional'),
         ('来い', '来る', 'imperative'),
-        ('来ている', '来る', 'progressive'),
-        ('来ていた', '来る', 'progressive past'),
         ('来たい', '来る', 'want to'),
     ]
     rules.extend(_kuru_k)
@@ -184,15 +155,49 @@ def _build_rules() -> list[tuple[str, str, str]]:
     # ── Irregulars ───────────────────────────────────────────────────────────
     rules.append(('行って', '行く', 'te-form'))
     rules.append(('行った', '行く', 'past'))
-    rules.append(('行っている', '行く', 'progressive'))
-    rules.append(('行っていた', '行く', 'progressive past'))
-    rules.append(('行ってる', '行く', 'progressive'))
 
-    # ── ます-stem as noun / compound ─────────────────────────────────────────
-    # Many i-stem forms are used as nouns (e.g. 読み, 話し).
-    # The ichidan rule 'ます' → 'る' already covers polite; this adds the bare
-    # i-stem for godan (already covered by imperative rule e → d, which
-    # coincidentally produces some stems, but not all match).
+    # ── Te-form auxiliaries ──────────────────────────────────────────────────
+    # An auxiliary attaches to the て/で-form of any verb (Vて + aux).  Each rule
+    # strips the auxiliary and restores the bare て/で-form; iteration then
+    # reduces that form to the dictionary verb via the rules above.  The
+    # auxiliary's own conjugation (past, polite, negative, te-form, …) is also
+    # handled by iteration, so only the dictionary form of each auxiliary is
+    # listed here.  Both て and で variants are needed (して vs 読んで).
+    _aux = [
+        ('いる', 'progressive'),    # ～ている
+        ('いく', 'go on'),          # ～ていく
+        ('くる', 'come to'),        # ～てくる
+        ('ある', 'resultative'),    # ～てある
+        ('おく', 'in advance'),     # ～ておく
+        ('しまう', 'completive'),   # ～てしまう
+        ('みる', 'try'),            # ～てみる
+        ('くれる', 'do for me'),    # ～てくれる
+        ('くださる', 'do for me'),  # ～てくださる
+        ('もらう', 'have done'),    # ～てもらう
+        ('いただく', 'have done'),  # ～ていただく
+        ('あげる', 'do for'),       # ～てあげる
+        ('やる', 'do for'),         # ～てやる
+    ]
+    for aux, reason in _aux:
+        rules.append(('て' + aux, 'て', reason))
+        rules.append(('で' + aux, 'で', reason))
+
+    # Common spoken contractions of て-auxiliaries.
+    _aux_contract = [
+        ('てる', 'て', 'progressive'),    # ～てる  = ～ている
+        ('でる', 'で', 'progressive'),
+        ('てた', 'て', 'progressive past'),
+        ('でた', 'で', 'progressive past'),
+        ('てない', 'て', 'progressive negative'),
+        ('でない', 'で', 'progressive negative'),
+        ('とく', 'て', 'in advance'),     # ～とく = ～ておく
+        ('どく', 'で', 'in advance'),
+        ('ちゃう', 'て', 'completive'),   # ～ちゃう = ～てしまう
+        ('じゃう', 'で', 'completive'),
+        ('ちゃった', 'て', 'completive past'),
+        ('じゃった', 'で', 'completive past'),
+    ]
+    rules.extend(_aux_contract)
 
     # Sort longest-suffix-first so greedy matching works correctly.
     rules.sort(key=lambda r: len(r[0]), reverse=True)
@@ -202,29 +207,54 @@ def _build_rules() -> list[tuple[str, str, str]]:
 RULES: list[tuple[str, str, str]] = _build_rules()
 
 
+_MAX_DEPTH = 6
+
+
 def deinflect(word: str) -> list[dict]:
     """Return candidate base forms for a conjugated *word*.
 
     Each result is ``{'word': str, 'reason': str}``.
-    Results are ordered longest-suffix-first (most specific rule wins).
-    Duplicates are suppressed.
+
+    Deinflection is iterative: rules are applied repeatedly so stacked
+    conjugations resolve in one call.  For example ``取り残されている`` needs two
+    steps (strip ``ている`` → ``取り残される``, then strip the passive →
+    ``取り残す``); both candidates are returned, with ``reason`` holding the
+    accumulated chain (e.g. ``"progressive < passive"``).
+
+    Results are ordered by chain length (fewest transforms first), so the
+    caller's "shortest chain wins" priority is preserved.  Duplicates are
+    suppressed and the search is bounded by ``_MAX_DEPTH`` and a visited set.
     """
     if len(word) < 2:
         return []
 
     candidates: list[dict] = []
-    seen: set[str] = set()
+    seen: set[str] = {word}
+    # Frontier of (form, reason_chain) still to expand. The original word seeds
+    # it with an empty chain but is never emitted as its own candidate.
+    frontier: list[tuple[str, str]] = [(word, '')]
 
-    for suffix_in, suffix_out, reason in RULES:
-        if not word.endswith(suffix_in):
-            continue
-        stem = word[:-len(suffix_in)]
-        if not stem:
-            continue
-        base = stem + suffix_out
-        if base in seen:
-            continue
-        seen.add(base)
-        candidates.append({'word': base, 'reason': reason})
+    for _ in range(_MAX_DEPTH):
+        next_frontier: list[tuple[str, str]] = []
+        for form, chain in frontier:
+            for suffix_in, suffix_out, reason in RULES:
+                if not form.endswith(suffix_in):
+                    continue
+                stem = form[:-len(suffix_in)]
+                base = stem + suffix_out
+                # An empty stem means the form *is* the whole rule (e.g. the
+                # irregular 行った→行く, した→する). Keep those, but drop the
+                # 1-char garbage generic godan rules would yield (った→う).
+                if not stem and len(base) < 2:
+                    continue
+                if base in seen:
+                    continue
+                seen.add(base)
+                new_chain = f'{chain} < {reason}' if chain else reason
+                candidates.append({'word': base, 'reason': new_chain})
+                next_frontier.append((base, new_chain))
+        if not next_frontier:
+            break
+        frontier = next_frontier
 
     return candidates
