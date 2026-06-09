@@ -507,7 +507,7 @@
       let inner = '';
       let unitSurface = '';
       for (let k = i; k < j; k++) { inner += tokenInnerHtml(tokens[k]); unitSurface += surfaces[k]; }
-      const keys = [head.lemma, surfaces[i], unitSurface];
+      const keys = [head.lemma, surfaces[i], unitSurface, head.base];
       let cls;
       if (keys.some(k => ignoredSet.has(k))) {
         cls = 'imm-ignored';                 // excluded from the comprehension %

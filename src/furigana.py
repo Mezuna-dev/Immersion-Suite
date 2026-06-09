@@ -109,17 +109,61 @@ _SKIP_POS = {'助詞', '助動詞', '補助記号', '記号', '空白', '接続�
 # Bound morphemes that attach to the preceding content word as its
 # conjugation/derivation tail rather than starting a new vocab unit.
 _TAIL_POS = {'助動詞', '接尾辞'}
+# 助詞 that continue a verb form (te-form + ～たり/～ながら/～つつ) and so belong to
+# the verb chunk rather than standing alone.
+_TAIL_PARTICLES = {'て', 'で', 'たり', 'ながら', 'つつ'}
 
 
 def _is_tail(m: dict) -> bool:
     """True if morpheme *m* belongs to the preceding word's conjugation tail.
 
-    Covers auxiliary 助動詞 (た, ない, ます…) and 接尾辞, plus a trailing て/で
-    connective so a verb keeps its own te-form (して, くれて) as one unit.
+    Covers auxiliary 助動詞 (た, ない, ます…), 接尾辞, a verb-form 助詞 (て/で/たり/
+    …), and a bound 補助形容詞 — the auxiliary ない/ほしい that Sudachi tags
+    形容詞・非自立可能 (e.g. 比べたく+ない, 状態じゃ+ない), which is grammar, not a
+    standalone vocab word.
     """
     if m['pos0'] in _TAIL_POS:
         return True
-    return m['pos0'] == '助詞' and m['surface'] in ('て', 'で')
+    if m['pos0'] == '助詞' and m['surface'] in _TAIL_PARTICLES:
+        return True
+    return m['pos0'] == '形容詞' and m.get('pos1') == '非自立可能'
+
+
+def _is_head(m: dict) -> bool:
+    """True if morpheme *m* can start a vocab chunk (a content word).
+
+    Excludes particles/aux/punctuation (_SKIP_POS), conjugation tails
+    (_TAIL_POS), and 接頭辞 prefixes (which attach to the following word instead).
+    """
+    return (m['pos0'] not in _SKIP_POS
+            and m['pos0'] not in _TAIL_POS
+            and m['pos0'] != '接頭辞'
+            and _has_japanese(m['surface']))
+
+
+def _build_chunk(raw: list[dict], lead: list[int], tail_start: int, n: int):
+    """Assemble one chunk: the `lead` morphemes plus any following conjugation
+    tail. Returns (ruby, base_surface, next_index).
+
+    `base_surface` is the word WITHOUT its inflectional tail — head + 接頭辞/
+    接尾辞 only (タイ人, 人たち, お元気) — so it matches the dictionary word the
+    popup stores, even though the chunk also carries the copula/inflection
+    (タイ人で). Inflectional tails (助動詞/助詞/補助形容詞) don't extend the base.
+    """
+    ruby: list[dict] = []
+    base = ''
+    for k in lead:
+        m = raw[k]
+        ruby += _align_token(m['surface'], m['reading'])
+        base += m['surface']
+    j = tail_start
+    while j < n and _is_tail(raw[j]):
+        m = raw[j]
+        ruby += _align_token(m['surface'], m['reading'])
+        if m['pos0'] == '接尾辞':
+            base += m['surface']
+        j += 1
+    return ruby, base, j
 
 
 def _has_japanese(s: str) -> bool:
@@ -156,11 +200,19 @@ def analyze_sentence(text: str) -> dict:
         if not surface:
             continue
         pos = m.part_of_speech()
+        pos0 = pos[0] if pos else ''
+        lemma = m.dictionary_form() or surface
+        # UniDic gives some サ/ザ変 verbs a classical ～ずる lemma (感ずる, 信ずる,
+        # 重んずる); normalise to the modern ～じる dictionary form so it matches
+        # 感じる etc. in the known set.
+        if pos0 == '動詞' and len(lemma) > 2 and lemma.endswith('ずる'):
+            lemma = lemma[:-2] + 'じる'
         raw.append({
             'surface': surface,
             'reading': _kata_to_hira(m.reading_form() or ''),
-            'pos0': pos[0] if pos else '',
-            'lemma': m.dictionary_form() or surface,
+            'pos0': pos0,
+            'pos1': pos[1] if len(pos) > 1 else '',
+            'lemma': lemma,
         })
 
     # Word-unit chunking: each content word starts a unit and absorbs only
@@ -180,24 +232,26 @@ def analyze_sentence(text: str) -> dict:
         if (cur['pos0'] == '助詞' and cur['surface'] in ('って', 'と')
                 and nxt is not None and nxt['pos0'] == '動詞'
                 and nxt['lemma'] in ('言う', 'いう')):
-            ruby = (_align_token(cur['surface'], cur['reading'])
-                    + _align_token(nxt['surface'], nxt['reading']))
-            j = i + 2
-            while j < n and _is_tail(raw[j]):
-                ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
-                j += 1
+            ruby, base, j = _build_chunk(raw, [i, i + 1], i + 2, n)
             tokens.append({
-                'lemma': nxt['lemma'],
-                'pos': nxt['pos0'],
-                'content': True,
-                'ruby': ruby,
+                'lemma': nxt['lemma'], 'pos': nxt['pos0'],
+                'content': True, 'ruby': ruby, 'base': base,
             })
             i = j
             continue
 
-        is_head = (cur['pos0'] not in _SKIP_POS
-                   and cur['pos0'] not in _TAIL_POS
-                   and _has_japanese(cur['surface']))
+        # 接頭辞 prefix (お/ご/…) attaches to the following content word so お元気
+        # is one unit headed by 元気, not a stray, mis-coloured お.
+        if cur['pos0'] == '接頭辞' and nxt is not None and _is_head(nxt):
+            ruby, base, j = _build_chunk(raw, [i, i + 1], i + 2, n)
+            tokens.append({
+                'lemma': nxt['lemma'], 'pos': nxt['pos0'],
+                'content': True, 'ruby': ruby, 'base': base,
+            })
+            i = j
+            continue
+
+        is_head = _is_head(cur)
         if not is_head:
             # Particle / punctuation / stray tail → its own plain token.
             tokens.append({
@@ -209,24 +263,19 @@ def analyze_sentence(text: str) -> dict:
             i += 1
             continue
 
-        ruby = _align_token(cur['surface'], cur['reading'])
-        j = i + 1
-        while j < n and _is_tail(raw[j]):
-            ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
-            j += 1
+        ruby, base, j = _build_chunk(raw, [i], i + 1, n)
         tokens.append({
-            'lemma': cur['lemma'],
-            'pos': cur['pos0'],
-            'content': True,
-            'ruby': ruby,
+            'lemma': cur['lemma'], 'pos': cur['pos0'],
+            'content': True, 'ruby': ruby, 'base': base,
         })
         i = j
 
     # Attach the full kana reading + plain surface of each chunk (used for
-    # known-word matching and homograph keying).
+    # known-word matching and homograph keying). Plain tokens have no base.
     for t in tokens:
         t['surface'] = chunk_surface(t['ruby'])
         t['reading'] = chunk_reading(t['ruby'])
+        t.setdefault('base', t['surface'])
 
     return {'tokens': tokens}
 
@@ -372,10 +421,12 @@ def comprehension(text: str, known: set, ignored: set | None = None) -> dict:
             continue
         surface = t.get('surface') or chunk_surface(t.get('ruby', []))
         lemma = t.get('lemma') or surface
-        if lemma in ignored or surface in ignored:
+        base = t.get('base') or surface
+        keys = (lemma, surface, base)
+        if any(k in ignored for k in keys):
             continue
         total += 1
-        if lemma in known or surface in known:
+        if any(k in known for k in keys):
             known_n += 1
         else:
             unknown_terms.append(lemma)
