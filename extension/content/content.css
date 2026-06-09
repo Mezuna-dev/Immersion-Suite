@@ -85,6 +85,11 @@
 .imm-yt-subbar-text .imm-word.imm-known {
   opacity: 0.62;
 }
+/* Function words (particles, conjunctions like でも, copula, punctuation) are
+   not vocabulary — dim them like known words so only unknown vocab stands out. */
+.imm-yt-subbar-text .imm-word.imm-grammar {
+  opacity: 0.62;
+}
 /* Ignored words (names, etc.) are excluded from the comprehension % and shown
    neutral - neither highlighted nor dimmed. */
 .imm-yt-subbar-text .imm-word.imm-ignored {

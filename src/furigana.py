@@ -109,24 +109,29 @@ _SKIP_POS = {'助詞', '助動詞', '補助記号', '記号', '空白', '接続�
 # Bound morphemes that attach to the preceding content word as its
 # conjugation/derivation tail rather than starting a new vocab unit.
 _TAIL_POS = {'助動詞', '接尾辞'}
-# 助詞 that continue a verb form (te-form + ～たり/～ながら/～つつ) and so belong to
-# the verb chunk rather than standing alone.
-_TAIL_PARTICLES = {'て', 'で', 'たり', 'ながら', 'つつ'}
+# POS that are never trackable as words even when standalone (punctuation,
+# symbols, whitespace, and the copula/auxiliary which rides on its word).
+_NONTRACK_POS = {'補助記号', '記号', '空白', '助動詞'}
 
 
 def _is_tail(m: dict) -> bool:
     """True if morpheme *m* belongs to the preceding word's conjugation tail.
 
-    Covers auxiliary 助動詞 (た, ない, ます…), 接尾辞, a verb-form 助詞 (て/で/たり/
-    …), and a bound 補助形容詞 — the auxiliary ない/ほしい that Sudachi tags
-    形容詞・非自立可能 (e.g. 比べたく+ない, 状態じゃ+ない), which is grammar, not a
-    standalone vocab word.
+    Covers auxiliary 助動詞 (た, ない, ます, です, な…), 接尾辞, a verb-form 助詞
+    (the 接続助詞 て/で in 読ん+で, plus ～たり/～ながら/～つつ), and the negation ない
+    when Sudachi tags it 形容詞・非自立可能 (比べたく+ない).  The case particle で
+    (学校で) and で+も are 格助詞/係助詞, NOT 接続助詞, so they stay as their own
+    trackable particles rather than being swallowed.
     """
     if m['pos0'] in _TAIL_POS:
         return True
-    if m['pos0'] == '助詞' and m['surface'] in _TAIL_PARTICLES:
-        return True
-    return m['pos0'] == '形容詞' and m.get('pos1') == '非自立可能'
+    if m['pos0'] == '助詞':
+        if m['surface'] in ('て', 'で'):
+            return m.get('pos1') == '接続助詞'
+        if m['surface'] in ('たり', 'ながら', 'つつ'):
+            return True
+    return (m['pos0'] == '形容詞' and m.get('pos1') == '非自立可能'
+            and m['lemma'] == 'ない')
 
 
 def _is_head(m: dict) -> bool:
@@ -266,13 +271,36 @@ def analyze_sentence(text: str) -> dict:
 
         is_head = _is_head(cur)
         if not is_head:
-            # Particle / punctuation / stray tail → its own plain token.
+            # Not a content head: particles, conjunctions, standalone counters,
+            # copula, punctuation. Per the "track everything" preference, Japanese
+            # function words are still trackable (coloured by known status); only
+            # punctuation/symbols/numbers/copula stay inert.
+            if cur['pos0'] == '助詞':
+                # Merge a run of consecutive 助詞 so compound particles (でも, では,
+                # には) form one chunk matching the dictionary entry the popup
+                # stores (it returns でも, not で + も).
+                ruby = _align_token(cur['surface'], cur['reading'])
+                surf = cur['surface']
+                j = i + 1
+                while j < n and raw[j]['pos0'] == '助詞':
+                    ruby += _align_token(raw[j]['surface'], raw[j]['reading'])
+                    surf += raw[j]['surface']
+                    j += 1
+                tokens.append({
+                    'lemma': surf, 'pos': '助詞', 'norm': surf,
+                    'content': True, 'ruby': ruby, 'base': surf,
+                })
+                i = j
+                continue
+            trackable = (cur['pos0'] not in _NONTRACK_POS
+                         and _has_japanese(cur['surface']))
             tokens.append({
                 'lemma': cur['lemma'],
                 'pos': cur['pos0'],
                 'norm': cur['norm'],
-                'content': False,
+                'content': trackable,
                 'ruby': _align_token(cur['surface'], cur['reading']),
+                'base': cur['surface'],
             })
             i += 1
             continue

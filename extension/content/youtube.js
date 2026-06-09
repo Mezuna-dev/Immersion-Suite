@@ -495,8 +495,11 @@
       }
 
       const head = tokens[i];
-      if (!head.content) {  // particle, punctuation, … → plain
-        parts.push(tokenInnerHtml(head));
+      if (!head.content) {
+        // Particles, conjunctions (でも), copula, punctuation: not vocab to
+        // study. Dim them like known words so the only thing that stands out is
+        // unknown vocab ("not highlighted" == "nothing to learn here").
+        parts.push(`<span class="imm-word imm-grammar">${tokenInnerHtml(head)}</span>`);
         i++;
         continue;
       }
