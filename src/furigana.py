@@ -201,18 +201,28 @@ def analyze_sentence(text: str) -> dict:
             continue
         pos = m.part_of_speech()
         pos0 = pos[0] if pos else ''
+        pos1 = pos[1] if len(pos) > 1 else ''
         lemma = m.dictionary_form() or surface
         # UniDic gives some サ/ザ変 verbs a classical ～ずる lemma (感ずる, 信ずる,
         # 重んずる); normalise to the modern ～じる dictionary form so it matches
         # 感じる etc. in the known set.
         if pos0 == '動詞' and len(lemma) > 2 and lemma.endswith('ずる'):
             lemma = lemma[:-2] + 'じる'
+        reading = _kata_to_hira(m.reading_form() or '')
+        # Sudachi reads the 人 suffix as ニン even for nationalities (タイ人 →
+        # タイニン); it should be じん unless counting people (3人 = さんにん).
+        if surface == '人' and pos0 == '接尾辞' and reading == 'にん':
+            prev = raw[-1] if raw else None
+            prev_num = bool(prev) and (prev['pos1'] == '数詞' or prev['surface'].isdigit())
+            if not prev_num:
+                reading = 'じん'
         raw.append({
             'surface': surface,
-            'reading': _kata_to_hira(m.reading_form() or ''),
+            'reading': reading,
             'pos0': pos0,
-            'pos1': pos[1] if len(pos) > 1 else '',
+            'pos1': pos1,
             'lemma': lemma,
+            'norm': m.normalized_form() or surface,
         })
 
     # Word-unit chunking: each content word starts a unit and absorbs only
@@ -226,15 +236,18 @@ def analyze_sentence(text: str) -> dict:
         cur = raw[i]
         nxt = raw[i + 1] if i + 1 < n else None
 
-        # Quotative って / と + 言う is the という / っていう expression. Sudachi
-        # splits off the って/と as a particle, which would leave only いう
-        # coloured; keep the whole thing as one unit headed by 言う.
-        if (cur['pos0'] == '助詞' and cur['surface'] in ('って', 'と')
-                and nxt is not None and nxt['pos0'] == '動詞'
+        # Fixed ～いう expressions Sudachi over-splits: the quotative って/と + 言う
+        # (という / っていう) and the demonstratives そう/こう/ああ + 言う
+        # (そういう / こういう). Keep each as one unit headed by 言う so it's a
+        # single word for comprehension and colours by 言う. (どういう is already a
+        # single 連体詞 in Sudachi, so it needs no handling.)
+        _iu_lead = ((cur['pos0'] == '助詞' and cur['surface'] in ('って', 'と'))
+                    or (cur['pos0'] == '副詞' and cur['surface'] in ('そう', 'こう', 'ああ')))
+        if (_iu_lead and nxt is not None and nxt['pos0'] == '動詞'
                 and nxt['lemma'] in ('言う', 'いう')):
             ruby, base, j = _build_chunk(raw, [i, i + 1], i + 2, n)
             tokens.append({
-                'lemma': nxt['lemma'], 'pos': nxt['pos0'],
+                'lemma': nxt['lemma'], 'pos': nxt['pos0'], 'norm': nxt['norm'],
                 'content': True, 'ruby': ruby, 'base': base,
             })
             i = j
@@ -245,7 +258,7 @@ def analyze_sentence(text: str) -> dict:
         if cur['pos0'] == '接頭辞' and nxt is not None and _is_head(nxt):
             ruby, base, j = _build_chunk(raw, [i, i + 1], i + 2, n)
             tokens.append({
-                'lemma': nxt['lemma'], 'pos': nxt['pos0'],
+                'lemma': nxt['lemma'], 'pos': nxt['pos0'], 'norm': nxt['norm'],
                 'content': True, 'ruby': ruby, 'base': base,
             })
             i = j
@@ -257,6 +270,7 @@ def analyze_sentence(text: str) -> dict:
             tokens.append({
                 'lemma': cur['lemma'],
                 'pos': cur['pos0'],
+                'norm': cur['norm'],
                 'content': False,
                 'ruby': _align_token(cur['surface'], cur['reading']),
             })
@@ -265,7 +279,7 @@ def analyze_sentence(text: str) -> dict:
 
         ruby, base, j = _build_chunk(raw, [i], i + 1, n)
         tokens.append({
-            'lemma': cur['lemma'], 'pos': cur['pos0'],
+            'lemma': cur['lemma'], 'pos': cur['pos0'], 'norm': cur['norm'],
             'content': True, 'ruby': ruby, 'base': base,
         })
         i = j
@@ -276,6 +290,7 @@ def analyze_sentence(text: str) -> dict:
         t['surface'] = chunk_surface(t['ruby'])
         t['reading'] = chunk_reading(t['ruby'])
         t.setdefault('base', t['surface'])
+        t.setdefault('norm', t['surface'])
 
     return {'tokens': tokens}
 
@@ -398,6 +413,9 @@ def expand_card_words(words: Iterable[str]) -> set:
             m = content[0]
             keys.add(m.surface())
             keys.add(m.dictionary_form() or m.surface())
+            # Also key by the normalized form so a kanji-written card (言う,
+            # 美味しい) matches a kana-written token (いう, おいしい) and vice versa.
+            keys.add(m.normalized_form() or m.surface())
     return keys
 
 
@@ -422,7 +440,7 @@ def comprehension(text: str, known: set, ignored: set | None = None) -> dict:
         surface = t.get('surface') or chunk_surface(t.get('ruby', []))
         lemma = t.get('lemma') or surface
         base = t.get('base') or surface
-        keys = (lemma, surface, base)
+        keys = (lemma, surface, base, t.get('norm') or surface)
         if any(k in ignored for k in keys):
             continue
         total += 1
