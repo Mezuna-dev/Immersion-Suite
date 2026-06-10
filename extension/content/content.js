@@ -863,8 +863,13 @@
       }
     });
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes[DICT_SETTINGS_KEY]) {
+      if (area !== 'local') return;
+      if (changes[DICT_SETTINGS_KEY]) {
         applyDictSettings(changes[DICT_SETTINGS_KEY].newValue);
+      }
+      // The settings page edits the mining template; pick it up without a reload.
+      if (changes[MINE_SETTINGS_KEY]) {
+        mineSettings = { deckId: null, typeId: null, fieldMaps: {}, ...(changes[MINE_SETTINGS_KEY].newValue || {}) };
       }
     });
   } catch (_) { /* no storage permission in some contexts */ }

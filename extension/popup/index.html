@@ -64,6 +64,50 @@
     </label>
   </section>
 
+  <!-- Whole-page furigana -->
+  <section class="card">
+    <h2 class="card-title">Page Furigana</h2>
+    <p class="pair-hint">Add readings above kanji on the page you're viewing. Needs the desktop app running.</p>
+    <button class="save-btn wide-btn" id="pageFuriBtn" type="button">Show furigana on this page</button>
+    <p class="status-hint" id="pageFuriHint" hidden></p>
+  </section>
+
+  <!-- Card creation defaults (hover-dictionary mining) -->
+  <section class="card">
+    <h2 class="card-title">Pop-Dictionary Cards</h2>
+    <p class="pair-hint">Default deck, card type and field template for the hover dictionary's <b>＋</b> button. With a default set, one click creates the card.</p>
+    <p class="status-hint" id="mineHint" hidden></p>
+    <div id="mineForm" hidden>
+      <label class="row">
+        <span class="row-label">Deck</span>
+        <select class="select" id="mineDeck"></select>
+      </label>
+      <label class="row">
+        <span class="row-label">Card type</span>
+        <select class="select" id="mineType"></select>
+      </label>
+      <div id="mineSlots"></div>
+    </div>
+  </section>
+
+  <!-- Card creation defaults (YouTube sentence mining) -->
+  <section class="card">
+    <h2 class="card-title">Sentence Mining Cards</h2>
+    <p class="pair-hint">Default deck, card type and field template for mining YouTube subtitles. With a default set, the <b>＋</b> buttons create the card in one click (Shift+click to adjust).</p>
+    <p class="status-hint" id="ytMineHint" hidden></p>
+    <div id="ytMineForm" hidden>
+      <label class="row">
+        <span class="row-label">Deck</span>
+        <select class="select" id="ytMineDeck"></select>
+      </label>
+      <label class="row">
+        <span class="row-label">Card type</span>
+        <select class="select" id="ytMineType"></select>
+      </label>
+      <div id="ytMineSlots"></div>
+    </div>
+  </section>
+
   <!-- YouTube immersion -->
   <section class="card">
     <h2 class="card-title">YouTube Immersion</h2>

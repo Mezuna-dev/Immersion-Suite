@@ -244,6 +244,7 @@ def initialize_database():
         con.commit()
         con.close()
         seed_default_card_type()
+        seed_mining_card_types()
         seed_default_immersion_categories()
         seed_default_media_categories()
 
@@ -378,6 +379,7 @@ def migrate_database():
     con.close()
     seed_default_immersion_categories()
     seed_default_media_categories()
+    seed_mining_card_types()
 
 
 # ===========================================================
@@ -620,6 +622,73 @@ def seed_default_card_type():
         """, ('Basic', '["Front", "Back"]', date.today().strftime('%Y-%m-%d')))
         con.commit()
     con.close()
+
+# Card types pre-made for the browser extension's two mining surfaces: the
+# hover-dictionary popup ("Pop-Dictionary") and YouTube subtitle mining
+# ("Sentence Mining"). Their field names match the extension's auto-mapper, so
+# out of the box a mined card lands with every slot filled and one-click mining
+# works without manual field mapping. Editable/deletable like any user type
+# (Is_Default stays 0); the seed runs once, guarded by a settings.json flag, so
+# a deleted type is not resurrected on the next launch.
+MINING_CARD_TYPES = [
+    {
+        'name': 'Pop-Dictionary',
+        'fields': ['Expression', 'Reading', 'Definition', 'Sentence'],
+        'front_style': '<div class="pd-word">{{Expression}}</div>',
+        'back_style': (
+            '<div class="pd-word">{{Expression}}</div>\n'
+            '<div class="pd-reading">{{Reading}}</div>\n'
+            '<hr>\n'
+            '<div class="pd-definition">{{Definition}}</div>\n'
+            '<div class="pd-sentence">{{Sentence}}</div>'
+        ),
+        'css_style': (
+            '.pd-word { font-size: 2.2em; font-weight: 700; }\n'
+            '.pd-reading { font-size: 1.2em; color: #888; margin-top: 4px; }\n'
+            '.pd-definition { font-size: 1.1em; margin-top: 10px; }\n'
+            '.pd-sentence { font-size: 1em; color: #666; margin-top: 12px; }'
+        ),
+    },
+    {
+        'name': 'Sentence Mining',
+        'fields': ['Sentence', 'Image', 'Audio'],
+        'front_style': '<div class="sm-sentence">{{Sentence}}</div>',
+        'back_style': (
+            '<div class="sm-sentence">{{Sentence}}</div>\n'
+            '<hr>\n'
+            '<div class="sm-image">{{Image}}</div>\n'
+            '<div class="sm-audio">{{Audio}}</div>'
+        ),
+        'css_style': (
+            '.sm-sentence { font-size: 1.5em; line-height: 1.7; }\n'
+            '.sm-image img { max-width: 100%; border-radius: 8px; margin-top: 10px; }\n'
+            '.sm-audio { margin-top: 8px; }'
+        ),
+    },
+]
+
+
+def seed_mining_card_types():
+    """One-time seed of the extension's mining card types (see MINING_CARD_TYPES)."""
+    settings = get_app_settings()
+    if settings.get('mining_card_types_seeded'):
+        return
+    con = create_db_connection()
+    cur = con.cursor()
+    creation_date = date.today().strftime('%Y-%m-%d')
+    for ct in MINING_CARD_TYPES:
+        cur.execute("SELECT ID FROM CardType WHERE Name = ?", (ct['name'],))
+        if cur.fetchone() is None:
+            cur.execute("""
+                INSERT INTO CardType (Name, Fields, Date_Created, Front_Style, Back_Style, CSS_Style)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (ct['name'], json.dumps(ct['fields']), creation_date,
+                  ct['front_style'], ct['back_style'], ct['css_style']))
+    con.commit()
+    con.close()
+    settings['mining_card_types_seeded'] = True
+    save_app_settings(settings)
+
 
 def get_or_create_card_type(name: str, fields: list, front_style: str = '', back_style: str = '', css_style: str = '') -> int:
     """Return the ID of an existing CardType with this name, or create a new one."""

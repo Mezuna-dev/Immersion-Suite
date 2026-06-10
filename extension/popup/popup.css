@@ -258,6 +258,13 @@ body {
 }
 .save-btn:hover { filter: brightness(1.06); transform: translateY(-1px); box-shadow: 0 6px 16px rgba(170, 0, 255, 0.45); }
 .save-btn:active { transform: scale(0.96); box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35); }
+.save-btn:disabled { opacity: 0.55; cursor: default; filter: none; transform: none; }
+
+.wide-btn { width: 100%; }
+
+/* Card-creation template rows: let the selects breathe in the narrow popup. */
+#mineForm .select,
+#ytMineForm .select { max-width: 180px; flex: 1; min-width: 0; }
 
 /* ── Footer ────────────────────────────────────────────────────────────── */
 .foot {

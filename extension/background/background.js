@@ -145,7 +145,9 @@ const LONG_ACTIONS = new Set(['create_card_with_media', 'get_youtube_subs']);
 // Per-action timeout overrides for actions that are slower than a lookup but
 // don't need the full media-download treatment. Word audio does a one-shot
 // HTTP fetch on the desktop side (10s server-side timeout + encode overhead).
-const ACTION_TIMEOUTS = { get_word_audio: 20000 };
+// Page-furigana tokenize batches can hit a cold tokenizer (Sudachi loads its
+// dictionary on first use), so give them headroom over the 5s default.
+const ACTION_TIMEOUTS = { get_word_audio: 20000, tokenize: 15000 };
 
 // MV3 tears the service worker down after ~30s idle. An open WebSocket only
 // keeps it alive *while messages flow*, so during a long, silent yt-dlp job

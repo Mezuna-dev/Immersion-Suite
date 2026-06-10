@@ -62,6 +62,12 @@
 
   const SETTINGS_KEY = 'imm_yt_settings';
 
+  // Sentence-mining defaults (deck / card type / slot→field map), shared with
+  // the toolbar popup's "Sentence Mining Cards" section. When configured, the
+  // ＋ buttons mine in one click; Shift+click still opens the panel.
+  const MINE_KEY = 'imm_yt_mine_settings';
+  let ytMine = { deckId: null, typeId: null, fieldMaps: {} };
+
   // Tokenized text cache: exact sub text → [{text, reading}, ...]. Keyed by
   // the raw string so the same sub never round-trips the backend twice.
   const tokenCache = new Map();
@@ -94,7 +100,10 @@
   // ── Settings (chrome.storage.local - Phase 4 will expose UI for these) ──
   function loadSettings() {
     try {
-      chrome.storage.local.get(SETTINGS_KEY, (data) => {
+      chrome.storage.local.get([SETTINGS_KEY, MINE_KEY], (data) => {
+        if (data && data[MINE_KEY]) {
+          ytMine = { deckId: null, typeId: null, fieldMaps: {}, ...data[MINE_KEY] };
+        }
         const s = data && data[SETTINGS_KEY];
         if (!s) return;
         autoPauseEnabled = !!s.autoPause;
@@ -166,7 +175,12 @@
   // in-player toggle buttons mid-session.
   try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local' || !changes[SETTINGS_KEY]) return;
+      if (area !== 'local') return;
+      // Mining defaults edited from the toolbar popup apply live.
+      if (changes[MINE_KEY]) {
+        ytMine = { deckId: null, typeId: null, fieldMaps: {}, ...(changes[MINE_KEY].newValue || {}) };
+      }
+      if (!changes[SETTINGS_KEY]) return;
       const s = changes[SETTINGS_KEY].newValue;
       if (!s) return;
       if (Number.isFinite(s.audioStartPadMs)) audioStartPadMs = s.audioStartPadMs;
@@ -345,7 +359,7 @@
     t.appendChild(makeButton('imm-yt-btn-pause',  '⏸', 'Auto-pause at end of sub', toggleAutoPause));
     t.appendChild(makeButton('imm-yt-btn-furi',   'あ', 'Show furigana',     toggleFurigana));
     t.appendChild(makeButton('imm-yt-btn-known',  '語', 'Colour known / unknown words', toggleKnownColoring));
-    t.appendChild(makeButton('imm-yt-btn-card',   '＋', 'Make card from sub', toggleCardPanel));
+    t.appendChild(makeButton('imm-yt-btn-card',   '＋', 'Make card from sub (Shift+click to choose deck & fields)', toggleCardPanel));
     t.appendChild(makeButton('imm-yt-btn-queue',  '☰', 'Show subtitle queue', toggleQueue));
     t.appendChild(makeButton('imm-yt-btn-settings', '⚙', 'Subtitle appearance', toggleSettingsPanel));
 
@@ -369,7 +383,7 @@
     b.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      onClick();
+      onClick(e);
     });
     return b;
   }
@@ -1227,8 +1241,102 @@
     return w;
   }
 
-  async function toggleCardPanel() {
+  function saveYtMine() {
+    try { chrome.storage.local.set({ [MINE_KEY]: ytMine }); } catch (_) {}
+  }
+
+  function ytMineFieldMap() {
+    if (ytMine.typeId == null || !ytMine.fieldMaps) return null;
+    return ytMine.fieldMaps[ytMine.typeId] || ytMine.fieldMaps[String(ytMine.typeId)] || null;
+  }
+
+  function ytMineConfigured() {
+    return !!(ytMine.deckId && ytMine.typeId && ytMineFieldMap());
+  }
+
+  // One-click mine of a cue with the saved defaults. Falls back to the panel
+  // when the defaults are missing/stale (deleted deck or card type) or the
+  // backend is unreachable (the panel surfaces the error). Feedback lands on
+  // the clicked ＋ button itself, since no panel is open.
+  async function quickMineCue(cue, btn) {
+    const origText  = btn ? btn.textContent : '';
+    const origTitle = btn ? btn.title : '';
+    const flash = (sym, msg) => {
+      if (!btn) return;
+      btn.disabled = false;
+      btn.textContent = sym;
+      if (msg) btn.title = msg;
+      setTimeout(() => { btn.textContent = origText; btn.title = origTitle; }, 1600);
+    };
+    const restore = () => {
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+    };
+    if (btn) { btn.disabled = true; btn.textContent = '…'; }
+
+    try {
+      await Promise.all([loadDecks(), loadCardTypes()]);
+    } catch (_) {
+      restore();
+      await openCardPanel();
+      return;
+    }
+
+    const slotMap = ytMineFieldMap();
+    const haveDeck = (decksCache || []).some(d => String(d.id) === String(ytMine.deckId));
+    const haveType = (cardTypesCache || []).some(t => String(t.id) === String(ytMine.typeId));
+    const fieldMap = {};
+    for (const [slot, f] of Object.entries(slotMap || {})) {
+      if (f) fieldMap[slot] = f;
+    }
+    if (!haveDeck || !haveType || !Object.keys(fieldMap).length) {
+      restore();
+      await openCardPanel();
+      return;
+    }
+
+    let imageB64 = null;
+    try {
+      imageB64 = captureScreenshot();
+    } catch (e) {
+      console.warn('[immersion-yt] screenshot failed', e);
+    }
+
+    const startMs = Math.max(0, Math.round(cue.start * 1000) + audioStartPadMs);
+    const endMs   = Math.max(startMs + 100, Math.round(cue.end * 1000) + audioEndPadMs);
+    const resp = await sendBackground({
+      action: 'create_card_with_media',
+      video_url: location.href.split('&')[0],
+      start_ms: startMs,
+      end_ms:   endMs,
+      sentence: cue.text,
+      image_b64: imageB64,
+      deck_id: Number(ytMine.deckId),
+      card_type_id: Number(ytMine.typeId),
+      field_map: fieldMap,
+    });
+    if (resp.error) {
+      flash('⚠', 'Error: ' + resp.error);
+      return;
+    }
+    if (resp.audio_skipped) {
+      console.warn('[immersion-yt] audio_skipped:', resp.audio_skipped);
+      flash('✓', `Card #${resp.card_id} created - audio skipped: ${resp.audio_skipped}`);
+      return;
+    }
+    flash('✓', `Card #${resp.card_id} created`);
+  }
+
+  async function toggleCardPanel(e) {
     if (cardPanelOpen()) { closeCardPanel(); return; }
+    if (!(e && e.shiftKey) && ytMineConfigured()) {
+      const cue = getActiveCue();
+      if (cue && cue.text) {
+        const btn = toolbarEl && toolbarEl.querySelector('#imm-yt-btn-card');
+        await quickMineCue({ start: cue.start, end: cue.end, text: cue.text }, btn);
+        return;
+      }
+      // No active line - the panel's status message explains that better.
+    }
     openCardPanel();
   }
 
@@ -1547,6 +1655,7 @@
       const opt = document.createElement('option');
       opt.value = String(d.id);
       opt.textContent = d.name;
+      if (String(d.id) === String(ytMine.deckId)) opt.selected = true;
       sel.appendChild(opt);
     }
   }
@@ -1558,6 +1667,7 @@
       const opt = document.createElement('option');
       opt.value = String(t.id);
       opt.textContent = t.name;
+      if (String(t.id) === String(ytMine.typeId)) opt.selected = true;
       sel.appendChild(opt);
     }
     renderFieldMap();
@@ -1572,7 +1682,8 @@
     if (!t) return;
 
     const fields = t.fields || [];
-    const stored = cardFieldMap.get(t.id) || autoMap(fields);
+    const stored = cardFieldMap.get(t.id) || ytMine.fieldMaps[t.id]
+      || ytMine.fieldMaps[String(t.id)] || autoMap(fields);
 
     const slots = [
       { key: 'sentence', label: 'Sentence' },
@@ -1672,6 +1783,12 @@
       setCardStatus('Error: ' + resp.error, 'error');
       return;
     }
+    // A successful panel mine becomes the saved default, so the next ＋ click
+    // is one-click (mirrors the hover dictionary's behaviour).
+    ytMine.deckId = String(deckId);
+    ytMine.typeId = String(typeId);
+    ytMine.fieldMaps = { ...ytMine.fieldMaps, [String(typeId)]: fieldMap };
+    saveYtMine();
     if (resp.audio_skipped) {
       console.warn('[immersion-yt] audio_skipped:', resp.audio_skipped);
       setCardStatus(`Card #${resp.card_id} created - audio skipped: ${resp.audio_skipped}`, 'warn');
@@ -1934,11 +2051,11 @@
     const mine = document.createElement('button');
     mine.type = 'button';
     mine.className = 'imm-yt-queue-mine';
-    mine.title = 'Make card from this line';
+    mine.title = 'Make card from this line (Shift+click to choose deck & fields)';
     mine.textContent = '＋';
     mine.addEventListener('click', (e) => {
       e.stopPropagation();
-      mineQueueRow(parseInt(row.dataset.idx, 10));
+      mineQueueRow(parseInt(row.dataset.idx, 10), e);
     });
     row.appendChild(mine);
 
@@ -2045,12 +2162,39 @@
     }
   }
 
-  async function mineQueueRow(idx) {
+  // Resolves once the player lands after a seek (or after a short timeout),
+  // so a quick-mined screenshot shows the mined line's frame, not the one the
+  // user was watching when they clicked.
+  function waitForSeek(timeoutMs = 700) {
+    return new Promise((resolve) => {
+      if (!videoEl) return resolve();
+      let timer = null;
+      const done = () => {
+        clearTimeout(timer);
+        videoEl.removeEventListener('seeked', done);
+        resolve();
+      };
+      timer = setTimeout(done, timeoutMs);
+      videoEl.addEventListener('seeked', done);
+    });
+  }
+
+  async function mineQueueRow(idx, e) {
     queueScrollGuardUntil = 0;
     if (idx < cues.length) {
       const cue = cues[idx];
       seekToCueStart(cue);
       setActiveCue(idx);
+      // One-click path: defaults are set, so mine this row straight away.
+      // (The pending DOM-mirror row below always uses the panel - its cue
+      // hasn't closed yet, so it has no reliable end time.)
+      if (!(e && e.shiftKey) && ytMineConfigured()) {
+        const row = queueRows[idx];
+        const btn = row && row.querySelector('.imm-yt-queue-mine');
+        await waitForSeek();
+        await quickMineCue({ start: cue.start, end: cue.end, text: cue.text }, btn);
+        return;
+      }
       // Pin this cue as the mining target so a stray pendingMirrorCue
       // (still set from before the seek) doesn't hijack submitCard.
       cardOverrideCue = { start: cue.start, end: cue.end, text: cue.text };

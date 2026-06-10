@@ -3,6 +3,21 @@
   border-radius: 2px;
 }
 
+/* ── Whole-page furigana (toolbar popup toggle) ────────────────────────── */
+
+/* Wrapper spans inherit everything; only the readings get sized down. The
+   reading is excluded from selection/copy so grabbing a sentence stays clean. */
+.imm-page-furi ruby { ruby-position: over; ruby-align: center; }
+.imm-page-furi rt {
+  font-size: 0.5em;
+  line-height: 1;
+  letter-spacing: 0;
+  font-weight: 400;
+  user-select: none;
+}
+.imm-page-furi rt::selection,
+.imm-page-furi rp::selection { background: transparent; }
+
 /* ── YouTube subtitle overlay ──────────────────────────────────────────── */
 
 /* Hide YouTube's native captions when our overlay is in use. */

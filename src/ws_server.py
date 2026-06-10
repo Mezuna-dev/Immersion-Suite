@@ -191,8 +191,7 @@ async def _dispatch(action, msg):
         return await loop.run_in_executor(None, _create_card, msg)
 
     if action == 'tokenize':
-        text = msg.get('text', '')
-        return await loop.run_in_executor(None, _tokenize, text)
+        return await loop.run_in_executor(None, _tokenize, msg)
 
     if action == 'analyze':
         text = msg.get('text', '')
@@ -216,9 +215,15 @@ async def _dispatch(action, msg):
     return {'error': f'unknown action: {action}'}
 
 
-def _tokenize(text: str) -> dict:
+def _tokenize(msg: dict) -> dict:
     from furigana import tokenize_sentence
-    return tokenize_sentence(text)
+    # Batch form for whole-page furigana: `texts` is a list of strings and the
+    # reply pairs each one with its token list, in order. Single `text` keeps
+    # the original shape for the YouTube layer.
+    texts = msg.get('texts')
+    if isinstance(texts, list):
+        return {'results': [tokenize_sentence(str(t or '')) for t in texts]}
+    return tokenize_sentence(msg.get('text', ''))
 
 
 def _analyze(text: str) -> dict:
