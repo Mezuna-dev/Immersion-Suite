@@ -142,6 +142,11 @@ async function request(payload, { timeoutMs } = {}) {
 // on those so the WS request doesn't get killed before yt-dlp finishes.
 const LONG_ACTIONS = new Set(['create_card_with_media', 'get_youtube_subs']);
 
+// Per-action timeout overrides for actions that are slower than a lookup but
+// don't need the full media-download treatment. Word audio does a one-shot
+// HTTP fetch on the desktop side (10s server-side timeout + encode overhead).
+const ACTION_TIMEOUTS = { get_word_audio: 20000 };
+
 // MV3 tears the service worker down after ~30s idle. An open WebSocket only
 // keeps it alive *while messages flow*, so during a long, silent yt-dlp job
 // (clips can run 60-80s) Chrome can suspend the worker and drop the socket
@@ -197,7 +202,8 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // Generic pass-through for YouTube-integration actions.
   const { action, ...rest } = msg;
   const isLong = LONG_ACTIONS.has(action);
-  const opts = isLong ? { timeoutMs: LONG_TIMEOUT_MS } : {};
+  const opts = isLong ? { timeoutMs: LONG_TIMEOUT_MS }
+    : ACTION_TIMEOUTS[action] ? { timeoutMs: ACTION_TIMEOUTS[action] } : {};
   if (isLong) startKeepalive();
   request({ action, ...rest }, opts).then((r) => {
     if (isLong) stopKeepalive();

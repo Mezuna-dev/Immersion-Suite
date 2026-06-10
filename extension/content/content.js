@@ -345,6 +345,7 @@
 
       html += '<div class="word-head"><div class="kanji-row">';
       html += _renderHeadword(kanji.slice(0, 3), readings.slice(0, 3));
+      html += `<button class="audio-btn" data-entry="${entryIdx}" title="Play pronunciation">🔊</button>`;
       if (reason) html += `<span class="reason">${esc(reason)}</span>`;
       html += '</div>';
       const forms = [...new Set([...kanji, ...readings].filter(Boolean))];
@@ -453,6 +454,18 @@
     .kanji-row { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
 
     .mine-actions-inline { display: flex; gap: 4px; flex: 0 0 auto; }
+    .audio-btn {
+      appearance: none; border: 1px solid rgba(37, 99, 235, 0.25);
+      background: rgba(37, 99, 235, 0.08); color: #2563eb;
+      font-size: 12px; line-height: 1; cursor: pointer;
+      width: 26px; height: 26px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      align-self: center;
+      transition: background .14s ease, transform .14s ease;
+    }
+    .audio-btn:hover { background: rgba(37, 99, 235, 0.18); transform: translateY(-1px); }
+    .audio-btn:disabled { opacity: .6; cursor: default; transform: none; }
+    .audio-btn.is-unavailable { opacity: .4; cursor: default; transform: none; }
     .known-btn {
       appearance: none; border: 1px solid rgba(22, 163, 74, 0.30);
       background: rgba(22, 163, 74, 0.08); color: #16a34a;
@@ -652,19 +665,22 @@
     contentEl.id = 'popup-content';
     popupEl.appendChild(contentEl);
 
-    // Delegated handling for the per-entry known (○/✓), mine (＋) and config (⚙) buttons.
+    // Delegated handling for the per-entry audio (🔊), known (○/✓), mine (＋)
+    // and config (⚙) buttons.
     contentEl.addEventListener('click', (e) => {
+      const audioBtn = e.target.closest('.audio-btn');
       const knownBtn = e.target.closest('.known-btn');
       const ignoreBtn = e.target.closest('.ignore-btn');
       const cfgBtn = e.target.closest('.mine-config');
       const mineBtn = e.target.closest('.mine-btn');
-      const btn = knownBtn || ignoreBtn || cfgBtn || mineBtn;
+      const btn = audioBtn || knownBtn || ignoreBtn || cfgBtn || mineBtn;
       if (!btn) return;
       e.stopPropagation();
       const entry = currentLookup && currentLookup.entries
         && currentLookup.entries[Number(btn.dataset.entry)];
       if (!entry) return;
-      if (knownBtn) toggleKnown(entry, knownBtn);
+      if (audioBtn) playWordAudio(entry, audioBtn);
+      else if (knownBtn) toggleKnown(entry, knownBtn);
       else if (ignoreBtn) toggleIgnore(entry, ignoreBtn);
       else if (cfgBtn || !mineConfigured()) openMinePanel(entry);
       else quickMine(entry, mineBtn);
@@ -995,6 +1011,105 @@
       knownBtn.textContent = '○';
       knownBtn.title = 'Mark as known';
     }
+  }
+
+  // ── Word audio (pronunciation playback) ────────────────────────────────────
+  // Clips come from the desktop app (get_word_audio: fetched once, then served
+  // from its disk cache) and play through Web Audio - unlike an <audio> element
+  // or data: URI, decodeAudioData isn't subject to the host page's CSP.
+  const AUDIO_CACHE_MAX = 32;
+  const _audioCache = new Map();  // `${term}|${reading}` → AudioBuffer | 'unavailable'
+  let _audioCtx = null;
+
+  function _audioTarget(entry) {
+    const kanji = entry.kanji_forms || [];
+    const readings = entry.reading_forms || [];
+    const term = kanji[0] || readings[0] || (currentLookup && currentLookup.matched) || '';
+    return { term, reading: readings[0] || term };
+  }
+
+  async function _decodeAudioB64(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    if (!_audioCtx) _audioCtx = new AudioContext();
+    return _audioCtx.decodeAudioData(bytes.buffer);
+  }
+
+  function _playAudioBuffer(buf) {
+    if (!_audioCtx) return;
+    const play = () => {
+      const src = _audioCtx.createBufferSource();
+      src.buffer = buf;
+      src.connect(_audioCtx.destination);
+      src.start();
+    };
+    if (_audioCtx.state === 'suspended') {
+      _audioCtx.resume().then(play).catch(() => {});
+    } else {
+      play();
+    }
+  }
+
+  function _audioBtnUnavailable(btn) {
+    btn.disabled = true;
+    btn.classList.add('is-unavailable');
+    btn.textContent = '🔇';
+    btn.title = 'No audio available for this word';
+  }
+
+  function _audioBtnError(btn, original, message) {
+    btn.disabled = false;
+    btn.textContent = '⚠';
+    btn.title = message;
+    setTimeout(() => { btn.textContent = original; btn.title = 'Play pronunciation'; }, 1600);
+  }
+
+  async function playWordAudio(entry, btn) {
+    const { term, reading } = _audioTarget(entry);
+    if (!term) return;
+
+    const key = term + '|' + reading;
+    const cached = _audioCache.get(key);
+    if (cached === 'unavailable') { _audioBtnUnavailable(btn); return; }
+    if (cached) { _playAudioBuffer(cached); return; }
+
+    const original = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '…';
+
+    let resp;
+    try {
+      resp = await chrome.runtime.sendMessage({ action: 'get_word_audio', term, reading });
+    } catch (_) {
+      resp = null;
+    }
+
+    if (!resp || resp.error || !resp.audio_b64) {
+      if (resp && resp.unavailable) {
+        _audioCache.set(key, 'unavailable');
+        _audioBtnUnavailable(btn);
+        return;
+      }
+      _audioBtnError(btn, original, (resp && resp.error) || 'Could not reach Immersion Suite');
+      return;
+    }
+
+    let buf;
+    try {
+      buf = await _decodeAudioB64(resp.audio_b64);
+    } catch (_) {
+      _audioBtnError(btn, original, 'Could not decode audio');
+      return;
+    }
+
+    _audioCache.set(key, buf);
+    if (_audioCache.size > AUDIO_CACHE_MAX) {
+      _audioCache.delete(_audioCache.keys().next().value);
+    }
+    btn.disabled = false;
+    btn.textContent = original;
+    _playAudioBuffer(buf);
   }
 
   // ── Mining (build a card from the hovered entry) ───────────────────────────

@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import hashlib
 import hmac
 import http
 import json
@@ -9,6 +10,9 @@ import shutil
 import subprocess
 import sys
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 import uuid
 from pathlib import Path
 
@@ -205,6 +209,9 @@ async def _dispatch(action, msg):
 
     if action == 'get_youtube_subs':
         return await loop.run_in_executor(None, _get_youtube_subs, msg)
+
+    if action == 'get_word_audio':
+        return await loop.run_in_executor(None, _get_word_audio, msg)
 
     return {'error': f'unknown action: {action}'}
 
@@ -935,6 +942,89 @@ def _parse_subs_vtt(text: str) -> list:
         last_text = body
     out.sort(key=lambda c: c['start'])
     return out
+
+
+# ── Word pronunciation audio ─────────────────────────────────────────────────
+# Native-speaker recordings for the hover popup's 🔊 button, fetched from the
+# JapanesePod101 audio endpoint (the same source Yomitan ships as its default).
+# Clips are cached on disk so each word is fetched at most once; "no recording
+# exists" is also cached (as an empty .missing marker) to avoid refetching.
+
+WORD_AUDIO_URL = 'https://assets.languagepod101.com/dictionary/japanese/audiomp3.php'
+WORD_AUDIO_TIMEOUT_SECONDS = 10
+# Real clips are a few hundred KB at most; anything bigger is not a word clip.
+WORD_AUDIO_MAX_BYTES = 2 * 1024 * 1024
+# The endpoint answers 200 OK with a spoken "the audio for this item is
+# currently unavailable" placeholder when it has no recording. Both digests of
+# that placeholder are well known; either match means "no audio".
+_AUDIO_UNAVAILABLE_MD5 = '7e2c2f954ef6051373ba916f000168dc'
+_AUDIO_UNAVAILABLE_SHA256 = 'ae6398b5a27bc8c0a771df6c907ade794be15518174773c58c7c7ddd17098906'
+
+
+def _audio_cache_dir() -> Path:
+    import database
+    return database.BASE_DIR / 'data' / 'audio_cache'
+
+
+def _is_audio_placeholder(data: bytes) -> bool:
+    if len(data) < 1024:
+        return True  # too short to be a real recording
+    return (hashlib.md5(data).hexdigest() == _AUDIO_UNAVAILABLE_MD5
+            or hashlib.sha256(data).hexdigest() == _AUDIO_UNAVAILABLE_SHA256)
+
+
+def _get_word_audio(msg: dict) -> dict:
+    """Return {'audio_b64', 'format'} for a term, or {'error', 'unavailable'?}.
+
+    `unavailable: True` means the source has no recording for this word (a
+    permanent condition the client may cache), as opposed to a transient
+    network/server failure."""
+    term = str(msg.get('term') or '').strip()
+    reading = str(msg.get('reading') or '').strip() or term
+    if not term:
+        return {'error': 'term is required'}
+
+    cache_dir = _audio_cache_dir()
+    key = hashlib.sha1(f'{term}\x00{reading}'.encode('utf-8')).hexdigest()
+    clip_path = cache_dir / f'{key}.mp3'
+    miss_path = cache_dir / f'{key}.missing'
+
+    try:
+        if clip_path.is_file():
+            data = clip_path.read_bytes()
+            return {'audio_b64': base64.b64encode(data).decode('ascii'), 'format': 'mp3'}
+        if miss_path.is_file():
+            return {'error': 'no audio available for this word', 'unavailable': True}
+    except OSError:
+        pass  # cache trouble → just refetch
+
+    params = urllib.parse.urlencode({'kanji': term, 'kana': reading})
+    req = urllib.request.Request(
+        f'{WORD_AUDIO_URL}?{params}',
+        headers={'User-Agent': 'Mozilla/5.0'},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=WORD_AUDIO_TIMEOUT_SECONDS) as resp:
+            data = resp.read(WORD_AUDIO_MAX_BYTES + 1)
+    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+        return {'error': f'audio fetch failed: {getattr(exc, "reason", exc)}'}
+    if len(data) > WORD_AUDIO_MAX_BYTES:
+        return {'error': 'audio response too large'}
+
+    if _is_audio_placeholder(data):
+        try:
+            cache_dir.mkdir(parents=True, exist_ok=True)
+            miss_path.touch()
+        except OSError:
+            pass
+        return {'error': 'no audio available for this word', 'unavailable': True}
+
+    try:
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        clip_path.write_bytes(data)
+    except OSError:
+        pass  # caching is best-effort; still serve the clip
+    return {'audio_b64': base64.b64encode(data).decode('ascii'), 'format': 'mp3'}
 
 
 # ── Boot ─────────────────────────────────────────────────────────────────────

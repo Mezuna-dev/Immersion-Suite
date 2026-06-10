@@ -28,6 +28,11 @@ Work in progress toward 1.4.0.
   dictionary, choose the **lookup key** (Shift / Alt / Ctrl / hover-only), and set
   YouTube defaults (furigana, auto-pause, and audio pre/post-roll padding for
   mined clips). Settings apply live where possible.
+- **Word pronunciation audio.** Every entry in the hover dictionary now has a **🔊**
+  button that plays a native-speaker recording of the word. Clips are fetched
+  through the desktop app and cached locally, so each word downloads once and
+  replays instantly (and works offline afterwards); words with no recording show
+  a muted 🔇 instead.
 
 ### Security
 - **Browser-extension bridge now rejects web origins.** The desktop app's local
