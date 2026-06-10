@@ -29,16 +29,19 @@
 .imm-yt-subbar-text {
   display: inline-block;
   padding: 8px 18px 10px;
-  /* --imm-sub-scale (text size) and --imm-sub-bg (bar opacity) are set on the
-     bar by the settings cog; they cascade here. */
+  /* These --imm-sub-* custom properties are set on the bar by the settings cog
+     (⚙) and cascade here: --imm-sub-scale (text size), --imm-sub-bg (bar
+     opacity), --imm-sub-font (family), --imm-sub-weight, --imm-sub-color, and
+     --imm-sub-shadow (outline/shadow). */
   background: rgba(8, 8, 12, var(--imm-sub-bg, 0.78));
-  color: #ffffff;
+  color: var(--imm-sub-color, #ffffff);
+  font-family: var(--imm-sub-font, 'Inter', system-ui, -apple-system, sans-serif);
   font-size: calc(28px * var(--imm-sub-scale, 1));
-  font-weight: 600;
+  font-weight: var(--imm-sub-weight, 600);
   line-height: 1.35;
   letter-spacing: 0.01em;
   border-radius: 8px;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  text-shadow: var(--imm-sub-shadow, 0 1px 3px rgba(0, 0, 0, 0.6));
   pointer-events: auto;
   user-select: text;
   white-space: pre-wrap;
@@ -83,17 +86,21 @@
 .imm-yt-subbar-text .imm-word {
   margin: 0 1.5px;
   border-radius: 4px;
-  padding: 0 1px;
+  /* Reserve the underline slot on every word so marked and unmarked words share
+     a baseline; each category fills in its colour via a CSS variable below. */
+  padding: 0 1px 1px;
+  border-bottom: 2px solid transparent;
 }
 
-/* Unknown content words: a clean purple underline rather than a filled block, so
-   the text stays crisp and a sentence full of unknowns reads as separate words,
-   not one smear. Toggled by the 語 toolbar button / options page. */
-.imm-yt-subbar-text .imm-word.imm-unknown {
-  border-bottom: 2px solid rgba(170, 0, 255, 0.9);
-  /* hug the text without nudging line height */
-  padding-bottom: 1px;
-}
+/* Per-category underline colours. The --imm-*-color custom properties are set by
+   the ⚙ panel: an enabled category gets its chosen colour, a disabled one
+   resolves to transparent (no underline). Unknown defaults to the purple
+   underline. A clean underline keeps the text crisp instead of smearing a
+   sentence of marked words into one block. Marking is gated by the 語 toggle. */
+.imm-yt-subbar-text .imm-word.imm-unknown { border-bottom-color: var(--imm-unknown-color, rgba(170, 0, 255, 0.9)); }
+.imm-yt-subbar-text .imm-word.imm-known   { border-bottom-color: var(--imm-known-color, transparent); }
+.imm-yt-subbar-text .imm-word.imm-ignored { border-bottom-color: var(--imm-ignored-color, transparent); }
+
 /* The word under the cursor still pops with a faint fill. */
 .imm-yt-subbar-text .imm-word.imm-unknown:hover {
   background: rgba(170, 0, 255, 0.22);
@@ -242,10 +249,109 @@
 .imm-yt-select-sm { font-size: 12px; padding: 4px 6px; }
 
 /* Subtitle-look settings popover (the ⚙ cog). Reuses .imm-yt-card-panel frame. */
-.imm-yt-settings-panel { min-width: 300px; max-width: 360px; }
+.imm-yt-settings-panel { min-width: 300px; max-width: 360px; max-height: 62vh; }
+
+/* Header stays put; only the row body scrolls, so the × is always reachable even
+   when a tall subtitle pushes the toolbar's ⚙ off the top of the player. */
+.imm-yt-settings-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.imm-yt-settings-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.imm-yt-settings-close {
+  appearance: none;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 16px;
+  line-height: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.imm-yt-settings-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  transform: rotate(90deg);
+}
+.imm-yt-settings-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  min-height: 0;
+  flex: 1 1 auto;
+}
 /* Rows stack at natural height (the shared .imm-yt-field flexes inside card rows,
    but here it sits directly in the column). */
 .imm-yt-settings-panel .imm-yt-field { flex: 0 0 auto; }
+
+/* Section divider inside the panel (e.g. "Word colours"). */
+.imm-yt-settings-head {
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Colour swatch input, styled to match the dark panel. */
+.imm-yt-color {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 36px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: none;
+  cursor: pointer;
+}
+.imm-yt-color::-webkit-color-swatch-wrapper { padding: 2px; }
+.imm-yt-color::-webkit-color-swatch { border: none; border-radius: 2px; }
+.imm-yt-color:disabled { opacity: 0.4; cursor: default; }
+
+/* Text-colour row: label on the left, swatch on the right. */
+.imm-yt-color-field {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Word-colour category row: toggle on the left, swatch on the right. */
+.imm-yt-marker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.imm-yt-marker-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+}
+.imm-yt-marker-toggle input[type="checkbox"] {
+  accent-color: #aa00ff;
+  cursor: pointer;
+}
 .imm-yt-range-row { display: flex; align-items: center; gap: 10px; }
 .imm-yt-range-row input[type="range"] {
   flex: 1;

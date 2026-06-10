@@ -39,6 +39,20 @@
   let settingsPanelEl = null;
   let subFontScale = 1;
   let subBgOpacity = 0.78;
+  // Font styling: subFontFamily keys into FONT_STACKS, subFontWeight is a CSS
+  // weight, subTextColor is the base text colour, subShadow is the outline/shadow
+  // strength (0 = none, 1 = default, up to 2 = heavy).
+  let subFontFamily = 'sans';
+  let subFontWeight = 600;
+  let subTextColor = '#ffffff';
+  let subShadow = 1;
+  // Per-category word-colour markers. Each is an on/off flag + an underline
+  // colour, applied to known/unknown-coloured spans (only visible when the 語
+  // known-word colouring mode is on). Unknown defaults on (the purple underline);
+  // known/ignored default off.
+  let markUnknown = true,  colUnknown = '#aa00ff';
+  let markKnown   = false, colKnown   = '#34d399';
+  let markIgnored = false, colIgnored = '#94a3b8';
 
   // Display-timing offset (ms). Positive = delay subs (show later relative
   // to audio); negative = advance them. Lets users dial out drift between
@@ -95,6 +109,16 @@
         if (Number.isFinite(s.subOffsetMs))     subOffsetMs     = s.subOffsetMs;
         if (Number.isFinite(s.subFontScale)) subFontScale = clampScale(s.subFontScale);
         if (Number.isFinite(s.subBgOpacity)) subBgOpacity = clampOpacity(s.subBgOpacity);
+        if (typeof s.subFontFamily === 'string' && FONT_STACKS[s.subFontFamily]) subFontFamily = s.subFontFamily;
+        if (Number.isFinite(s.subFontWeight)) subFontWeight = s.subFontWeight;
+        if (typeof s.subTextColor === 'string') subTextColor = s.subTextColor;
+        if (Number.isFinite(s.subShadow)) subShadow = clampShadow(s.subShadow);
+        if (typeof s.markUnknown === 'boolean') markUnknown = s.markUnknown;
+        if (typeof s.markKnown   === 'boolean') markKnown   = s.markKnown;
+        if (typeof s.markIgnored === 'boolean') markIgnored = s.markIgnored;
+        if (typeof s.colUnknown === 'string') colUnknown = s.colUnknown;
+        if (typeof s.colKnown   === 'string') colKnown   = s.colKnown;
+        if (typeof s.colIgnored === 'string') colIgnored = s.colIgnored;
         applySubAppearance();
         syncAutoPauseButton();
         syncFuriganaButton();
@@ -121,6 +145,16 @@
           subOffsetMs,
           subFontScale,
           subBgOpacity,
+          subFontFamily,
+          subFontWeight,
+          subTextColor,
+          subShadow,
+          markUnknown,
+          markKnown,
+          markIgnored,
+          colUnknown,
+          colKnown,
+          colIgnored,
         },
       });
     } catch (_) {}
@@ -589,11 +623,9 @@
       videoCompEl.innerHTML =
         '<span class="imm-yt-comp-label">Video Comprehension</span>'
         + `<span class="imm-yt-comp-pill">${pct}%</span>`
-        + `<span class="imm-yt-comp-sub">${r.known}/${r.total} words known`
-        + (oneT ? ` · ${oneT} lines with 1 new word` : '') + '</span>';
+        + `<span class="imm-yt-comp-sub">${oneT ? `${oneT} lines with 1 new word` : ''}</span>`;
       videoCompEl.title =
-        `Estimated comprehension of the whole video: ${r.known} of ${r.total}`
-        + ` scoreable words are known (${pct}%), across ${r.lines} subtitle lines.`
+        `Estimated comprehension of the whole video: ${pct}%, across ${r.lines} subtitle lines.`
         + (oneT ? ` ${oneT} lines have exactly one unknown word (good mining targets).` : '');
       videoCompEl.style.display = 'flex';
     }).catch(() => {});
@@ -1229,11 +1261,58 @@
   // ── Subtitle-look settings (⚙) ──────────────────────────────────────────
   function clampScale(v) { return Math.min(2, Math.max(0.5, v)); }
   function clampOpacity(v) { return Math.min(1, Math.max(0, v)); }
+  function clampShadow(v) { return Math.min(2, Math.max(0, v)); }
+
+  // Font-family stacks. Each prefers a Latin face then a matching Japanese face
+  // so both scripts render in the chosen style across platforms.
+  const FONT_STACKS = {
+    sans:    "'Inter', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, system-ui, sans-serif",
+    serif:   "'Hiragino Mincho ProN', 'Yu Mincho', YuMincho, 'MS Mincho', Georgia, serif",
+    rounded: "'Hiragino Maru Gothic ProN', 'Varela Round', Quicksand, system-ui, sans-serif",
+    mono:    "ui-monospace, 'MS Gothic', Osaka-Mono, 'Yu Gothic', monospace",
+  };
+  const FONT_LABELS = [
+    ['sans', 'Sans (Gothic)'],
+    ['serif', 'Serif (Mincho)'],
+    ['rounded', 'Rounded'],
+    ['mono', 'Monospace'],
+  ];
+  const WEIGHT_LABELS = [
+    ['300', 'Light'],
+    ['400', 'Normal'],
+    ['600', 'Semibold'],
+    ['800', 'Bold'],
+  ];
+
+  // Build the text-shadow string from a strength multiplier (0 = none, 1 =
+  // default drop shadow, >=1 adds a thickening 4-way outline for legibility on
+  // bright video).
+  function subShadowCss(s) {
+    if (s <= 0) return 'none';
+    const a = Math.min(0.95, 0.55 * s + 0.05).toFixed(2);
+    const blur = (3 * s).toFixed(1);
+    const layers = [`0 1px ${blur}px rgba(0,0,0,${a})`];
+    if (s >= 1) {
+      const w = (s - 0.5).toFixed(2);
+      const c = `rgba(0,0,0,${a})`;
+      layers.push(`${w}px 0 0 ${c}`, `-${w}px 0 0 ${c}`,
+                  `0 ${w}px 0 ${c}`, `0 -${w}px 0 ${c}`);
+    }
+    return layers.join(', ');
+  }
 
   function applySubAppearance() {
     if (!barEl) return;
     barEl.style.setProperty('--imm-sub-scale', String(subFontScale));
     barEl.style.setProperty('--imm-sub-bg', String(subBgOpacity));
+    barEl.style.setProperty('--imm-sub-font', FONT_STACKS[subFontFamily] || FONT_STACKS.sans);
+    barEl.style.setProperty('--imm-sub-weight', String(subFontWeight));
+    barEl.style.setProperty('--imm-sub-color', subTextColor);
+    barEl.style.setProperty('--imm-sub-shadow', subShadowCss(subShadow));
+    // Marker colours; an unchecked category resolves to transparent (no underline).
+    barEl.style.setProperty('--imm-unknown-color', markUnknown ? colUnknown : 'transparent');
+    barEl.style.setProperty('--imm-known-color',   markKnown   ? colKnown   : 'transparent');
+    barEl.style.setProperty('--imm-ignored-color', markIgnored ? colIgnored : 'transparent');
   }
 
   function settingsPanelOpen() {
@@ -1243,22 +1322,79 @@
   function buildSettingsPanel() {
     const wrap = document.createElement('div');
     wrap.className = 'imm-yt-card-panel imm-yt-settings-panel';
+    populateSettingsPanel(wrap);
+    return wrap;
+  }
 
-    wrap.appendChild(buildRangeRow('Text size', 50, 200, Math.round(subFontScale * 100), '%',
+  // (Re)builds the ⚙ panel from current state. Called on first build, on open
+  // (so the widgets reflect the live values), and after Reset. The header (title
+  // + ×) stays fixed while the row body scrolls, so the close control is always
+  // reachable even when a large subtitle pushes the toolbar's ⚙ off-screen.
+  function populateSettingsPanel(wrap) {
+    wrap.textContent = '';
+
+    const header = document.createElement('div');
+    header.className = 'imm-yt-settings-header';
+    const title = document.createElement('span');
+    title.className = 'imm-yt-settings-title';
+    title.textContent = 'Subtitle appearance';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'imm-yt-settings-close';
+    close.textContent = '×';
+    close.title = 'Close';
+    close.addEventListener('click', closeSettingsPanel);
+    header.appendChild(title);
+    header.appendChild(close);
+    wrap.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'imm-yt-settings-body';
+    wrap.appendChild(body);
+
+    body.appendChild(buildRangeRow('Text size', 50, 200, Math.round(subFontScale * 100), '%',
       (pct) => { subFontScale = clampScale(pct / 100); applySubAppearance(); }));
-    wrap.appendChild(buildRangeRow('Background', 0, 100, Math.round(subBgOpacity * 100), '%',
+    body.appendChild(buildRangeRow('Background', 0, 100, Math.round(subBgOpacity * 100), '%',
       (pct) => { subBgOpacity = clampOpacity(pct / 100); applySubAppearance(); }));
+    body.appendChild(buildRangeRow('Outline', 0, 200, Math.round(subShadow * 100), '%',
+      (pct) => { subShadow = clampShadow(pct / 100); applySubAppearance(); }));
+
+    body.appendChild(buildSelectRow('Font', FONT_LABELS, subFontFamily,
+      (v) => { subFontFamily = v; applySubAppearance(); saveSettings(); }));
+    body.appendChild(buildSelectRow('Weight', WEIGHT_LABELS, String(subFontWeight),
+      (v) => { subFontWeight = Number(v); applySubAppearance(); saveSettings(); }));
+    body.appendChild(buildColorRow('Text colour', subTextColor,
+      (v) => { subTextColor = v; applySubAppearance(); }));
+
+    const head = document.createElement('div');
+    head.className = 'imm-yt-settings-head';
+    head.textContent = 'Word colours';
+    head.title = 'Underline colours for the 語 known-word view';
+    body.appendChild(head);
+
+    body.appendChild(buildMarkerRow('Unknown', markUnknown, colUnknown,
+      (on) => { markUnknown = on; applySubAppearance(); saveSettings(); },
+      (c) => { colUnknown = c; applySubAppearance(); }));
+    body.appendChild(buildMarkerRow('Known', markKnown, colKnown,
+      (on) => { markKnown = on; applySubAppearance(); saveSettings(); },
+      (c) => { colKnown = c; applySubAppearance(); }));
+    body.appendChild(buildMarkerRow('Ignored', markIgnored, colIgnored,
+      (on) => { markIgnored = on; applySubAppearance(); saveSettings(); },
+      (c) => { colIgnored = c; applySubAppearance(); }));
 
     const reset = document.createElement('button');
     reset.type = 'button';
     reset.className = 'imm-yt-settings-reset';
     reset.textContent = 'Reset to defaults';
     reset.addEventListener('click', () => {
-      subFontScale = 1; subBgOpacity = 0.78;
-      applySubAppearance(); saveSettings(); refreshSettingsPanel();
+      subFontScale = 1; subBgOpacity = 0.78; subShadow = 1;
+      subFontFamily = 'sans'; subFontWeight = 600; subTextColor = '#ffffff';
+      markUnknown = true;  colUnknown = '#aa00ff';
+      markKnown   = false; colKnown   = '#34d399';
+      markIgnored = false; colIgnored = '#94a3b8';
+      applySubAppearance(); saveSettings(); populateSettingsPanel(wrap);
     });
-    wrap.appendChild(reset);
-    return wrap;
+    body.appendChild(reset);
   }
 
   // One labelled slider row; onInput receives the live integer value.
@@ -1290,16 +1426,87 @@
     return field;
   }
 
-  // Re-sync slider positions to the current values (after Reset).
-  function refreshSettingsPanel() {
-    if (!settingsPanelEl) return;
-    const vals = [Math.round(subFontScale * 100), Math.round(subBgOpacity * 100)];
-    settingsPanelEl.querySelectorAll('.imm-yt-range-row').forEach((row, i) => {
-      const range = row.querySelector('input[type="range"]');
-      const val = row.querySelector('.imm-yt-range-val');
-      if (range) range.value = String(vals[i]);
-      if (val) val.textContent = vals[i] + (range ? range.dataset.unit : '%');
+  // A labelled dropdown. `options` is [value, label] pairs; onChange owns its own
+  // persistence (selects change discretely, so there's no live-drag to debounce).
+  function buildSelectRow(label, options, current, onChange) {
+    const field = document.createElement('div');
+    field.className = 'imm-yt-field';
+    const lab = document.createElement('span');
+    lab.className = 'imm-yt-field-label';
+    lab.textContent = label;
+    field.appendChild(lab);
+
+    const sel = document.createElement('select');
+    sel.className = 'imm-yt-select imm-yt-select-sm';
+    for (const [value, text] of options) {
+      const opt = document.createElement('option');
+      opt.value = value;
+      opt.textContent = text;
+      if (value === current) opt.selected = true;
+      sel.appendChild(opt);
+    }
+    sel.addEventListener('change', () => onChange(sel.value));
+    field.appendChild(sel);
+    return field;
+  }
+
+  // A labelled colour swatch. onInput fires live while picking; the value is
+  // persisted on the picker's `change` (close).
+  function buildColorRow(label, value, onInput) {
+    const field = document.createElement('div');
+    field.className = 'imm-yt-field imm-yt-color-field';
+    const lab = document.createElement('span');
+    lab.className = 'imm-yt-field-label';
+    lab.textContent = label;
+    const input = makeColorInput(value, onInput);
+    field.appendChild(lab);
+    field.appendChild(input);
+    return field;
+  }
+
+  // A word-colour category row: a checkbox toggle on the left and a colour swatch
+  // on the right (disabled while the toggle is off).
+  function buildMarkerRow(label, enabled, color, onToggle, onColor) {
+    const row = document.createElement('div');
+    row.className = 'imm-yt-marker-row';
+
+    const toggle = document.createElement('label');
+    toggle.className = 'imm-yt-marker-toggle';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = enabled;
+    const txt = document.createElement('span');
+    txt.textContent = label;
+    toggle.appendChild(cb);
+    toggle.appendChild(txt);
+
+    const swatch = makeColorInput(color, onColor);
+    swatch.disabled = !enabled;
+    cb.addEventListener('change', () => {
+      swatch.disabled = !cb.checked;
+      onToggle(cb.checked);
     });
+
+    row.appendChild(toggle);
+    row.appendChild(swatch);
+    return row;
+  }
+
+  // Shared <input type="color"> wiring: live preview on input, persist on change.
+  function makeColorInput(value, onInput) {
+    const input = document.createElement('input');
+    input.type = 'color';
+    input.className = 'imm-yt-color';
+    input.value = value;
+    input.addEventListener('input', () => onInput(input.value));
+    input.addEventListener('change', saveSettings);
+    return input;
+  }
+
+  // Rebuild the panel body so every widget reflects the live values (after Reset
+  // or before opening).
+  function refreshSettingsPanel() {
+    if (settingsPanelEl) populateSettingsPanel(settingsPanelEl);
   }
 
   function toggleSettingsPanel() {
