@@ -8,7 +8,7 @@ const TOKEN_KEY = 'imm_ws_token';       // pairing secret - background.js
 // Defaults must mirror the content scripts so the form shows the real behaviour
 // before the user has ever changed anything.
 const DICT_DEFAULTS = { enabled: true, modifier: 'shift' };
-const YT_DEFAULTS = { furigana: false, autoPause: false, knownColoring: false, audioStartPadMs: 0, audioEndPadMs: 400 };
+const YT_DEFAULTS = { furigana: true, autoPause: false, knownColoring: true, audioStartPadMs: 0, audioEndPadMs: 400 };
 
 const $ = (id) => document.getElementById(id);
 

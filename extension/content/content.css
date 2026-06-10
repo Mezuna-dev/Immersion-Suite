@@ -29,9 +29,11 @@
 .imm-yt-subbar-text {
   display: inline-block;
   padding: 8px 18px 10px;
-  background: rgba(8, 8, 12, 0.78);
+  /* --imm-sub-scale (text size) and --imm-sub-bg (bar opacity) are set on the
+     bar by the settings cog; they cascade here. */
+  background: rgba(8, 8, 12, var(--imm-sub-bg, 0.78));
   color: #ffffff;
-  font-size: 28px;
+  font-size: calc(28px * var(--imm-sub-scale, 1));
   font-weight: 600;
   line-height: 1.35;
   letter-spacing: 0.01em;
@@ -45,10 +47,10 @@
 
 /* Match YouTube's fullscreen - the player container becomes the viewport. */
 .ytp-fullscreen .imm-yt-subbar { bottom: 12%; }
-.ytp-fullscreen .imm-yt-subbar-text { font-size: 36px; }
+.ytp-fullscreen .imm-yt-subbar-text { font-size: calc(36px * var(--imm-sub-scale, 1)); }
 
 /* Theater / mini-player tweaks - subbar tracks the player's own size. */
-.ytp-miniplayer-active .imm-yt-subbar-text { font-size: 18px; padding: 5px 10px; }
+.ytp-miniplayer-active .imm-yt-subbar-text { font-size: calc(18px * var(--imm-sub-scale, 1)); padding: 5px 10px; }
 
 /* ── Furigana (ruby annotations) ───────────────────────────────────────── */
 
@@ -75,25 +77,34 @@
 
 /* ── Known / unknown word colouring ────────────────────────────────────── */
 
-/* Unknown content words are highlighted so they stand out at a glance; known
-   words recede. Toggled by the 語 toolbar button / options page. */
-.imm-yt-subbar-text .imm-word.imm-unknown {
-  background: rgba(170, 0, 255, 0.30);
+/* A small gap between every word so adjacent words stay visually distinct.
+   Japanese has no spaces, so the gap (plus the per-word underline below) keeps
+   word boundaries readable instead of blurring into one block. */
+.imm-yt-subbar-text .imm-word {
+  margin: 0 1.5px;
   border-radius: 4px;
-  padding: 0 2px;
+  padding: 0 1px;
 }
-.imm-yt-subbar-text .imm-word.imm-known {
-  opacity: 0.62;
+
+/* Unknown content words: a clean purple underline rather than a filled block, so
+   the text stays crisp and a sentence full of unknowns reads as separate words,
+   not one smear. Toggled by the 語 toolbar button / options page. */
+.imm-yt-subbar-text .imm-word.imm-unknown {
+  border-bottom: 2px solid rgba(170, 0, 255, 0.9);
+  /* hug the text without nudging line height */
+  padding-bottom: 1px;
 }
-/* Function words (particles, conjunctions like でも, copula, punctuation) are
-   not vocabulary — dim them like known words so only unknown vocab stands out. */
-.imm-yt-subbar-text .imm-word.imm-grammar {
-  opacity: 0.62;
+/* The word under the cursor still pops with a faint fill. */
+.imm-yt-subbar-text .imm-word.imm-unknown:hover {
+  background: rgba(170, 0, 255, 0.22);
 }
-/* Ignored words (names, etc.) are excluded from the comprehension % and shown
-   neutral - neither highlighted nor dimmed. */
+/* Known / grammar / ignored words read at (near) full clarity — the underline
+   on unknown words is the only marker, so the rest stays easy to read. A
+   whisper of dim keeps a gentle hierarchy without graying the text out. */
+.imm-yt-subbar-text .imm-word.imm-known,
+.imm-yt-subbar-text .imm-word.imm-grammar,
 .imm-yt-subbar-text .imm-word.imm-ignored {
-  opacity: 0.85;
+  opacity: 0.92;
 }
 
 /* Comprehension badge: known/total words in the current line. */
@@ -229,6 +240,35 @@
 
 .imm-yt-select option { background: #1a1a22; color: #fff; }
 .imm-yt-select-sm { font-size: 12px; padding: 4px 6px; }
+
+/* Subtitle-look settings popover (the ⚙ cog). Reuses .imm-yt-card-panel frame. */
+.imm-yt-settings-panel { min-width: 300px; max-width: 360px; }
+/* Rows stack at natural height (the shared .imm-yt-field flexes inside card rows,
+   but here it sits directly in the column). */
+.imm-yt-settings-panel .imm-yt-field { flex: 0 0 auto; }
+.imm-yt-range-row { display: flex; align-items: center; gap: 10px; }
+.imm-yt-range-row input[type="range"] {
+  flex: 1;
+  accent-color: #aa00ff;
+  cursor: pointer;
+}
+.imm-yt-range-val {
+  min-width: 46px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.85);
+}
+.imm-yt-settings-reset {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: rgba(204, 102, 255, 0.95);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.imm-yt-settings-reset:hover { text-decoration: underline; }
 
 .imm-yt-card-actions {
   justify-content: flex-end;

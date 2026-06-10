@@ -19,9 +19,9 @@
   let domMirrorActive = false;  // true when cues are being synthesized from the DOM
   let pendingMirrorCue = null;  // {start, text} - open cue waiting for its end timestamp
   let autoPauseEnabled = false; // pause playback at the end of the active sub
-  let furiganaEnabled = false;  // show ruby annotations above kanji
+  let furiganaEnabled = true;   // show ruby annotations above kanji (on by default)
   let furiganaAvailable = true; // flips off after a backend tokenize failure
-  let knownColoring = false;    // colour words by known/unknown status
+  let knownColoring = true;     // colour words by known/unknown status (on by default)
   let knownSet = new Set();     // known lemmas (manual + SRS cards, from the desktop DB)
   let ignoredSet = new Set();   // ignored lemmas (excluded from comprehension)
   let knownLoaded = false;
@@ -33,6 +33,12 @@
   // chrome.storage.local under imm_yt_settings.{audioStartPadMs,audioEndPadMs}.
   let audioStartPadMs = 0;
   let audioEndPadMs   = 400;
+
+  // Subtitle appearance (the ⚙ cog). subFontScale multiplies the bar's font-size
+  // across all display modes; subBgOpacity is the bar background alpha.
+  let settingsPanelEl = null;
+  let subFontScale = 1;
+  let subBgOpacity = 0.78;
 
   // Display-timing offset (ms). Positive = delay subs (show later relative
   // to audio); negative = advance them. Lets users dial out drift between
@@ -59,7 +65,7 @@
   let queueEl = null;
   let queueListEl = null;
   let queueRows = [];
-  let queueOpen = false;
+  let queueOpen = true;         // show subtitle queue by default
   let queueLoading = false;
   let videoCompEl = null;       // whole-video comprehension badge (queue header)
   let videoCompReqId = 0;       // guards against stale async responses
@@ -78,12 +84,18 @@
         const s = data && data[SETTINGS_KEY];
         if (!s) return;
         autoPauseEnabled = !!s.autoPause;
-        furiganaEnabled = !!s.furigana;
-        knownColoring = !!s.knownColoring;
-        queueOpen = !!s.queueOpen;
+        // Furigana, known-word colouring and the queue default ON — absent keys
+        // (new user / settings saved before these existed) read as enabled, but
+        // an explicit false (user turned it off) is still respected.
+        furiganaEnabled = s.furigana !== false;
+        knownColoring = s.knownColoring !== false;
+        queueOpen = s.queueOpen !== false;
         if (Number.isFinite(s.audioStartPadMs)) audioStartPadMs = s.audioStartPadMs;
         if (Number.isFinite(s.audioEndPadMs))   audioEndPadMs   = s.audioEndPadMs;
         if (Number.isFinite(s.subOffsetMs))     subOffsetMs     = s.subOffsetMs;
+        if (Number.isFinite(s.subFontScale)) subFontScale = clampScale(s.subFontScale);
+        if (Number.isFinite(s.subBgOpacity)) subBgOpacity = clampOpacity(s.subBgOpacity);
+        applySubAppearance();
         syncAutoPauseButton();
         syncFuriganaButton();
         syncKnownButton();
@@ -107,6 +119,8 @@
           audioStartPadMs,
           audioEndPadMs,
           subOffsetMs,
+          subFontScale,
+          subBgOpacity,
         },
       });
     } catch (_) {}
@@ -275,6 +289,10 @@
     cardPanelEl = buildCardPanel();
     barEl.appendChild(cardPanelEl);
 
+    settingsPanelEl = buildSettingsPanel();
+    barEl.appendChild(settingsPanelEl);
+
+    applySubAppearance();
     player.appendChild(barEl);
     syncAutoPauseButton();
     syncFuriganaButton();
@@ -295,6 +313,7 @@
     t.appendChild(makeButton('imm-yt-btn-known',  '語', 'Colour known / unknown words', toggleKnownColoring));
     t.appendChild(makeButton('imm-yt-btn-card',   '＋', 'Make card from sub', toggleCardPanel));
     t.appendChild(makeButton('imm-yt-btn-queue',  '☰', 'Show subtitle queue', toggleQueue));
+    t.appendChild(makeButton('imm-yt-btn-settings', '⚙', 'Subtitle appearance', toggleSettingsPanel));
 
     compEl = document.createElement('span');
     compEl.id = 'imm-yt-comp';
@@ -407,7 +426,7 @@
     if (!text) {
       textEl.textContent = '';
       if (compEl) compEl.style.display = 'none';
-      if (barEl) barEl.style.display = cardPanelOpen() ? 'flex' : 'none';
+      if (barEl) barEl.style.display = (cardPanelOpen() || settingsPanelOpen()) ? 'flex' : 'none';
       return;
     }
 
@@ -1183,6 +1202,7 @@
 
   async function openCardPanel() {
     if (!cardPanelEl) return;
+    if (settingsPanelOpen()) closeSettingsPanel();
     cardPanelEl.classList.add('is-open');
     if (barEl) barEl.style.display = 'flex';
     setCardStatus('');
@@ -1203,6 +1223,97 @@
     if (!cardPanelEl) return;
     cardPanelEl.classList.remove('is-open');
     cardOverrideCue = null;
+    if (barEl) barEl.style.display = textEl && textEl.textContent ? 'flex' : 'none';
+  }
+
+  // ── Subtitle-look settings (⚙) ──────────────────────────────────────────
+  function clampScale(v) { return Math.min(2, Math.max(0.5, v)); }
+  function clampOpacity(v) { return Math.min(1, Math.max(0, v)); }
+
+  function applySubAppearance() {
+    if (!barEl) return;
+    barEl.style.setProperty('--imm-sub-scale', String(subFontScale));
+    barEl.style.setProperty('--imm-sub-bg', String(subBgOpacity));
+  }
+
+  function settingsPanelOpen() {
+    return !!(settingsPanelEl && settingsPanelEl.classList.contains('is-open'));
+  }
+
+  function buildSettingsPanel() {
+    const wrap = document.createElement('div');
+    wrap.className = 'imm-yt-card-panel imm-yt-settings-panel';
+
+    wrap.appendChild(buildRangeRow('Text size', 50, 200, Math.round(subFontScale * 100), '%',
+      (pct) => { subFontScale = clampScale(pct / 100); applySubAppearance(); }));
+    wrap.appendChild(buildRangeRow('Background', 0, 100, Math.round(subBgOpacity * 100), '%',
+      (pct) => { subBgOpacity = clampOpacity(pct / 100); applySubAppearance(); }));
+
+    const reset = document.createElement('button');
+    reset.type = 'button';
+    reset.className = 'imm-yt-settings-reset';
+    reset.textContent = 'Reset to defaults';
+    reset.addEventListener('click', () => {
+      subFontScale = 1; subBgOpacity = 0.78;
+      applySubAppearance(); saveSettings(); refreshSettingsPanel();
+    });
+    wrap.appendChild(reset);
+    return wrap;
+  }
+
+  // One labelled slider row; onInput receives the live integer value.
+  function buildRangeRow(label, min, max, value, unit, onInput) {
+    const field = document.createElement('div');
+    field.className = 'imm-yt-field';
+    const lab = document.createElement('span');
+    lab.className = 'imm-yt-field-label';
+    lab.textContent = label;
+    field.appendChild(lab);
+
+    const row = document.createElement('div');
+    row.className = 'imm-yt-range-row';
+    const range = document.createElement('input');
+    range.type = 'range';
+    range.min = String(min); range.max = String(max); range.value = String(value);
+    range.dataset.unit = unit;
+    const val = document.createElement('span');
+    val.className = 'imm-yt-range-val';
+    val.textContent = value + unit;
+    range.addEventListener('input', () => {
+      val.textContent = range.value + unit;
+      onInput(Number(range.value));      // live preview while dragging
+    });
+    range.addEventListener('change', saveSettings);  // persist on release
+    row.appendChild(range);
+    row.appendChild(val);
+    field.appendChild(row);
+    return field;
+  }
+
+  // Re-sync slider positions to the current values (after Reset).
+  function refreshSettingsPanel() {
+    if (!settingsPanelEl) return;
+    const vals = [Math.round(subFontScale * 100), Math.round(subBgOpacity * 100)];
+    settingsPanelEl.querySelectorAll('.imm-yt-range-row').forEach((row, i) => {
+      const range = row.querySelector('input[type="range"]');
+      const val = row.querySelector('.imm-yt-range-val');
+      if (range) range.value = String(vals[i]);
+      if (val) val.textContent = vals[i] + (range ? range.dataset.unit : '%');
+    });
+  }
+
+  function toggleSettingsPanel() {
+    if (settingsPanelOpen()) { closeSettingsPanel(); return; }
+    if (cardPanelOpen()) closeCardPanel();
+    if (!settingsPanelEl) return;
+    refreshSettingsPanel();
+    settingsPanelEl.classList.add('is-open');
+    if (barEl) barEl.style.display = 'flex';
+  }
+
+  function closeSettingsPanel() {
+    if (!settingsPanelEl) return;
+    settingsPanelEl.classList.remove('is-open');
     if (barEl) barEl.style.display = textEl && textEl.textContent ? 'flex' : 'none';
   }
 
@@ -1760,6 +1871,7 @@
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (isTypingTarget(e.target)) return;
     if (cardPanelOpen() && cardPanelEl.contains(e.target)) return;
+    if (settingsPanelOpen() && settingsPanelEl.contains(e.target)) return;
 
     const k = e.key.toLowerCase();
     if (k === 'a') { prevCue(); e.preventDefault(); }
