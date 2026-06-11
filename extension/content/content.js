@@ -1376,11 +1376,13 @@
     }
   }
 
-  // The YouTube subtitle bar text exists for lookups, so plain hover works
-  // there without the modifier. Only the text element - the bar's toolbar
-  // buttons (あ / 語 / …) would otherwise trigger bogus lookups.
+  // The YouTube subtitle bar and queue-row text exist for lookups, so plain
+  // hover works there without the modifier. Only the text elements - the bar's
+  // toolbar buttons (あ / 語 / …) and the rows' ＋ buttons would otherwise
+  // trigger bogus lookups.
   function inNoKeyZone(target) {
-    return !!(target && target.closest && target.closest('.imm-yt-subbar-text'));
+    return !!(target && target.closest &&
+      target.closest('.imm-yt-subbar-text, .imm-yt-queue-text'));
   }
 
   // ── Event wiring ───────────────────────────────────────────────────────────
