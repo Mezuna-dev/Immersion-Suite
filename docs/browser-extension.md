@@ -82,9 +82,12 @@ can mine while reading anything, not just YouTube. The first time, use the **⚙
 button to pick the deck, card type, and which fields receive each piece; after that
 **＋** adds a card in one click.
 
-**Mark a word known** — the **○ / ✓** button on each entry tracks which words you
-already know, in a list kept separate from your SRS deck. This drives the
-known/unknown colouring in the YouTube subtitle bar (below).
+**Mark a word's status** — each entry has three status buttons, kept in a list
+separate from your SRS deck: **○ / ✓** marks a word *known*, **学** marks it
+*learning* (you've started studying it — coloured its own way, but still counted
+as unknown in the comprehension %), and **⊘** *ignores* it (excluded from the %
+entirely). A word holds one status at a time. These drive the word colouring in
+the YouTube subtitle bar (below).
 
 **Options** — click the extension's toolbar icon to enable/disable the dictionary,
 change the lookup key (Shift / Alt / Ctrl / hover-only), and set YouTube defaults
@@ -98,7 +101,8 @@ Open any video on `youtube.com/watch`. The extension replaces YouTube's captions
 its own subtitle bar and adds a small toolbar (hover the bar to reveal it).
 
 **Look up words**
-Shift-hover any word in the subtitle bar to open the same dictionary popup.
+Hover any word in the subtitle bar or the queue to open the dictionary popup — no
+key needed there (elsewhere on the page the configured lookup key still applies).
 
 **Navigate the dialogue**
 Jump between subtitle lines without hunting for the scrubber:
@@ -115,9 +119,11 @@ moving on.
 **Furigana** (あ) toggles kana readings above the kanji in the subtitle bar.
 
 **Known/unknown colouring** (語) highlights the words in the subtitle bar that aren't
-in your known list, so you can see how hard a line is at a glance. Mark words known
-with the ○/✓ button in the hover popup; the bar recolours immediately. Your known
-list is separate from the SRS deck.
+in your known list, so you can see how hard a line is at a glance. Unknown words get
+a purple underline and learning words an amber one by default; known/ignored markers
+can be switched on (and every colour changed) in the ⚙ appearance panel. Mark words
+with the ○/✓, 学 and ⊘ buttons in the hover popup; the bar recolours immediately.
+Your known list is separate from the SRS deck.
 
 **Sentence mining** (＋) turns the current line into a flashcard. It captures a
 screenshot of the frame and an audio clip of the line, then lets you choose the deck,

@@ -758,7 +758,8 @@ def delete_card_type(card_type_id: int):
 
 # --- Known Word Functions --------------------------
 # A manually-curated vocabulary status table, independent of the SRS deck.
-# Status is 'known' (counts toward comprehension) or 'ignored' (excluded). The
+# Status is 'known' (counts toward comprehension), 'learning' (seen but not yet
+# known — coloured distinctly, counted as unknown) or 'ignored' (excluded). The
 # effective known set used for colouring/comprehension also unions in the words
 # the user has SRS cards for (see get_card_words) - assembled in the WS layer.
 
@@ -786,10 +787,22 @@ def get_ignored_words() -> list:
     return [r[0] for r in rows]
 
 
+def get_learning_words() -> list:
+    """Return all terms the user marked 'learning'."""
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT Term FROM KnownWord WHERE Status = 'learning'")
+        rows = cur.fetchall()
+    finally:
+        con.close()
+    return [r[0] for r in rows]
+
+
 def set_word_status(term: str, status: str) -> None:
-    """Set a term's status to 'known' or 'ignored' (upsert)."""
+    """Set a term's status to 'known', 'learning' or 'ignored' (upsert)."""
     term = (term or '').strip()
-    if not term or status not in ('known', 'ignored'):
+    if not term or status not in ('known', 'learning', 'ignored'):
         return
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
@@ -835,16 +848,18 @@ def count_known_words() -> int:
 
 
 def comprehension_signature() -> tuple:
-    """Cheap (card_count, status_row_count) fingerprint of the inputs to the
-    effective known set. Lets a cached set notice cards/statuses changed in the
-    app UI (same process as the WS server) without an explicit invalidation."""
+    """Cheap fingerprint of the inputs to the effective known set: card count
+    plus a per-status row count. Lets a cached set notice cards/statuses changed
+    in the app UI (same process as the WS server) without an explicit
+    invalidation. Counting per status (not just total rows) means a status FLIP
+    (known → learning) also busts the cache."""
     con = create_db_connection()
     cur = con.cursor()
     try:
         cur.execute("SELECT COUNT(*) FROM Card")
         cards = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM KnownWord")
-        statuses = cur.fetchone()[0]
+        cur.execute("SELECT Status, COUNT(*) FROM KnownWord GROUP BY Status")
+        statuses = tuple(sorted(cur.fetchall()))
     finally:
         con.close()
     return (cards, statuses)

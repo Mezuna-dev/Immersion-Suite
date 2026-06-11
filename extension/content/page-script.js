@@ -15,8 +15,25 @@
     return tracks[0];
   }
 
-  function emitTrack(reason) {
-    const resp = window.ytInitialPlayerResponse;
+  // window.ytInitialPlayerResponse is only reliable for the FIRST video - SPA
+  // navigations often leave it stale, which used to re-announce the previous
+  // video's id/track (and the content script then kept the old queue). Prefer
+  // the navigate event's own payload, then the live player API, and use the
+  // global only as a last resort.
+  function getPlayerResponse(override) {
+    if (override && override.videoDetails) return override;
+    const player = document.getElementById('movie_player');
+    if (player && typeof player.getPlayerResponse === 'function') {
+      try {
+        const r = player.getPlayerResponse();
+        if (r && r.videoDetails) return r;
+      } catch (_) { /* fall through */ }
+    }
+    return window.ytInitialPlayerResponse;
+  }
+
+  function emitTrack(reason, respOverride) {
+    const resp = getPlayerResponse(respOverride);
     const tracks = resp
       && resp.captions
       && resp.captions.playerCaptionsTracklistRenderer
@@ -39,7 +56,11 @@
   emitTrack('initial');
 
   // SPA navigations between videos - YouTube fires this on the document after
-  // the player has loaded the new video's metadata.
-  document.addEventListener('yt-navigate-finish', () => emitTrack('navigate'));
+  // the player has loaded the new video's metadata. The event detail carries
+  // the fresh player response; pass it through so we never read stale globals.
+  document.addEventListener('yt-navigate-finish', (e) => {
+    const d = e && e.detail;
+    emitTrack('navigate', d && d.response && d.response.playerResponse);
+  });
   document.addEventListener('yt-player-updated', () => emitTrack('player-updated'));
 })();

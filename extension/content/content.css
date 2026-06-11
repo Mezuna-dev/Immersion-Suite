@@ -112,13 +112,17 @@
    resolves to transparent (no underline). Unknown defaults to the purple
    underline. A clean underline keeps the text crisp instead of smearing a
    sentence of marked words into one block. Marking is gated by the 語 toggle. */
-.imm-yt-subbar-text .imm-word.imm-unknown { border-bottom-color: var(--imm-unknown-color, rgba(170, 0, 255, 0.9)); }
-.imm-yt-subbar-text .imm-word.imm-known   { border-bottom-color: var(--imm-known-color, transparent); }
-.imm-yt-subbar-text .imm-word.imm-ignored { border-bottom-color: var(--imm-ignored-color, transparent); }
+.imm-yt-subbar-text .imm-word.imm-unknown  { border-bottom-color: var(--imm-unknown-color, rgba(170, 0, 255, 0.9)); }
+.imm-yt-subbar-text .imm-word.imm-learning { border-bottom-color: var(--imm-learning-color, rgba(245, 158, 11, 0.9)); }
+.imm-yt-subbar-text .imm-word.imm-known    { border-bottom-color: var(--imm-known-color, transparent); }
+.imm-yt-subbar-text .imm-word.imm-ignored  { border-bottom-color: var(--imm-ignored-color, transparent); }
 
 /* The word under the cursor still pops with a faint fill. */
 .imm-yt-subbar-text .imm-word.imm-unknown:hover {
   background: rgba(170, 0, 255, 0.22);
+}
+.imm-yt-subbar-text .imm-word.imm-learning:hover {
+  background: rgba(245, 158, 11, 0.22);
 }
 /* Known / grammar / ignored words read at (near) full clarity — the underline
    on unknown words is the only marker, so the rest stays easy to read. A

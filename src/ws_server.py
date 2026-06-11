@@ -231,7 +231,8 @@ def _analyze(text: str) -> dict:
     return analyze_sentence(text)
 
 
-# The effective known set = manually-known ∪ words from SRS cards − ignored.
+# The effective known set = manually-known ∪ words from SRS cards − ignored −
+# learning (a manual learning/ignored mark overrides card-seeded known status).
 # Building it tokenizes every card expression, so cache it and rebuild only when
 # a status changes or a card is created.
 _known_cache: dict | None = None
@@ -242,25 +243,28 @@ def _invalidate_known_cache() -> None:
     _known_cache = None
 
 
-def _effective_known() -> tuple[set, set]:
-    """Return (known_set, ignored_set) for colouring and comprehension."""
+def _effective_known() -> tuple[set, set, set]:
+    """Return (known_set, ignored_set, learning_set) for colouring and
+    comprehension. Learning words still count as unknown for the %."""
     global _known_cache
     import database
     sig = database.comprehension_signature()
     if _known_cache is not None and _known_cache.get('sig') == sig:
-        return _known_cache['known'], _known_cache['ignored']
+        return _known_cache['known'], _known_cache['ignored'], _known_cache['learning']
     from furigana import expand_card_words
     manual = set(database.get_known_words())
     ignored = set(database.get_ignored_words())
+    learning = set(database.get_learning_words())
     cards = expand_card_words(database.get_card_words())
-    known = (manual | cards) - ignored
-    _known_cache = {'known': known, 'ignored': ignored, 'sig': sig}
-    return known, ignored
+    known = (manual | cards) - ignored - learning
+    _known_cache = {'known': known, 'ignored': ignored, 'learning': learning, 'sig': sig}
+    return known, ignored, learning
 
 
 def _get_known_words() -> dict:
-    known, ignored = _effective_known()
-    return {'known': sorted(known), 'ignored': sorted(ignored)}
+    known, ignored, learning = _effective_known()
+    return {'known': sorted(known), 'ignored': sorted(ignored),
+            'learning': sorted(learning)}
 
 
 def _set_known_word(msg: dict) -> dict:
@@ -272,13 +276,13 @@ def _set_known_word(msg: dict) -> dict:
     terms = [str(t).strip() for t in terms if t and str(t).strip()]
     if not terms:
         return {'error': 'term is required'}
-    # status: 'known' | 'ignored' | 'unknown' (clear). Falls back to the legacy
-    # boolean `known` flag (true → known, false → clear).
+    # status: 'known' | 'learning' | 'ignored' | 'unknown' (clear). Falls back
+    # to the legacy boolean `known` flag (true → known, false → clear).
     status = msg.get('status')
-    if status not in ('known', 'ignored', 'unknown'):
+    if status not in ('known', 'learning', 'ignored', 'unknown'):
         status = 'known' if msg.get('known', True) else 'unknown'
     for t in terms:
-        if status in ('known', 'ignored'):
+        if status in ('known', 'learning', 'ignored'):
             database.set_word_status(t, status)
         else:
             database.remove_known_word(t)
@@ -295,7 +299,7 @@ def _comprehension(msg: dict) -> dict:
     scoreable tokens plus a count of i+1 (single-unknown) lines.
     """
     from furigana import comprehension
-    known, ignored = _effective_known()
+    known, ignored, _learning = _effective_known()
     texts = msg.get('texts')
     if isinstance(texts, list):
         total = known_n = one_t = 0

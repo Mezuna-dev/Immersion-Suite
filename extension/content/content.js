@@ -36,6 +36,7 @@
   // Known-words set (manual marks + SRS card words, lives in the desktop DB).
   let knownSet          = new Set();
   let ignoredSet        = new Set();   // words excluded from comprehension
+  let learningSet       = new Set();   // words being learned (still "unknown" for the %)
   let knownLoaded       = false;
   let popupHovered      = false;
   let lastChunk         = null;   // chunk currently shown / in flight
@@ -356,10 +357,13 @@
       const markForms = (Array.isArray(data.mark) && data.mark.length) ? data.mark : forms;
       const isKnown = markForms.some(f => knownSet.has(f));
       const isIgnored = markForms.some(f => ignoredSet.has(f));
+      const isLearning = markForms.some(f => learningSet.has(f));
       const mw = esc(data.mark_word || markForms[0] || '');
       html += '<div class="mine-actions-inline">'
         + `<button class="known-btn${isKnown ? ' is-known' : ''}" data-entry="${entryIdx}" `
         + `title="${isKnown ? `「${mw}」 known — click to unmark` : `Mark 「${mw}」 as known`}">${isKnown ? '✓' : '○'}</button>`
+        + `<button class="learn-btn${isLearning ? ' is-learning' : ''}" data-entry="${entryIdx}" `
+        + `title="${isLearning ? `「${mw}」 learning — click to unmark` : `Mark 「${mw}」 as learning`}">学</button>`
         + `<button class="ignore-btn${isIgnored ? ' is-ignored' : ''}" data-entry="${entryIdx}" `
         + `title="${isIgnored ? `「${mw}」 ignored — click to unmark` : `Ignore 「${mw}」 (exclude from comprehension)`}">⊘</button>`
         + `<button class="mine-btn" data-entry="${entryIdx}" title="Add this word as a card">＋</button>`
@@ -477,6 +481,17 @@
     .known-btn:hover { background: rgba(22, 163, 74, 0.18); transform: translateY(-1px); }
     .known-btn.is-known { background: #16a34a; color: #fff; border-color: transparent; }
     .known-btn:disabled { opacity: .6; cursor: default; transform: none; }
+    .learn-btn {
+      appearance: none; border: 1px solid rgba(245, 158, 11, 0.35);
+      background: rgba(245, 158, 11, 0.08); color: #d97706;
+      font-size: 12px; line-height: 1; cursor: pointer;
+      width: 26px; height: 26px; border-radius: 7px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: background .14s ease, color .14s ease, transform .14s ease;
+    }
+    .learn-btn:hover { background: rgba(245, 158, 11, 0.18); transform: translateY(-1px); }
+    .learn-btn.is-learning { background: #f59e0b; color: #fff; border-color: transparent; }
+    .learn-btn:disabled { opacity: .6; cursor: default; transform: none; }
     .ignore-btn {
       appearance: none; border: 1px solid rgba(148, 163, 184, 0.30);
       background: rgba(148, 163, 184, 0.08); color: #94a3b8;
@@ -670,10 +685,11 @@
     contentEl.addEventListener('click', (e) => {
       const audioBtn = e.target.closest('.audio-btn');
       const knownBtn = e.target.closest('.known-btn');
+      const learnBtn = e.target.closest('.learn-btn');
       const ignoreBtn = e.target.closest('.ignore-btn');
       const cfgBtn = e.target.closest('.mine-config');
       const mineBtn = e.target.closest('.mine-btn');
-      const btn = audioBtn || knownBtn || ignoreBtn || cfgBtn || mineBtn;
+      const btn = audioBtn || knownBtn || learnBtn || ignoreBtn || cfgBtn || mineBtn;
       if (!btn) return;
       e.stopPropagation();
       const entry = currentLookup && currentLookup.entries
@@ -681,6 +697,7 @@
       if (!entry) return;
       if (audioBtn) playWordAudio(entry, audioBtn);
       else if (knownBtn) toggleKnown(entry, knownBtn);
+      else if (learnBtn) toggleLearning(entry, learnBtn);
       else if (ignoreBtn) toggleIgnore(entry, ignoreBtn);
       else if (cfgBtn || !mineConfigured()) openMinePanel(entry);
       else quickMine(entry, mineBtn);
@@ -934,6 +951,7 @@
       if (r && !r.error && Array.isArray(r.known)) {
         knownSet = new Set(r.known);
         ignoredSet = new Set(Array.isArray(r.ignored) ? r.ignored : []);
+        learningSet = new Set(Array.isArray(r.learning) ? r.learning : []);
         knownLoaded = true;
       }
     }).catch(() => {});
@@ -969,8 +987,9 @@
     }
     if (!resp || resp.error) return false;
     for (const f of forms) {
-      knownSet.delete(f); ignoredSet.delete(f);
+      knownSet.delete(f); ignoredSet.delete(f); learningSet.delete(f);
       if (status === 'known') knownSet.add(f);
+      else if (status === 'learning') learningSet.add(f);
       else if (status === 'ignored') ignoredSet.add(f);
     }
     try {
@@ -980,42 +999,57 @@
     return true;
   }
 
-  async function toggleKnown(entry, btn) {
-    const forms = markForms(entry);
-    if (!forms.length) return;
-    const makeKnown = !forms.some(f => knownSet.has(f));
-    btn.disabled = true;
-    const ok = await _setEntryStatus(forms, makeKnown ? 'known' : 'unknown');
-    btn.disabled = false;
-    if (!ok) return;
-    btn.classList.toggle('is-known', makeKnown);
-    btn.textContent = makeKnown ? '✓' : '○';
-    btn.title = makeKnown ? 'Known — click to unmark' : 'Mark as known';
-    // Clearing/setting known may have cleared an ignored mark; resync that button.
-    const ignoreBtn = btn.parentElement && btn.parentElement.querySelector('.ignore-btn');
+  // A word holds ONE status (known / learning / ignored / none), so setting any
+  // of the three buttons clears the other two. Repaint the whole row from the
+  // sets after the backend confirms.
+  function _syncStatusRow(row) {
+    if (!row) return;
+    const knownBtn = row.querySelector('.known-btn');
+    const learnBtn = row.querySelector('.learn-btn');
+    const ignoreBtn = row.querySelector('.ignore-btn');
+    if (knownBtn) {
+      const on = knownBtn.classList.contains('is-known');
+      knownBtn.textContent = on ? '✓' : '○';
+      knownBtn.title = on ? 'Known — click to unmark' : 'Mark as known';
+    }
+    if (learnBtn) {
+      const on = learnBtn.classList.contains('is-learning');
+      learnBtn.title = on ? 'Learning — click to unmark' : 'Mark as learning';
+    }
     if (ignoreBtn) {
-      ignoreBtn.classList.remove('is-ignored');
-      ignoreBtn.title = 'Ignore (exclude from comprehension)';
+      const on = ignoreBtn.classList.contains('is-ignored');
+      ignoreBtn.title = on ? 'Ignored — click to unmark' : 'Ignore (exclude from comprehension)';
     }
   }
 
-  async function toggleIgnore(entry, btn) {
+  async function _toggleStatus(entry, btn, status, cls, isSet) {
     const forms = markForms(entry);
     if (!forms.length) return;
-    const makeIgnored = !forms.some(f => ignoredSet.has(f));
+    const makeSet = !forms.some(isSet);
     btn.disabled = true;
-    const ok = await _setEntryStatus(forms, makeIgnored ? 'ignored' : 'unknown');
+    const ok = await _setEntryStatus(forms, makeSet ? status : 'unknown');
     btn.disabled = false;
     if (!ok) return;
-    btn.classList.toggle('is-ignored', makeIgnored);
-    btn.title = makeIgnored ? 'Ignored — click to unmark' : 'Ignore (exclude from comprehension)';
-    // Ignoring clears any known mark; resync that button.
-    const knownBtn = btn.parentElement && btn.parentElement.querySelector('.known-btn');
-    if (knownBtn) {
-      knownBtn.classList.remove('is-known');
-      knownBtn.textContent = '○';
-      knownBtn.title = 'Mark as known';
+    const row = btn.parentElement;
+    if (row) {
+      for (const b of row.querySelectorAll('.known-btn, .learn-btn, .ignore-btn')) {
+        b.classList.remove('is-known', 'is-learning', 'is-ignored');
+      }
     }
+    btn.classList.toggle(cls, makeSet);
+    _syncStatusRow(row);
+  }
+
+  function toggleKnown(entry, btn) {
+    return _toggleStatus(entry, btn, 'known', 'is-known', (f) => knownSet.has(f));
+  }
+
+  function toggleLearning(entry, btn) {
+    return _toggleStatus(entry, btn, 'learning', 'is-learning', (f) => learningSet.has(f));
+  }
+
+  function toggleIgnore(entry, btn) {
+    return _toggleStatus(entry, btn, 'ignored', 'is-ignored', (f) => ignoredSet.has(f));
   }
 
   // ── Word audio (pronunciation playback) ────────────────────────────────────

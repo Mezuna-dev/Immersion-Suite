@@ -24,6 +24,7 @@
   let knownColoring = true;     // colour words by known/unknown status (on by default)
   let knownSet = new Set();     // known lemmas (manual + SRS cards, from the desktop DB)
   let ignoredSet = new Set();   // ignored lemmas (excluded from comprehension)
+  let learningSet = new Set();  // learning lemmas (coloured; counted as unknown)
   let knownLoaded = false;
 
   // Audio-clip padding around the active cue, in ms. Subs are usually
@@ -48,11 +49,12 @@
   let subShadow = 1;
   // Per-category word-colour markers. Each is an on/off flag + an underline
   // colour, applied to known/unknown-coloured spans (only visible when the 語
-  // known-word colouring mode is on). Unknown defaults on (the purple underline);
-  // known/ignored default off.
-  let markUnknown = true,  colUnknown = '#aa00ff';
-  let markKnown   = false, colKnown   = '#34d399';
-  let markIgnored = false, colIgnored = '#94a3b8';
+  // known-word colouring mode is on). Unknown (purple) and learning (amber)
+  // default on; known/ignored default off.
+  let markUnknown  = true,  colUnknown  = '#aa00ff';
+  let markLearning = true,  colLearning = '#f59e0b';
+  let markKnown    = false, colKnown    = '#34d399';
+  let markIgnored  = false, colIgnored  = '#94a3b8';
 
   // Display-timing offset (ms). Positive = delay subs (show later relative
   // to audio); negative = advance them. Lets users dial out drift between
@@ -122,12 +124,14 @@
         if (Number.isFinite(s.subFontWeight)) subFontWeight = s.subFontWeight;
         if (typeof s.subTextColor === 'string') subTextColor = s.subTextColor;
         if (Number.isFinite(s.subShadow)) subShadow = clampShadow(s.subShadow);
-        if (typeof s.markUnknown === 'boolean') markUnknown = s.markUnknown;
-        if (typeof s.markKnown   === 'boolean') markKnown   = s.markKnown;
-        if (typeof s.markIgnored === 'boolean') markIgnored = s.markIgnored;
-        if (typeof s.colUnknown === 'string') colUnknown = s.colUnknown;
-        if (typeof s.colKnown   === 'string') colKnown   = s.colKnown;
-        if (typeof s.colIgnored === 'string') colIgnored = s.colIgnored;
+        if (typeof s.markUnknown  === 'boolean') markUnknown  = s.markUnknown;
+        if (typeof s.markLearning === 'boolean') markLearning = s.markLearning;
+        if (typeof s.markKnown    === 'boolean') markKnown    = s.markKnown;
+        if (typeof s.markIgnored  === 'boolean') markIgnored  = s.markIgnored;
+        if (typeof s.colUnknown  === 'string') colUnknown  = s.colUnknown;
+        if (typeof s.colLearning === 'string') colLearning = s.colLearning;
+        if (typeof s.colKnown    === 'string') colKnown    = s.colKnown;
+        if (typeof s.colIgnored  === 'string') colIgnored  = s.colIgnored;
         applySubAppearance();
         syncAutoPauseButton();
         syncFuriganaButton();
@@ -159,9 +163,11 @@
           subTextColor,
           subShadow,
           markUnknown,
+          markLearning,
           markKnown,
           markIgnored,
           colUnknown,
+          colLearning,
           colKnown,
           colIgnored,
         },
@@ -206,8 +212,9 @@
       // legacy boolean `known` flag.
       const status = d.status || (d.known ? 'known' : 'unknown');
       for (const t of terms) {
-        knownSet.delete(t); ignoredSet.delete(t);
+        knownSet.delete(t); ignoredSet.delete(t); learningSet.delete(t);
         if (status === 'known') knownSet.add(t);
+        else if (status === 'learning') learningSet.add(t);
         else if (status === 'ignored') ignoredSet.add(t);
       }
       if (knownColoring) renderText();
@@ -438,6 +445,7 @@
       if (r && !r.error && Array.isArray(r.known)) {
         knownSet = new Set(r.known);
         ignoredSet = new Set(Array.isArray(r.ignored) ? r.ignored : []);
+        learningSet = new Set(Array.isArray(r.learning) ? r.learning : []);
         knownLoaded = true;
         if (knownColoring) renderText();
         scheduleVideoComprehension(0);
@@ -581,6 +589,8 @@
       let cls;
       if (keys.some(k => ignoredSet.has(k))) {
         cls = 'imm-ignored';                 // excluded from the comprehension %
+      } else if (keys.some(k => learningSet.has(k))) {
+        cls = 'imm-learning'; scoreTotal++;  // being learned - still unknown for the %
       } else if (keys.some(k => knownSet.has(k))) {
         cls = 'imm-known'; scoreTotal++; scoreKnown++;
       } else {
@@ -1418,9 +1428,10 @@
     barEl.style.setProperty('--imm-sub-color', subTextColor);
     barEl.style.setProperty('--imm-sub-shadow', subShadowCss(subShadow));
     // Marker colours; an unchecked category resolves to transparent (no underline).
-    barEl.style.setProperty('--imm-unknown-color', markUnknown ? colUnknown : 'transparent');
-    barEl.style.setProperty('--imm-known-color',   markKnown   ? colKnown   : 'transparent');
-    barEl.style.setProperty('--imm-ignored-color', markIgnored ? colIgnored : 'transparent');
+    barEl.style.setProperty('--imm-unknown-color',  markUnknown  ? colUnknown  : 'transparent');
+    barEl.style.setProperty('--imm-learning-color', markLearning ? colLearning : 'transparent');
+    barEl.style.setProperty('--imm-known-color',    markKnown    ? colKnown    : 'transparent');
+    barEl.style.setProperty('--imm-ignored-color',  markIgnored  ? colIgnored  : 'transparent');
   }
 
   function settingsPanelOpen() {
@@ -1483,6 +1494,9 @@
     body.appendChild(buildMarkerRow('Unknown', markUnknown, colUnknown,
       (on) => { markUnknown = on; applySubAppearance(); saveSettings(); },
       (c) => { colUnknown = c; applySubAppearance(); }));
+    body.appendChild(buildMarkerRow('Learning', markLearning, colLearning,
+      (on) => { markLearning = on; applySubAppearance(); saveSettings(); },
+      (c) => { colLearning = c; applySubAppearance(); }));
     body.appendChild(buildMarkerRow('Known', markKnown, colKnown,
       (on) => { markKnown = on; applySubAppearance(); saveSettings(); },
       (c) => { colKnown = c; applySubAppearance(); }));
@@ -1497,9 +1511,10 @@
     reset.addEventListener('click', () => {
       subFontScale = 1; subBgOpacity = 0.78; subShadow = 1;
       subFontFamily = 'sans'; subFontWeight = 600; subTextColor = '#ffffff';
-      markUnknown = true;  colUnknown = '#aa00ff';
-      markKnown   = false; colKnown   = '#34d399';
-      markIgnored = false; colIgnored = '#94a3b8';
+      markUnknown  = true;  colUnknown  = '#aa00ff';
+      markLearning = true;  colLearning = '#f59e0b';
+      markKnown    = false; colKnown    = '#34d399';
+      markIgnored  = false; colIgnored  = '#94a3b8';
       applySubAppearance(); saveSettings(); populateSettingsPanel(wrap);
     });
     body.appendChild(reset);
@@ -2241,13 +2256,38 @@
     }
   }, true);
 
+  function urlVideoId() {
+    try {
+      const v = new URLSearchParams(location.search).get('v');
+      if (v) return v;
+      const m = location.pathname.match(/^\/shorts\/([\w-]+)/);
+      return m ? m[1] : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // ── Message bridge from page-script ─────────────────────────────────────
   window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.source !== 'imm-yt' || data.type !== 'track') return;
+    // A stale announce (player response lagging an SPA navigation) names a
+    // video other than the one in the URL - acting on it would load the
+    // previous video's subs over the new one. Drop it; a fresh announce
+    // follows once the player catches up.
+    const urlVid = urlVideoId();
+    if (urlVid && data.videoId && data.videoId !== urlVid) return;
     if (data.videoId && data.videoId === currentVideoId && cues.length) return;
     loadVideo(data.videoId, data.url);
+  });
+
+  // Belt and braces for the stale-queue bug: clear the previous video's bar +
+  // queue the moment navigation lands, even if the track announce is late or
+  // never comes (e.g. the new video has no captions at all).
+  document.addEventListener('yt-navigate-finish', () => {
+    const urlVid = urlVideoId();
+    if (urlVid !== currentVideoId) loadVideo(urlVid, null);
   });
 
   // ── Boot ────────────────────────────────────────────────────────────────
