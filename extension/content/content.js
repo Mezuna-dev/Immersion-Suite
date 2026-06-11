@@ -1376,10 +1376,17 @@
     }
   }
 
+  // The YouTube subtitle bar text exists for lookups, so plain hover works
+  // there without the modifier. Only the text element - the bar's toolbar
+  // buttons (あ / 語 / …) would otherwise trigger bogus lookups.
+  function inNoKeyZone(target) {
+    return !!(target && target.closest && target.closest('.imm-yt-subbar-text'));
+  }
+
   // ── Event wiring ───────────────────────────────────────────────────────────
   document.addEventListener('mousemove', (e) => {
     if (miningOpen) return;  // don't start new lookups while the panel is open
-    const active = dictEnabled && modifierActive(e);
+    const active = dictEnabled && (modifierActive(e) || inNoKeyZone(e.target));
     modHeld = active;
 
     if (!active) {
@@ -1393,9 +1400,9 @@
     const x = e.clientX;
     const y = e.clientY;
     clearTimeout(debounceTimer);
-    // Without a held key the popup would chase every pixel of movement, so
-    // debounce harder in no-key mode to avoid lookup spam.
-    const debounce = lookupModifier === 'none' ? 120 : DEBOUNCE_MS;
+    // Without a held key (no-key mode or the subtitle-bar hover zone) the popup
+    // would chase every pixel of movement, so debounce harder to avoid spam.
+    const debounce = (lookupModifier === 'none' || !modifierActive(e)) ? 120 : DEBOUNCE_MS;
     debounceTimer = setTimeout(() => {
       const hit = getChunkAtPoint(x, y);
       if (!hit) {

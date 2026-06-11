@@ -646,7 +646,7 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* Custom scrollbar - Chromium / WebKit. */
@@ -719,13 +719,13 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
 
 .imm-yt-queue-time {
   flex: 0 0 auto;
-  min-width: 50px;
+  min-width: 54px;
   padding: 4px 9px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(204, 102, 255, 0.9);
+  color: rgba(204, 102, 255, 0.95);
   font-variant-numeric: tabular-nums;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.02em;
   text-align: center;
@@ -738,9 +738,10 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
 
 .imm-yt-queue-text {
   flex: 1;
-  font-size: 16px;
-  line-height: 1.55;
-  color: rgba(255, 255, 255, 0.92);
+  font-family: 'Inter', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, system-ui, sans-serif;
+  font-size: 19px;
+  line-height: 1.8;
+  color: rgba(255, 255, 255, 0.96);
   word-break: break-word;
   user-select: text;
 }
