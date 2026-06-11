@@ -1164,6 +1164,38 @@ def browse_cards(deck_id=None, search_query=None, sort_by=None) -> list:
     return results
 
 
+def delete_cards(card_ids: list) -> None:
+    """Delete several cards (and their reviews) in one transaction."""
+    ids = [int(i) for i in card_ids]
+    if not ids:
+        return
+    placeholders = ','.join('?' * len(ids))
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute(f"DELETE FROM Review WHERE Card_ID IN ({placeholders})", ids)
+        cur.execute(f"DELETE FROM Card WHERE ID IN ({placeholders})", ids)
+        con.commit()
+    finally:
+        con.close()
+
+
+def move_cards_to_deck(card_ids: list, deck_id: int) -> None:
+    """Move several cards to another deck in one transaction."""
+    ids = [int(i) for i in card_ids]
+    if not ids:
+        return
+    placeholders = ','.join('?' * len(ids))
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute(f"UPDATE Card SET Deck_ID = ? WHERE ID IN ({placeholders})",
+                    [int(deck_id)] + ids)
+        con.commit()
+    finally:
+        con.close()
+
+
 def update_card_fields(card_id: int, deck_id: int, card_type_id: int, fields_json: str, front: str, back: str):
     con = create_db_connection()
     cur = con.cursor()

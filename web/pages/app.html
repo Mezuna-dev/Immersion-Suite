@@ -408,17 +408,34 @@
                     <div class="d-flex gap-3 mb-4 flex-wrap align-items-end" style="animation: fadeIn 0.6s ease;">
                         <div>
                             <label class="form-label settings-label" style="font-size: 0.8rem;">Deck</label>
-                            <select class="form-control dash-select" id="browse-deck-select" onchange="fetchBrowseCards()" style="width: 14rem; font-size: 0.9rem;">
+                            <select class="form-control dash-select" id="browse-deck-select" onchange="fetchBrowseCards()" style="width: 13rem; font-size: 0.9rem;">
                                 <option value="0">All Decks</option>
                             </select>
                         </div>
-                        <div style="flex: 1; max-width: 24rem;">
+                        <div style="flex: 1; min-width: 14rem; max-width: 24rem;">
                             <label class="form-label settings-label" style="font-size: 0.8rem;">Search</label>
-                            <input type="text" class="form-control settings-input" id="browse-search-input" placeholder="Search cards…" oninput="debounceBrowseSearch()" style="font-size: 0.9rem;">
+                            <input type="text" class="form-control settings-input" id="browse-search-input" placeholder="Search front, back &amp; fields…" oninput="debounceBrowseSearch()" style="font-size: 0.9rem;">
+                        </div>
+                        <div>
+                            <label class="form-label settings-label" style="font-size: 0.8rem;">Status</label>
+                            <select class="form-control dash-select" id="browse-status-select" onchange="applyBrowseFilters()" style="width: 10.5rem; font-size: 0.9rem;">
+                                <option value="all">All Statuses</option>
+                                <option value="due">Due Now</option>
+                                <option value="new">New</option>
+                                <option value="learning">Learning</option>
+                                <option value="young">Young (&lt;21d)</option>
+                                <option value="mature">Mature (21d+)</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="form-label settings-label" style="font-size: 0.8rem;">Card Type</label>
+                            <select class="form-control dash-select" id="browse-type-select" onchange="applyBrowseFilters()" style="width: 11rem; font-size: 0.9rem;">
+                                <option value="0">All Types</option>
+                            </select>
                         </div>
                         <div>
                             <label class="form-label settings-label" style="font-size: 0.8rem;">Sort By</label>
-                            <select class="form-control dash-select" id="browse-sort-select" onchange="fetchBrowseCards()" style="width: 16rem; font-size: 0.9rem;">
+                            <select class="form-control dash-select" id="browse-sort-select" onchange="fetchBrowseCards()" style="width: 13rem; font-size: 0.9rem;">
                                 <option value="date_created_desc">Date Created (Newest)</option>
                                 <option value="date_created_asc">Date Created (Oldest)</option>
                                 <option value="due_date_asc">Due Date</option>
@@ -427,6 +444,15 @@
                                 <option value="front_asc">Front (A–Z)</option>
                             </select>
                         </div>
+                    </div>
+                    <div id="browse-bulk-bar" class="browse-bulk-bar" hidden>
+                        <span id="browse-bulk-count" class="browse-bulk-count">0 selected</span>
+                        <select class="form-control dash-select" id="browse-bulk-deck" style="width: 13rem; font-size: 0.85rem;">
+                            <option value="0">Move to deck…</option>
+                        </select>
+                        <button class="btn btn-dark btn-sm browse-bulk-btn" onclick="bulkMoveBrowse()">Move</button>
+                        <button class="btn btn-danger btn-sm browse-bulk-btn" onclick="bulkDeleteBrowse()">Delete</button>
+                        <button class="btn btn-dark btn-sm browse-bulk-btn" onclick="clearBrowseSelection()">Clear selection</button>
                     </div>
                     <div id="browse-card-count" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.75rem; animation: fadeIn 0.6s ease;"></div>
                     <div id="browse-card-list" style="animation: fadeIn 0.6s ease;"></div>

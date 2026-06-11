@@ -1879,9 +1879,11 @@ function createCard() {
 // ===== Card Browser =====
 
 var browseDebounceTimer = null;
-var browseCards = [];
+var browseCards = [];          // raw result from the backend
+var browseFiltered = [];       // after the client-side status/type filters
 var browsePage = 0;
-var BROWSE_PAGE_SIZE = 100;
+var browsePageSize = 100;
+var browseSelected = new Set(); // card ids ticked for bulk actions
 
 function populateBrowseDeckSelect() {
     var select = document.getElementById('browse-deck-select');
@@ -1895,6 +1897,41 @@ function populateBrowseDeckSelect() {
         select.value = prev;
     }
     syncCustomSelect('browse-deck-select');
+
+    // The bulk bar's move-target select mirrors the deck list.
+    var bulk = document.getElementById('browse-bulk-deck');
+    if (bulk) {
+        var prevBulk = bulk.value;
+        bulk.innerHTML = '<option value="0">Move to deck…</option>';
+        populateDeckSelectHierarchical(bulk, flat);
+        if (prevBulk && decks.some(function(d) { return String(d.id) === prevBulk; })) {
+            bulk.value = prevBulk;
+        }
+        syncCustomSelect('browse-bulk-deck');
+    }
+}
+
+// Card-type filter options come from the loaded cards themselves, so the list
+// only offers types that actually occur in the current deck/search result.
+function populateBrowseTypeSelect() {
+    var select = document.getElementById('browse-type-select');
+    if (!select) return;
+    var prev = select.value;
+    var seen = {};
+    browseCards.forEach(function(c) {
+        if (c.card_type_id && c.type_name) seen[c.card_type_id] = c.type_name;
+    });
+    select.innerHTML = '<option value="0">All Types</option>';
+    Object.keys(seen)
+        .sort(function(a, b) { return seen[a].localeCompare(seen[b]); })
+        .forEach(function(id) {
+            var opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = seen[id];
+            select.appendChild(opt);
+        });
+    if (prev && (prev === '0' || seen[prev])) select.value = prev;
+    syncCustomSelect('browse-type-select');
 }
 
 function fetchBrowseCards() {
@@ -1929,6 +1966,47 @@ function truncate(text, maxLen) {
 
 function updateBrowseCards(cards) {
     browseCards = cards;
+    browseSelected.clear();
+    populateBrowseTypeSelect();
+    applyBrowseFilters();
+}
+
+// A card's lifecycle stage, for the Status column + filter. Mirrors the
+// scheduler's buckets: New → Learning (in steps) → Young → Mature (21d+).
+function browseCardStatus(c) {
+    if (c.is_new) return 'new';
+    if (c.learning_step && c.learning_step > 0) return 'learning';
+    if ((c.interval || 0) >= 21) return 'mature';
+    return 'young';
+}
+
+var BROWSE_STATUS_LABELS = { 'new': 'New', learning: 'Learning', young: 'Young', mature: 'Mature' };
+
+function browseIsDue(c) {
+    if (c.is_new) return false;
+    if (!c.due_date) return false;
+    return c.due_date <= todayStr();
+}
+
+function todayStr() {
+    var d = new Date();
+    return d.getFullYear() + '-' +
+        String(d.getMonth() + 1).padStart(2, '0') + '-' +
+        String(d.getDate()).padStart(2, '0');
+}
+
+function applyBrowseFilters() {
+    var statusSel = document.getElementById('browse-status-select');
+    var typeSel = document.getElementById('browse-type-select');
+    var status = statusSel ? statusSel.value : 'all';
+    var typeId = typeSel ? typeSel.value : '0';
+
+    browseFiltered = browseCards.filter(function(c) {
+        if (typeId !== '0' && String(c.card_type_id) !== typeId) return false;
+        if (status === 'all') return true;
+        if (status === 'due') return browseIsDue(c);
+        return browseCardStatus(c) === status;
+    });
     browsePage = 0;
     renderBrowsePage();
 }
@@ -1938,24 +2016,43 @@ function renderBrowsePage() {
     var countEl = document.getElementById('browse-card-count');
     if (!container) return;
 
-    var totalCards = browseCards.length;
-    countEl.textContent = totalCards + (totalCards === 1 ? ' card' : ' cards');
+    var totalCards = browseFiltered.length;
+    var filtered = totalCards !== browseCards.length;
+    countEl.textContent = totalCards + (totalCards === 1 ? ' card' : ' cards') +
+        (filtered ? ' (of ' + browseCards.length + ')' : '');
 
     if (totalCards === 0) {
-        container.innerHTML = '<p style="opacity: 0.6;">No cards found.</p>';
+        container.innerHTML = '<p style="opacity: 0.6;">' + (browseCards.length
+            ? 'No cards match these filters - try widening the status or card-type filter.'
+            : 'No cards here yet. Mine some from the browser extension, or create one under SRS → Create Card.') + '</p>';
+        updateBrowseBulkBar();
         return;
     }
 
-    var totalPages = Math.ceil(totalCards / BROWSE_PAGE_SIZE);
-    var start = browsePage * BROWSE_PAGE_SIZE;
-    var end = Math.min(start + BROWSE_PAGE_SIZE, totalCards);
-    var pageCards = browseCards.slice(start, end);
+    var totalPages = Math.ceil(totalCards / browsePageSize);
+    if (browsePage >= totalPages) browsePage = totalPages - 1;
+    var start = browsePage * browsePageSize;
+    var end = Math.min(start + browsePageSize, totalCards);
+    var pageCards = browseFiltered.slice(start, end);
 
     var table = document.createElement('table');
     table.className = 'browse-table';
 
-    // Event delegation: single click handler on table
+    // One delegated click handler: ticking the checkbox toggles selection,
+    // clicking anywhere else on the row opens the editor.
     table.addEventListener('click', function(e) {
+        var check = e.target.closest('.browse-check');
+        if (check) {
+            var id = parseInt(check.dataset.cardId, 10);
+            if (check.checked) browseSelected.add(id);
+            else browseSelected.delete(id);
+            var rowEl = check.closest('.browse-row');
+            if (rowEl) rowEl.classList.toggle('browse-row-selected', check.checked);
+            updateBrowseBulkBar();
+            syncBrowseHeaderCheck();
+            return;
+        }
+        if (e.target.closest('.browse-check-cell')) return; // checkbox cell incl. header
         var row = e.target.closest('.browse-row');
         if (row && row.dataset.cardId) {
             editCardFromBrowser(parseInt(row.dataset.cardId, 10));
@@ -1963,25 +2060,36 @@ function renderBrowsePage() {
     });
 
     var thead = document.createElement('thead');
-    thead.innerHTML = '<tr><th>Front</th><th>Back</th><th>Deck</th><th>Type</th><th>Due</th><th>Interval</th></tr>';
+    thead.innerHTML = '<tr>' +
+        '<th class="browse-check-cell"><input type="checkbox" id="browse-check-all" title="Select all on this page"></th>' +
+        '<th>Front</th><th>Back</th><th>Deck</th><th>Type</th><th>Status</th><th>Due</th><th>Interval</th></tr>';
     table.appendChild(thead);
 
+    var today = todayStr();
     var tbody = document.createElement('tbody');
     var frag = document.createDocumentFragment();
     for (var i = 0; i < pageCards.length; i++) {
         var card = pageCards[i];
         var tr = document.createElement('tr');
-        tr.className = 'browse-row';
+        tr.className = 'browse-row' + (browseSelected.has(card.id) ? ' browse-row-selected' : '');
         tr.dataset.cardId = card.id;
-        var frontText = truncate(card.front, 60);
-        var backText = truncate(card.back, 60);
-        var statusBadge = card.is_new ? ' <span class="browse-badge browse-badge-new">New</span>' : '';
+        var st = browseCardStatus(card);
+        var statusBadge = '<span class="browse-badge browse-badge-' + st + '">' + BROWSE_STATUS_LABELS[st] + '</span>';
+        var due = card.is_new ? '-' : (card.due_date || '-');
+        var dueCls = '';
+        if (!card.is_new && card.due_date) {
+            if (card.due_date < today) dueCls = ' class="browse-due-overdue"';
+            else if (card.due_date === today) dueCls = ' class="browse-due-today"';
+        }
         tr.innerHTML =
-            '<td>' + frontText + statusBadge + '</td>' +
-            '<td>' + backText + '</td>' +
-            '<td>' + (card.deck_name || '') + '</td>' +
-            '<td>' + (card.type_name || '') + '</td>' +
-            '<td>' + (card.due_date || '-') + '</td>' +
+            '<td class="browse-check-cell"><input type="checkbox" class="browse-check" data-card-id="' + card.id + '"' +
+                (browseSelected.has(card.id) ? ' checked' : '') + '></td>' +
+            '<td class="browse-front">' + escapeHtml(truncate(card.front, 60)) + '</td>' +
+            '<td>' + escapeHtml(truncate(card.back, 80)) + '</td>' +
+            '<td>' + escapeHtml(card.deck_name || '') + '</td>' +
+            '<td>' + escapeHtml(card.type_name || '') + '</td>' +
+            '<td>' + statusBadge + '</td>' +
+            '<td' + dueCls + '>' + escapeHtml(due) + '</td>' +
             '<td>' + (card.interval || 0) + 'd</td>';
         frag.appendChild(tr);
     }
@@ -1991,30 +2099,123 @@ function renderBrowsePage() {
     container.innerHTML = '';
     container.appendChild(table);
 
-    // Pagination controls
+    // Select-all toggles every row on the current page.
+    var checkAll = table.querySelector('#browse-check-all');
+    checkAll.addEventListener('change', function() {
+        pageCards.forEach(function(c) {
+            if (checkAll.checked) browseSelected.add(c.id);
+            else browseSelected.delete(c.id);
+        });
+        table.querySelectorAll('.browse-check').forEach(function(cb) {
+            cb.checked = checkAll.checked;
+            var rowEl = cb.closest('.browse-row');
+            if (rowEl) rowEl.classList.toggle('browse-row-selected', checkAll.checked);
+        });
+        updateBrowseBulkBar();
+    });
+    syncBrowseHeaderCheck();
+
+    // Pagination footer: range + page controls + page size.
+    var nav = document.createElement('div');
+    nav.className = 'browse-pagination';
+
+    var range = document.createElement('span');
+    range.className = 'browse-page-range';
+    range.textContent = 'Showing ' + (start + 1) + '–' + end + ' of ' + totalCards;
+    nav.appendChild(range);
+
     if (totalPages > 1) {
-        var nav = document.createElement('div');
-        nav.style.cssText = 'display:flex;justify-content:center;align-items:center;gap:1rem;margin-top:0.75rem;';
-        var prevBtn = document.createElement('button');
-        prevBtn.className = 'btn btn-dark btn-sm';
-        prevBtn.textContent = 'Previous';
-        prevBtn.disabled = browsePage === 0;
-        prevBtn.style.backgroundColor = '#2d2a3e';
-        prevBtn.addEventListener('click', function() { if (browsePage > 0) { browsePage--; renderBrowsePage(); } });
+        var mkBtn = function(label, title, disabled, onClick) {
+            var b = document.createElement('button');
+            b.className = 'btn btn-dark btn-sm browse-page-btn';
+            b.textContent = label;
+            b.title = title;
+            b.disabled = disabled;
+            b.addEventListener('click', onClick);
+            return b;
+        };
+        nav.appendChild(mkBtn('«', 'First page', browsePage === 0,
+            function() { browsePage = 0; renderBrowsePage(); }));
+        nav.appendChild(mkBtn('‹', 'Previous page', browsePage === 0,
+            function() { browsePage--; renderBrowsePage(); }));
         var info = document.createElement('span');
-        info.style.color = '#aaa';
+        info.className = 'browse-page-info';
         info.textContent = 'Page ' + (browsePage + 1) + ' of ' + totalPages;
-        var nextBtn = document.createElement('button');
-        nextBtn.className = 'btn btn-dark btn-sm';
-        nextBtn.textContent = 'Next';
-        nextBtn.disabled = browsePage >= totalPages - 1;
-        nextBtn.style.backgroundColor = '#2d2a3e';
-        nextBtn.addEventListener('click', function() { if (browsePage < totalPages - 1) { browsePage++; renderBrowsePage(); } });
-        nav.appendChild(prevBtn);
         nav.appendChild(info);
-        nav.appendChild(nextBtn);
-        container.appendChild(nav);
+        nav.appendChild(mkBtn('›', 'Next page', browsePage >= totalPages - 1,
+            function() { browsePage++; renderBrowsePage(); }));
+        nav.appendChild(mkBtn('»', 'Last page', browsePage >= totalPages - 1,
+            function() { browsePage = totalPages - 1; renderBrowsePage(); }));
     }
+
+    var sizeWrap = document.createElement('span');
+    sizeWrap.className = 'browse-page-size';
+    sizeWrap.textContent = 'Per page: ';
+    [50, 100, 250].forEach(function(n) {
+        var b = document.createElement('button');
+        b.className = 'btn btn-dark btn-sm browse-page-btn' + (browsePageSize === n ? ' browse-page-btn-on' : '');
+        b.textContent = String(n);
+        b.addEventListener('click', function() {
+            browsePageSize = n;
+            browsePage = 0;
+            renderBrowsePage();
+        });
+        sizeWrap.appendChild(b);
+    });
+    nav.appendChild(sizeWrap);
+
+    container.appendChild(nav);
+    updateBrowseBulkBar();
+}
+
+function syncBrowseHeaderCheck() {
+    var checkAll = document.getElementById('browse-check-all');
+    if (!checkAll) return;
+    var boxes = document.querySelectorAll('#browse-card-list .browse-check');
+    var checked = 0;
+    boxes.forEach(function(cb) { if (cb.checked) checked++; });
+    checkAll.checked = boxes.length > 0 && checked === boxes.length;
+    checkAll.indeterminate = checked > 0 && checked < boxes.length;
+}
+
+function updateBrowseBulkBar() {
+    var bar = document.getElementById('browse-bulk-bar');
+    var count = document.getElementById('browse-bulk-count');
+    if (!bar) return;
+    var n = browseSelected.size;
+    bar.hidden = n === 0;
+    if (count) count.textContent = n + ' selected';
+}
+
+function clearBrowseSelection() {
+    browseSelected.clear();
+    document.querySelectorAll('#browse-card-list .browse-check').forEach(function(cb) {
+        cb.checked = false;
+        var rowEl = cb.closest('.browse-row');
+        if (rowEl) rowEl.classList.remove('browse-row-selected');
+    });
+    syncBrowseHeaderCheck();
+    updateBrowseBulkBar();
+}
+
+function bulkDeleteBrowse() {
+    var n = browseSelected.size;
+    if (!n || !bridge) return;
+    showConfirm('Delete ' + n + (n === 1 ? ' card' : ' cards') + '? This cannot be undone.', function() {
+        bridge.deleteCardsFromBrowser(JSON.stringify(Array.from(browseSelected)));
+        browseSelected.clear();
+        updateBrowseBulkBar();
+    });
+}
+
+function bulkMoveBrowse() {
+    var n = browseSelected.size;
+    var deckSel = document.getElementById('browse-bulk-deck');
+    var deckId = deckSel ? parseInt(deckSel.value, 10) : 0;
+    if (!n || !deckId || !bridge) return;
+    bridge.moveCardsToDeck(JSON.stringify(Array.from(browseSelected)), deckId);
+    browseSelected.clear();
+    updateBrowseBulkBar();
 }
 
 var editCardData = null; // Store the card being edited

@@ -625,6 +625,107 @@ code {
     color: var(--blue);
     border: 1.5px solid rgba(37, 99, 235, 0.2);
 }
+.browse-badge-learning {
+    background: rgba(245, 158, 11, 0.12);
+    color: #f59e0b;
+    border: 1.5px solid rgba(245, 158, 11, 0.25);
+}
+.browse-badge-young {
+    background: rgba(170, 0, 255, 0.12);
+    color: #cc66ff;
+    border: 1.5px solid rgba(170, 0, 255, 0.25);
+}
+.browse-badge-mature {
+    background: rgba(52, 211, 153, 0.12);
+    color: #34d399;
+    border: 1.5px solid rgba(52, 211, 153, 0.25);
+}
+
+/* Status badges stand on their own in the Status column - no leading gap. */
+.browse-table .browse-badge { margin-left: 0; }
+
+/* Front column: the part the user scans, so give it presence + JP-aware faces. */
+.browse-table td.browse-front {
+    font-family: 'Inter', 'Hiragino Kaku Gothic ProN', 'Yu Gothic', Meiryo, system-ui, sans-serif;
+    font-size: 1.05rem;
+    color: var(--text-1);
+    font-weight: 600;
+}
+
+/* Selection checkboxes */
+.browse-table .browse-check-cell {
+    width: 2.2rem;
+    text-align: center;
+    cursor: default;
+}
+.browse-table input[type="checkbox"] {
+    accent-color: var(--accent);
+    width: 0.95rem;
+    height: 0.95rem;
+    cursor: pointer;
+}
+.browse-row-selected,
+.browse-row-selected:hover { background-color: rgba(170, 0, 255, 0.16); }
+.browse-row-selected td { color: var(--text-1); }
+
+/* Due-date urgency */
+.browse-table td.browse-due-today { color: #f59e0b; font-weight: 600; }
+.browse-table td.browse-due-overdue { color: #f87171; font-weight: 600; }
+
+/* Bulk action bar - appears once something is selected. */
+.browse-bulk-bar[hidden] { display: none; }
+.browse-bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    padding: 0.55rem 0.85rem;
+    margin-bottom: 0.85rem;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(170, 0, 255, 0.16), rgba(204, 102, 255, 0.06));
+    border: 1.5px solid rgba(170, 0, 255, 0.35);
+    animation: fadeIn 0.25s ease;
+}
+.browse-bulk-count {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-right: 0.4rem;
+}
+.browse-bulk-btn { font-size: 0.8rem; }
+
+/* Pagination footer */
+.browse-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.6rem;
+    flex-wrap: wrap;
+    margin-top: 0.9rem;
+}
+.browse-page-range,
+.browse-page-info {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.browse-page-btn {
+    background-color: #2d2a3e;
+    min-width: 2rem;
+    font-size: 0.8rem;
+}
+.browse-page-btn-on {
+    background: var(--accent);
+    color: #fff;
+}
+.browse-page-size {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    margin-left: 0.6rem;
+}
 
 /* ── Review - clean white card feel ──────────────────────── */
 #review-front-text, #review-back-text {

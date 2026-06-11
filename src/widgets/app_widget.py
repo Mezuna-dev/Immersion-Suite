@@ -614,6 +614,26 @@ class AppBridge(QObject):
     def deleteCardFromBrowser(self, card_id):
         database.delete_card(card_id)
 
+    # Bulk operations from the card browser's selection bar. Both refresh the
+    # browser afterwards so the list reflects the change with current filters.
+    @pyqtSlot(str)
+    def deleteCardsFromBrowser(self, ids_json):
+        try:
+            ids = json.loads(ids_json)
+        except (ValueError, TypeError):
+            return
+        database.delete_cards(ids)
+        self.web_view.page().runJavaScript('fetchBrowseCards();')
+
+    @pyqtSlot(str, int)
+    def moveCardsToDeck(self, ids_json, deck_id):
+        try:
+            ids = json.loads(ids_json)
+        except (ValueError, TypeError):
+            return
+        database.move_cards_to_deck(ids, deck_id)
+        self.web_view.page().runJavaScript('fetchBrowseCards();')
+
     @pyqtSlot(int)
     def getCardForEdit(self, card_id):
         con = database.create_db_connection()
