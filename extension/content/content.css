@@ -1,5 +1,5 @@
 ::highlight(immersion-match) {
-  background-color: rgba(170, 0, 255, 0.20);
+  background-color: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.20);
   border-radius: 2px;
 }
 
@@ -112,14 +112,14 @@
    resolves to transparent (no underline). Unknown defaults to the purple
    underline. A clean underline keeps the text crisp instead of smearing a
    sentence of marked words into one block. Marking is gated by the 語 toggle. */
-.imm-yt-subbar-text .imm-word.imm-unknown  { border-bottom-color: var(--imm-unknown-color, rgba(170, 0, 255, 0.9)); }
+.imm-yt-subbar-text .imm-word.imm-unknown  { border-bottom-color: var(--imm-unknown-color, rgba(var(--imm-acc-rgb, 170, 0, 255), 0.9)); }
 .imm-yt-subbar-text .imm-word.imm-learning { border-bottom-color: var(--imm-learning-color, rgba(245, 158, 11, 0.9)); }
 .imm-yt-subbar-text .imm-word.imm-known    { border-bottom-color: var(--imm-known-color, transparent); }
 .imm-yt-subbar-text .imm-word.imm-ignored  { border-bottom-color: var(--imm-ignored-color, transparent); }
 
 /* The word under the cursor still pops with a faint fill. */
 .imm-yt-subbar-text .imm-word.imm-unknown:hover {
-  background: rgba(170, 0, 255, 0.22);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.22);
 }
 .imm-yt-subbar-text .imm-word.imm-learning:hover {
   background: rgba(245, 158, 11, 0.22);
@@ -197,8 +197,8 @@
 
 .imm-yt-btn:hover { background: rgba(255, 255, 255, 0.12); }
 .imm-yt-btn:active { background: rgba(255, 255, 255, 0.18); }
-.imm-yt-btn.is-on { background: rgba(170, 0, 255, 0.55); color: #fff; }
-.imm-yt-btn.is-on:hover { background: rgba(170, 0, 255, 0.70); }
+.imm-yt-btn.is-on { background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.55); color: #fff; }
+.imm-yt-btn.is-on:hover { background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.70); }
 .imm-yt-btn.is-unavailable { color: rgba(255, 255, 255, 0.45); }
 .imm-yt-btn.is-unavailable.is-on { background: rgba(120, 50, 50, 0.55); }
 
@@ -288,9 +288,9 @@
 }
 .imm-yt-addfield-btn {
   appearance: none;
-  border: 1px dashed rgba(170, 0, 255, 0.45);
+  border: 1px dashed rgba(var(--imm-acc-rgb, 170, 0, 255), 0.45);
   background: transparent;
-  color: #cc66ff;
+  color: var(--imm-acc-light, #cc66ff);
   border-radius: 5px;
   padding: 4px 10px;
   font: inherit;
@@ -299,7 +299,7 @@
   cursor: pointer;
   flex: 0 0 auto;
 }
-.imm-yt-addfield-btn:hover { background: rgba(170, 0, 255, 0.15); }
+.imm-yt-addfield-btn:hover { background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.15); }
 .imm-yt-addfield-btn:disabled { opacity: .6; cursor: default; }
 .imm-yt-addfield-name { flex: 1; }
 .imm-yt-fieldvals .imm-yt-field { flex: 1 1 100%; }
@@ -316,7 +316,7 @@
   font-size: 13px;
   line-height: 1.5;
 }
-.imm-yt-fieldval:focus { outline: none; border-color: rgba(170, 0, 255, 0.7); }
+.imm-yt-fieldval:focus { outline: none; border-color: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.7); }
 .imm-yt-fieldval-auto {
   display: inline-block;
   align-self: flex-start;
@@ -324,9 +324,9 @@
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(170, 0, 255, 0.18);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.18);
   color: #e0d3ff;
-  border: 1px solid rgba(170, 0, 255, 0.30);
+  border: 1px solid rgba(var(--imm-acc-rgb, 170, 0, 255), 0.30);
 }
 
 /* Subtitle-look settings popover (the ⚙ cog). Reuses .imm-yt-card-panel frame,
@@ -431,13 +431,13 @@
   cursor: pointer;
 }
 .imm-yt-marker-toggle input[type="checkbox"] {
-  accent-color: #aa00ff;
+  accent-color: var(--imm-acc, #aa00ff);
   cursor: pointer;
 }
 .imm-yt-range-row { display: flex; align-items: center; gap: 10px; }
 .imm-yt-range-row input[type="range"] {
   flex: 1;
-  accent-color: #aa00ff;
+  accent-color: var(--imm-acc, #aa00ff);
   cursor: pointer;
 }
 .imm-yt-range-val {
@@ -450,7 +450,7 @@
   align-self: flex-start;
   background: none;
   border: none;
-  color: rgba(204, 102, 255, 0.95);
+  color: rgba(var(--imm-acc-light-rgb, 204, 102, 255), 0.95);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
@@ -487,7 +487,7 @@
 
 /* Primary - mirrors the app's gradient + glow-lift + spring-squish signature. */
 .imm-yt-btn-primary {
-  background: linear-gradient(135deg, #aa00ff, #cc66ff);
+  background: linear-gradient(135deg, var(--imm-acc, #aa00ff), var(--imm-acc-light, #cc66ff));
   border: none;
   color: #fff;
   cursor: pointer;
@@ -496,7 +496,7 @@
   font-size: 13px;
   font-weight: 700;
   border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+  box-shadow: 0 2px 8px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.35);
   transition: box-shadow 0.18s ease,
               transform 0.14s cubic-bezier(0.34, 1.4, 0.64, 1),
               filter 0.15s ease;
@@ -504,11 +504,11 @@
 .imm-yt-btn-primary:hover {
   filter: brightness(1.06);
   transform: translateY(-2px);
-  box-shadow: 0 7px 18px rgba(170, 0, 255, 0.45);
+  box-shadow: 0 7px 18px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.45);
 }
 .imm-yt-btn-primary:active {
   transform: scale(0.96);
-  box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+  box-shadow: 0 2px 8px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.35);
 }
 
 /* ── Sidebar subtitle queue ────────────────────────────────────────────── */
@@ -526,18 +526,18 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
 }
 
 @keyframes imm-yt-queue-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(170, 0, 255, 0.45),
-                        0 4px 14px rgba(170, 0, 255, 0.18); }
-  50%      { box-shadow: 0 0 0 4px rgba(170, 0, 255, 0.08),
-                        0 6px 22px rgba(170, 0, 255, 0.28); }
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--imm-acc-rgb, 170, 0, 255), 0.45),
+                        0 4px 14px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.18); }
+  50%      { box-shadow: 0 0 0 4px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.08),
+                        0 6px 22px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.28); }
 }
 
 .imm-yt-queue {
   display: none;
   flex-direction: column;
   background:
-    radial-gradient(120% 80% at 0% 0%, rgba(170, 0, 255, 0.18), transparent 60%),
-    radial-gradient(120% 80% at 100% 100%, rgba(204, 102, 255, 0.10), transparent 55%),
+    radial-gradient(120% 80% at 0% 0%, rgba(var(--imm-acc-rgb, 170, 0, 255), 0.18), transparent 60%),
+    radial-gradient(120% 80% at 100% 100%, rgba(var(--imm-acc-light-rgb, 204, 102, 255), 0.10), transparent 55%),
     linear-gradient(180deg, #15131e 0%, #100e18 100%);
   color: #fff;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -582,8 +582,8 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #cc66ff, #aa00ff);
-  box-shadow: 0 0 10px rgba(204, 102, 255, 0.7);
+  background: linear-gradient(135deg, var(--imm-acc-light, #cc66ff), var(--imm-acc, #aa00ff));
+  box-shadow: 0 0 10px rgba(var(--imm-acc-light-rgb, 204, 102, 255), 0.7);
 }
 
 .imm-yt-queue-count {
@@ -591,7 +591,7 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   font-weight: 700;
   padding: 3px 9px;
   border-radius: 999px;
-  background: rgba(170, 0, 255, 0.22);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.22);
   color: #e0d3ff;
   letter-spacing: 0.04em;
   font-variant-numeric: tabular-nums;
@@ -677,7 +677,7 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   transition: background 0.15s ease, color 0.15s ease;
 }
 .imm-yt-queue-offset-btn:hover {
-  background: rgba(170, 0, 255, 0.35);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.35);
   color: #fff;
 }
 
@@ -702,8 +702,8 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   color: #fff;
 }
 .imm-yt-queue-offset-label.is-nonzero {
-  color: #cc66ff;
-  background: rgba(170, 0, 255, 0.18);
+  color: var(--imm-acc-light, #cc66ff);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.18);
 }
 
 .imm-yt-queue-list {
@@ -720,10 +720,10 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
 .imm-yt-queue-list::-webkit-scrollbar { width: 8px; }
 .imm-yt-queue-list::-webkit-scrollbar-track { background: transparent; }
 .imm-yt-queue-list::-webkit-scrollbar-thumb {
-  background: rgba(170, 0, 255, 0.30);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.30);
   border-radius: 4px;
 }
-.imm-yt-queue-list::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.55); }
+.imm-yt-queue-list::-webkit-scrollbar-thumb:hover { background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.55); }
 
 .imm-yt-queue-row {
   position: relative;
@@ -760,20 +760,20 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
 }
 
 .imm-yt-queue-row:hover {
-  background: rgba(170, 0, 255, 0.12);
-  border-color: rgba(170, 0, 255, 0.30);
+  background: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.12);
+  border-color: rgba(var(--imm-acc-rgb, 170, 0, 255), 0.30);
   transform: translateX(2px);
 }
 
 .imm-yt-queue-row.is-active {
   background: linear-gradient(135deg,
-    rgba(170, 0, 255, 0.32) 0%,
-    rgba(204, 102, 255, 0.16) 100%);
-  border-color: rgba(204, 102, 255, 0.55);
+    rgba(var(--imm-acc-rgb, 170, 0, 255), 0.32) 0%,
+    rgba(var(--imm-acc-light-rgb, 204, 102, 255), 0.16) 100%);
+  border-color: rgba(var(--imm-acc-light-rgb, 204, 102, 255), 0.55);
   animation: imm-yt-queue-pop 0.28s ease, imm-yt-queue-glow 2.4s ease-in-out infinite;
 }
 .imm-yt-queue-row.is-active::before {
-  background: linear-gradient(135deg, #cc66ff, #aa00ff);
+  background: linear-gradient(135deg, var(--imm-acc-light, #cc66ff), var(--imm-acc, #aa00ff));
   color: #1a1226;
 }
 .imm-yt-queue-row.is-active .imm-yt-queue-text { color: #fff; font-weight: 600; }
@@ -790,7 +790,7 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
   padding: 4px 9px;
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.05);
-  color: rgba(204, 102, 255, 0.95);
+  color: rgba(var(--imm-acc-light-rgb, 204, 102, 255), 0.95);
   font-variant-numeric: tabular-nums;
   font-size: 13px;
   font-weight: 600;
@@ -832,11 +832,11 @@ body.imm-yt-queue-open #secondary-inner > *:not(#__imm_yt_queue) {
 }
 
 .imm-yt-queue-mine:hover {
-  background: linear-gradient(135deg, #aa00ff, #cc66ff);
+  background: linear-gradient(135deg, var(--imm-acc, #aa00ff), var(--imm-acc-light, #cc66ff));
   color: #fff;
   border-color: transparent;
   transform: scale(1.08);
-  box-shadow: 0 4px 12px rgba(170, 0, 255, 0.45);
+  box-shadow: 0 4px 12px rgba(var(--imm-acc-rgb, 170, 0, 255), 0.45);
 }
 
 .imm-yt-queue-row.is-active .imm-yt-queue-mine {

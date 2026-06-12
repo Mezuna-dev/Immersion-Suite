@@ -20,10 +20,49 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
     bridge.checkForUpdates(false);  // silent startup check; backend honours the setting
 });
 
+// Theme presets - the accent family applied app-wide (and mirrored by the
+// browser extension via the get_theme WS action). 'violet' is the historical
+// default look. Keys are persisted in settings.json, so renaming one needs a
+// migration. Deprecates the old free-form accent_color picker; accent_color is
+// still written (= theme accent) for anything legacy that reads it.
+var THEMES = {
+    violet:  { name: 'Neon Violet', accent: '#aa00ff', dark: '#7f00bf', light: '#cc66ff', rgb: '170, 0, 255' },
+    ocean:   { name: 'Ocean',       accent: '#2563eb', dark: '#1d4ed8', light: '#60a5fa', rgb: '37, 99, 235' },
+    emerald: { name: 'Emerald',     accent: '#059669', dark: '#047857', light: '#34d399', rgb: '5, 150, 105' },
+    sunset:  { name: 'Sunset',      accent: '#ea580c', dark: '#c2410c', light: '#fb923c', rgb: '234, 88, 12' },
+    sakura:  { name: 'Sakura',      accent: '#db2777', dark: '#be185d', light: '#f472b6', rgb: '219, 39, 119' },
+};
+var currentTheme = 'violet';
+var currentMode = 'light';
+
+function applyThemeVars(themeId, mode) {
+    var t = THEMES[themeId] || THEMES.violet;
+    var root = document.documentElement;
+    root.style.setProperty('--accent', t.accent);
+    root.style.setProperty('--accent-dark', t.dark);
+    root.style.setProperty('--accent-light', t.light);
+    root.style.setProperty('--accent-rgb', t.rgb);
+    root.style.setProperty('--accent-dim', 'rgba(' + t.rgb + (mode === 'dark' ? ', 0.16)' : ', 0.1)'));
+    root.setAttribute('data-mode', mode === 'dark' ? 'dark' : 'light');
+    currentAccent = t.accent;  // legacy var, still used for chart/badge inline colours
+}
+
+// Migration: installs that saved a custom accent_color before themes existed
+// snap to the theme with that exact accent, else the default.
+function themeFromSettings(settings) {
+    if (settings.theme && THEMES[settings.theme]) return settings.theme;
+    var legacy = (settings.accent_color || '').toLowerCase();
+    for (var id in THEMES) {
+        if (THEMES[id].accent.toLowerCase() === legacy) return id;
+    }
+    return 'violet';
+}
+
 function applyAppSettings(settings) {
-    currentAccent = settings.accent_color || '#aa00ff';
+    currentTheme = themeFromSettings(settings);
+    currentMode = settings.ui_mode === 'dark' ? 'dark' : 'light';
+    applyThemeVars(currentTheme, currentMode);
     currentFontSize = settings.font_size || 'medium';
-    document.documentElement.style.setProperty('--accent', currentAccent);
     document.documentElement.style.setProperty('--review-font-size', FONT_SIZE_MAP[currentFontSize] || '2.5rem');
     currentSRSDefaults = {
         new_cards_limit: settings.default_new_cards_limit !== undefined ? settings.default_new_cards_limit : 15,
@@ -85,9 +124,56 @@ function startKeyCapture() {
     document.addEventListener('keydown', onKey, true);
 }
 
+// Pending (unsaved) appearance choices while the settings page is open.
+var pendingTheme = null;
+var pendingMode = null;
+
+function renderThemeSwatches() {
+    var wrap = document.getElementById('settings-theme-swatches');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    Object.keys(THEMES).forEach(function(id) {
+        var t = THEMES[id];
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'theme-swatch' + ((pendingTheme || currentTheme) === id ? ' is-active' : '');
+        btn.dataset.theme = id;
+        btn.style.setProperty('--swatch-color', t.accent);
+        btn.style.setProperty('--swatch-light', t.light);
+        var dot = document.createElement('span');
+        dot.className = 'theme-swatch-dot';
+        btn.appendChild(dot);
+        btn.appendChild(document.createTextNode(t.name));
+        btn.addEventListener('click', function() { previewTheme(id); });
+        wrap.appendChild(btn);
+    });
+}
+
+function syncModeButtons() {
+    var mode = pendingMode || currentMode;
+    document.querySelectorAll('#settings-mode-toggle .mode-btn').forEach(function(b) {
+        b.classList.toggle('is-active', b.dataset.mode === mode);
+    });
+}
+
+// Live preview: applied immediately, persisted only on Save.
+function previewTheme(id) {
+    pendingTheme = id;
+    applyThemeVars(id, pendingMode || currentMode);
+    renderThemeSwatches();
+}
+
+function previewMode(mode) {
+    pendingMode = mode;
+    applyThemeVars(pendingTheme || currentTheme, mode);
+    syncModeButtons();
+}
+
 function showAppSettings() {
-    document.getElementById('settings-accent-color').value = currentAccent;
-    document.getElementById('settings-accent-hex').textContent = currentAccent;
+    pendingTheme = currentTheme;
+    pendingMode = currentMode;
+    renderThemeSwatches();
+    syncModeButtons();
     document.getElementById('settings-font-size').value = currentFontSize;
     document.getElementById('srs-default-new-limit').value = currentSRSDefaults.new_cards_limit;
     document.getElementById('srs-default-learning-steps').value = currentSRSDefaults.learning_steps;
@@ -127,10 +213,6 @@ function updateDataInfo(info) {
     if (statsEl) statsEl.textContent = info.deck_count + ' decks · ' + info.card_count + ' cards · ' + info.review_count + ' reviews';
 }
 
-function previewAccent(color) {
-    document.documentElement.style.setProperty('--accent', color);
-    document.getElementById('settings-accent-hex').textContent = color;
-}
 
 // ===== Updates =====
 
@@ -249,7 +331,9 @@ function applyRatingButtonMode() {
 
 function buildSettings(overrides) {
     return Object.assign({
-        accent_color: currentAccent,
+        theme: currentTheme,
+        ui_mode: currentMode,
+        accent_color: currentAccent,  // deprecated; kept = theme accent for legacy readers
         font_size: currentFontSize,
         default_new_cards_limit: currentSRSDefaults.new_cards_limit,
         default_learning_steps: currentSRSDefaults.learning_steps,
@@ -267,7 +351,9 @@ function buildSettings(overrides) {
 function saveAppSettings() {
     var newLimit = parseInt(document.getElementById('srs-default-new-limit').value, 10);
     var settings = buildSettings({
-        accent_color: document.getElementById('settings-accent-color').value,
+        theme: pendingTheme || currentTheme,
+        ui_mode: pendingMode || currentMode,
+        accent_color: (THEMES[pendingTheme || currentTheme] || THEMES.violet).accent,
         font_size: document.getElementById('settings-font-size').value,
         default_new_cards_limit: isNaN(newLimit) ? 15 : newLimit,
         default_learning_steps: document.getElementById('srs-default-learning-steps').value.trim() || '1 10',
@@ -285,7 +371,7 @@ function saveAppSettings() {
 }
 
 function resetAppearanceSettings() {
-    var settings = buildSettings({ accent_color: '#aa00ff', font_size: 'medium' });
+    var settings = buildSettings({ theme: 'violet', ui_mode: 'light', accent_color: '#aa00ff', font_size: 'medium' });
     applyAppSettings(settings);
     showAppSettings();
     if (bridge) bridge.saveAppSettings(JSON.stringify(settings));
@@ -327,7 +413,7 @@ function toggleSidebar() {
 }
 
 function showView(viewId) {
-    document.documentElement.style.setProperty('--accent', currentAccent);
+    applyThemeVars(currentTheme, currentMode);
     document.querySelectorAll('.view-section').forEach(function(el) {
         el.classList.add('view-hidden');
     });

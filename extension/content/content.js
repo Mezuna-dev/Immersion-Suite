@@ -37,6 +37,19 @@
   let reviewBeforeAdd   = true;
   const REVIEW_KEY      = 'imm_mine_review';
 
+  // Appearance: mirrors the desktop app's theme preset + light/dark mode
+  // (fetched over the WS bridge, cached for offline). Keys/palettes must stay
+  // in sync with THEMES in the app's app.js.
+  const THEME_KEY = 'imm_theme';
+  const IMM_THEMES = {
+    violet:  { accent: '#aa00ff', light: '#cc66ff', rgb: '170, 0, 255', lightRgb: '204, 102, 255' },
+    ocean:   { accent: '#2563eb', light: '#60a5fa', rgb: '37, 99, 235', lightRgb: '96, 165, 250' },
+    emerald: { accent: '#059669', light: '#34d399', rgb: '5, 150, 105', lightRgb: '52, 211, 153' },
+    sunset:  { accent: '#ea580c', light: '#fb923c', rgb: '234, 88, 12', lightRgb: '251, 146, 60' },
+    sakura:  { accent: '#db2777', light: '#f472b6', rgb: '219, 39, 119', lightRgb: '244, 114, 182' },
+  };
+  let themeInfo = null;   // { theme, mode } - null until loaded
+
   // Known-words set (manual marks + SRS card words, lives in the desktop DB).
   let knownSet          = new Set();
   let ignoredSet        = new Set();   // words excluded from comprehension
@@ -419,20 +432,35 @@
   const POPUP_CSS = `
     :host { all: initial; }
 
+    /* Theme tokens - defaults are the light "Neon Violet" look. The desktop
+       app's chosen theme/mode overrides these via inline style on the host
+       element (see applyThemeToHost), keeping the popup coherent with the app. */
+    :host {
+      --acc: #aa00ff;
+      --acc-light: #cc66ff;
+      --acc-rgb: 170, 0, 255;
+      --bg: #ffffff;
+      --bg-soft: #faf8ff;
+      --fg: #1a1133;
+      --fg-2: #6b5f8a;
+      --border: rgba(0, 0, 0, 0.07);
+      --border-md: rgba(0, 0, 0, 0.11);
+    }
+
     #popup {
       position: fixed;
       width: 440px;
-      background: #ffffff;
-      border: 1.5px solid rgba(0, 0, 0, 0.11);
+      background: var(--bg);
+      border: 1.5px solid var(--border-md);
       border-top: none;
       border-radius: 16px;
       box-shadow:
-        0 1px 3px rgba(0, 0, 0, 0.06),
+        0 1px 3px var(--border),
         0 4px 16px rgba(0, 0, 0, 0.08),
-        0 16px 48px rgba(170, 0, 255, 0.10);
+        0 16px 48px rgba(var(--acc-rgb), 0.10);
       font-family: 'Inter', system-ui, -apple-system, sans-serif;
       font-size: 14px;
-      color: #1a1133;
+      color: var(--fg);
       overflow: hidden;
       display: none;
       z-index: 2147483647;
@@ -444,7 +472,7 @@
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 3px;
-      background: linear-gradient(90deg, #aa00ff, #cc66ff);
+      background: linear-gradient(90deg, var(--acc), var(--acc-light));
       pointer-events: none;
     }
 
@@ -458,10 +486,10 @@
     }
     #popup-content::-webkit-scrollbar       { width: 6px; }
     #popup-content::-webkit-scrollbar-track { background: transparent; }
-    #popup-content::-webkit-scrollbar-thumb { background: rgba(170, 0, 255, 0.20); border-radius: 3px; }
-    #popup-content::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.35); }
+    #popup-content::-webkit-scrollbar-thumb { background: rgba(var(--acc-rgb), 0.20); border-radius: 3px; }
+    #popup-content::-webkit-scrollbar-thumb:hover { background: rgba(var(--acc-rgb), 0.35); }
 
-    .entry { padding: 14px 20px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
+    .entry { padding: 14px 20px 16px; border-bottom: 1px solid var(--border); }
     .entry:last-child { border-bottom: none; }
 
     .word-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
@@ -514,8 +542,8 @@
     .ignore-btn.is-ignored { background: #64748b; color: #fff; border-color: transparent; }
     .ignore-btn:disabled { opacity: .6; cursor: default; transform: none; }
     .mine-btn, .mine-config {
-      appearance: none; border: 1px solid rgba(170, 0, 255, 0.25);
-      background: rgba(170, 0, 255, 0.08); color: #aa00ff;
+      appearance: none; border: 1px solid rgba(var(--acc-rgb), 0.25);
+      background: rgba(var(--acc-rgb), 0.08); color: var(--acc);
       font-size: 14px; line-height: 1; cursor: pointer;
       width: 26px; height: 26px; border-radius: 7px;
       display: inline-flex; align-items: center; justify-content: center;
@@ -523,86 +551,86 @@
     }
     .mine-config { font-size: 12px; }
     .mine-btn:hover, .mine-config:hover {
-      background: linear-gradient(135deg, #aa00ff, #cc66ff); color: #fff; transform: translateY(-1px);
+      background: linear-gradient(135deg, var(--acc), var(--acc-light)); color: #fff; transform: translateY(-1px);
     }
     .mine-btn:disabled { opacity: .6; cursor: default; transform: none; }
 
     /* Mining panel */
     .mine-panel { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
-    .mine-loading { font-size: 12.5px; color: #6b5f8a; }
+    .mine-loading { font-size: 12.5px; color: var(--fg-2); }
     .mine-head { display: flex; align-items: center; gap: 8px; }
     .mine-back {
-      appearance: none; border: none; background: rgba(0, 0, 0, 0.05); color: #1a1133;
+      appearance: none; border: none; background: var(--border); color: var(--fg);
       width: 24px; height: 24px; border-radius: 6px; cursor: pointer; font-size: 14px; line-height: 1;
     }
-    .mine-back:hover { background: rgba(170, 0, 255, 0.12); }
-    .mine-title { font-size: 16px; font-weight: 700; color: #1a1133; word-break: break-all; }
+    .mine-back:hover { background: rgba(var(--acc-rgb), 0.12); }
+    .mine-title { font-size: 16px; font-weight: 700; color: var(--fg); word-break: break-all; }
     .mine-row { display: flex; align-items: center; gap: 10px; }
-    .mine-label { flex: 0 0 92px; font-size: 11.5px; color: #6b5f8a; font-weight: 600; }
+    .mine-label { flex: 0 0 92px; font-size: 11.5px; color: var(--fg-2); font-weight: 600; }
     .mine-select {
       flex: 1; min-width: 0; appearance: none;
-      background: #faf8ff; color: #1a1133; border: 1px solid rgba(170, 0, 255, 0.20);
+      background: var(--bg-soft); color: var(--fg); border: 1px solid rgba(var(--acc-rgb), 0.20);
       border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12.5px;
     }
-    .mine-select:focus { outline: none; border-color: #aa00ff; }
+    .mine-select:focus { outline: none; border-color: var(--acc); }
     .mine-select-sm { font-size: 12px; padding: 5px 7px; }
     .mine-fieldmap {
       display: flex; flex-direction: column; gap: 7px;
-      padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
+      padding-top: 8px; border-top: 1px solid var(--border);
     }
     /* Pre-add review: one stacked label + editable value per card field.
        No inner scroller - #popup-content scrolls the whole panel. */
     .mine-fieldvals {
       display: flex; flex-direction: column; gap: 8px;
-      padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
+      padding-top: 8px; border-top: 1px solid var(--border);
     }
     .mine-addfield { display: flex; align-items: center; gap: 6px; }
     .mine-addfield-btn {
-      appearance: none; border: 1px dashed rgba(170, 0, 255, 0.35);
-      background: transparent; color: #aa00ff; border-radius: 7px;
+      appearance: none; border: 1px dashed rgba(var(--acc-rgb), 0.35);
+      background: transparent; color: var(--acc); border-radius: 7px;
       padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
     }
-    .mine-addfield-btn:hover { background: rgba(170, 0, 255, 0.08); }
+    .mine-addfield-btn:hover { background: rgba(var(--acc-rgb), 0.08); }
     .mine-addfield-ok, .mine-addfield-cancel {
-      appearance: none; border: 1px solid rgba(170, 0, 255, 0.25);
-      background: rgba(170, 0, 255, 0.08); color: #aa00ff;
+      appearance: none; border: 1px solid rgba(var(--acc-rgb), 0.25);
+      background: rgba(var(--acc-rgb), 0.08); color: var(--acc);
       width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
       font-size: 13px; line-height: 1; flex: 0 0 auto;
     }
-    .mine-addfield-ok:hover, .mine-addfield-cancel:hover { background: rgba(170, 0, 255, 0.18); }
+    .mine-addfield-ok:hover, .mine-addfield-cancel:hover { background: rgba(var(--acc-rgb), 0.18); }
     .mine-addfield-ok:disabled { opacity: .6; cursor: default; }
     .mine-row-stack { flex-direction: column; align-items: stretch; gap: 3px; }
     .mine-row-stack .mine-label { flex: none; }
     .mine-input {
       width: 100%; box-sizing: border-box; appearance: none; resize: vertical;
-      background: #faf8ff; color: #1a1133; border: 1px solid rgba(170, 0, 255, 0.20);
+      background: var(--bg-soft); color: var(--fg); border: 1px solid rgba(var(--acc-rgb), 0.20);
       border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12.5px; line-height: 1.5;
     }
-    .mine-input:focus { outline: none; border-color: #aa00ff; }
+    .mine-input:focus { outline: none; border-color: var(--acc); }
     .mine-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 8px; }
-    .mine-status { font-size: 12px; color: #6b5f8a; }
+    .mine-status { font-size: 12px; color: var(--fg-2); }
     .mine-status[data-level="ok"]  { color: #16a34a; font-weight: 600; }
     .mine-status[data-level="err"] { color: #dc2626; }
     .mine-add {
       appearance: none; border: none; cursor: pointer;
-      background: linear-gradient(135deg, #aa00ff, #cc66ff); color: #fff;
+      background: linear-gradient(135deg, var(--acc), var(--acc-light)); color: #fff;
       font-weight: 700; font-size: 13px; padding: 8px 16px; border-radius: 10px;
-      box-shadow: 0 2px 8px rgba(170, 0, 255, 0.35);
+      box-shadow: 0 2px 8px rgba(var(--acc-rgb), 0.35);
       transition: transform .14s cubic-bezier(0.34, 1.4, 0.64, 1), filter .15s ease;
     }
     .mine-add:hover { filter: brightness(1.06); transform: translateY(-2px); }
     .mine-add:active { transform: scale(0.96); }
     .mine-add:disabled { opacity: .7; cursor: default; transform: none; }
 
-    .head-ruby  { font-size: 26px; font-weight: 700; color: #1a1133; letter-spacing: .02em; ruby-position: over; line-height: 2.2; }
-    .head-ruby rt { font-size: 13px; font-weight: 600; color: #6b5f8a; letter-spacing: .04em; margin-bottom: 6px; }
-    .head-plain { font-size: 26px; font-weight: 700; color: #1a1133; letter-spacing: .02em; }
+    .head-ruby  { font-size: 26px; font-weight: 700; color: var(--fg); letter-spacing: .02em; ruby-position: over; line-height: 2.2; }
+    .head-ruby rt { font-size: 13px; font-weight: 600; color: var(--fg-2); letter-spacing: .04em; margin-bottom: 6px; }
+    .head-plain { font-size: 26px; font-weight: 700; color: var(--fg); letter-spacing: .02em; }
     .alt-kanji  { font-size: 14px; color: #a898c8; align-self: center; }
 
     .reason {
       display: inline-block; padding: 2px 8px 3px; font-size: 10px; font-weight: 600;
-      color: #aa00ff; background: rgba(170, 0, 255, 0.08);
-      border: 1px solid rgba(170, 0, 255, 0.18); border-radius: 5px;
+      color: var(--acc); background: rgba(var(--acc-rgb), 0.08);
+      border: 1px solid rgba(var(--acc-rgb), 0.18); border-radius: 5px;
       letter-spacing: .3px; text-transform: lowercase; white-space: nowrap;
     }
 
@@ -611,9 +639,9 @@
     .etag-common { color: #16a34a; background: rgba(22, 163, 74, 0.08);   border: 1px solid rgba(22, 163, 74, 0.20); }
     .etag-freq   { color: #d97706; background: rgba(217, 119, 6, 0.08);   border: 1px solid rgba(217, 119, 6, 0.20); }
     .etag-news   { color: #2563eb; background: rgba(37, 99, 235, 0.08);   border: 1px solid rgba(37, 99, 235, 0.18); }
-    .etag-loan   { color: #aa00ff; background: rgba(170, 0, 255, 0.08);  border: 1px solid rgba(170, 0, 255, 0.20); }
-    .etag-spec   { color: #6b5f8a; background: rgba(107, 95, 138, 0.07);  border: 1px solid rgba(107, 95, 138, 0.15); }
-    .etag-misc   { color: #6b5f8a; background: rgba(107, 95, 138, 0.06);  border: 1px solid rgba(107, 95, 138, 0.12); }
+    .etag-loan   { color: var(--acc); background: rgba(var(--acc-rgb), 0.08);  border: 1px solid rgba(var(--acc-rgb), 0.20); }
+    .etag-spec   { color: var(--fg-2); background: rgba(107, 95, 138, 0.07);  border: 1px solid rgba(107, 95, 138, 0.15); }
+    .etag-misc   { color: var(--fg-2); background: rgba(107, 95, 138, 0.06);  border: 1px solid rgba(107, 95, 138, 0.12); }
     .etag-prio   { color: #d97706; background: rgba(217, 119, 6, 0.08);   border: 1px solid rgba(217, 119, 6, 0.20); }
 
     .senses { display: flex; flex-direction: column; gap: 10px; }
@@ -621,50 +649,50 @@
 
     .pos-row { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 6px; }
     .pos {
-      font-size: 10px; color: #aa00ff; text-transform: lowercase; letter-spacing: .3px;
-      font-weight: 600; padding: 3px 9px; background: rgba(170, 0, 255, 0.08);
-      border: 1px solid rgba(170, 0, 255, 0.20); border-radius: 5px; white-space: nowrap;
+      font-size: 10px; color: var(--acc); text-transform: lowercase; letter-spacing: .3px;
+      font-weight: 600; padding: 3px 9px; background: rgba(var(--acc-rgb), 0.08);
+      border: 1px solid rgba(var(--acc-rgb), 0.20); border-radius: 5px; white-space: nowrap;
     }
 
     .gloss-list { display: flex; flex-direction: column; gap: 2px; }
-    .gloss      { color: #1a1133; font-size: 13.5px; line-height: 1.55; padding-left: 4px; }
+    .gloss      { color: var(--fg); font-size: 13.5px; line-height: 1.55; padding-left: 4px; }
     .gloss-num  { color: #a898c8; font-size: 12px; font-weight: 600; margin-right: 2px; }
 
     .examples {
       margin: 6px 0 0 4px; display: flex; flex-direction: column; gap: 6px;
-      border-left: 2px solid rgba(170, 0, 255, 0.20); padding: 4px 0 4px 10px;
+      border-left: 2px solid rgba(var(--acc-rgb), 0.20); padding: 4px 0 4px 10px;
     }
-    .example-ja    { font-size: 13px; color: #1a1133; line-height: 1.9; }
-    .example-ja ruby rt { font-size: 10.5px; color: #6b5f8a; font-weight: 500; }
-    .example-en    { font-size: 12px; color: #6b5f8a; font-style: italic; line-height: 1.5; margin-top: 1px; }
+    .example-ja    { font-size: 13px; color: var(--fg); line-height: 1.9; }
+    .example-ja ruby rt { font-size: 10.5px; color: var(--fg-2); font-weight: 500; }
+    .example-en    { font-size: 12px; color: var(--fg-2); font-style: italic; line-height: 1.5; margin-top: 1px; }
 
     .forms {
       margin-top: 12px; padding: 8px 10px;
-      background: rgba(170, 0, 255, 0.04); border: 1px solid rgba(170, 0, 255, 0.12); border-radius: 6px;
+      background: rgba(var(--acc-rgb), 0.04); border: 1px solid rgba(var(--acc-rgb), 0.12); border-radius: 6px;
     }
     .forms-label    { font-size: 9.5px; font-weight: 700; color: #a898c8; text-transform: uppercase; letter-spacing: .6px; margin-bottom: 4px; }
-    .forms-kanji    { font-size: 14px; color: #1a1133; font-weight: 600; margin-bottom: 4px; }
+    .forms-kanji    { font-size: 14px; color: var(--fg); font-weight: 600; margin-bottom: 4px; }
     .forms-readings { display: flex; flex-wrap: wrap; gap: 6px; }
-    .form-reading   { font-size: 12px; color: #6b5f8a; padding: 1px 6px; border-radius: 4px; background: rgba(170, 0, 255, 0.06); border: 1px solid rgba(170, 0, 255, 0.12); }
+    .form-reading   { font-size: 12px; color: var(--fg-2); padding: 1px 6px; border-radius: 4px; background: rgba(var(--acc-rgb), 0.06); border: 1px solid rgba(var(--acc-rgb), 0.12); }
     .form-reading.form-pri  { color: #d97706; background: rgba(217, 119, 6, 0.08); border-color: rgba(217, 119, 6, 0.20); }
     .form-reading.form-rare { color: #a898c8; }
 
     .source {
       padding: 8px 20px 10px; font-size: 10px; color: #a898c8;
-      text-align: right; letter-spacing: .3px; border-top: 1px solid rgba(0, 0, 0, 0.06);
+      text-align: right; letter-spacing: .3px; border-top: 1px solid var(--border);
     }
     .error { padding: 18px 20px; color: #dc2626; font-size: 13px; line-height: 1.6; }
 
     #close-btn {
       position: absolute; top: 9px; right: 10px;
       width: 22px; height: 22px;
-      background: rgba(170, 0, 255, 0.08); border: 1px solid rgba(170, 0, 255, 0.18);
+      background: rgba(var(--acc-rgb), 0.08); border: 1px solid rgba(var(--acc-rgb), 0.18);
       border-radius: 50%; color: #a898c8; font-size: 15px; line-height: 22px;
       cursor: pointer; padding: 0; text-align: center; z-index: 1;
     }
     #close-btn:hover {
-      background: rgba(170, 0, 255, 0.15); border-color: rgba(170, 0, 255, 0.32);
-      color: #aa00ff;
+      background: rgba(var(--acc-rgb), 0.15); border-color: rgba(var(--acc-rgb), 0.32);
+      color: var(--acc);
     }
   `;
 
@@ -704,6 +732,7 @@
     const style = document.createElement('style');
     style.textContent = POPUP_CSS;
     shadowRoot.appendChild(style);
+    applyThemeToHost();
 
     popupEl = document.createElement('div');
     popupEl.id = 'popup';
@@ -952,6 +981,67 @@
   } catch (_) { /* no storage permission in some contexts */ }
 
   loadKnownWords();
+
+  // ── Theme sync ──────────────────────────────────────────────────────────
+  function applyThemeToHost() {
+    if (!themeInfo) return;
+    const t = IMM_THEMES[themeInfo.theme] || IMM_THEMES.violet;
+    // Page-level accent vars: drive content.css (selection highlight, the
+    // whole YouTube overlay) on every page, not just the popup's shadow root.
+    try {
+      const rootStyle = document.documentElement.style;
+      rootStyle.setProperty('--imm-acc', t.accent);
+      rootStyle.setProperty('--imm-acc-light', t.light);
+      rootStyle.setProperty('--imm-acc-rgb', t.rgb);
+      rootStyle.setProperty('--imm-acc-light-rgb', t.lightRgb);
+    } catch (_) {}
+    if (!shadowHost) return;
+    const s = shadowHost.style;
+    s.setProperty('--acc', t.accent);
+    s.setProperty('--acc-light', t.light);
+    s.setProperty('--acc-rgb', t.rgb);
+    if (themeInfo.mode === 'dark') {
+      s.setProperty('--bg', '#1c1825');
+      s.setProperty('--bg-soft', '#241e30');
+      s.setProperty('--fg', '#f1edfa');
+      s.setProperty('--fg-2', '#b3a6d4');
+      s.setProperty('--border', 'rgba(255, 255, 255, 0.09)');
+      s.setProperty('--border-md', 'rgba(255, 255, 255, 0.16)');
+    } else {
+      for (const p of ['--bg', '--bg-soft', '--fg', '--fg-2', '--border', '--border-md']) {
+        s.removeProperty(p);
+      }
+    }
+  }
+
+  function setThemeInfo(info, persist) {
+    if (!info || !info.theme) return;
+    themeInfo = { theme: info.theme, mode: info.mode === 'dark' ? 'dark' : 'light' };
+    applyThemeToHost();
+    if (persist) {
+      try { chrome.storage.local.set({ [THEME_KEY]: themeInfo }); } catch (_) {}
+    }
+  }
+
+  function loadTheme() {
+    // Cached copy first (instant, works offline), then the live app setting.
+    try {
+      chrome.storage.local.get(THEME_KEY, (d) => {
+        if (d && d[THEME_KEY] && !themeInfo) setThemeInfo(d[THEME_KEY], false);
+      });
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes[THEME_KEY] && changes[THEME_KEY].newValue) {
+          setThemeInfo(changes[THEME_KEY].newValue, false);
+        }
+      });
+    } catch (_) {}
+    try {
+      chrome.runtime.sendMessage({ action: 'get_theme' }).then((r) => {
+        if (r && !r.error && r.theme) setThemeInfo(r, true);
+      }).catch(() => {});
+    } catch (_) {}
+  }
+  loadTheme();
 
   // ── Sentence extraction (for the mined card's context field) ───────────────
   const SENT_MAX    = 140;                       // chars gathered each direction

@@ -26,7 +26,9 @@ DB_PATH = BASE_DIR / 'data' / 'app.db'
 SETTINGS_PATH = BASE_DIR / 'data' / 'settings.json'
 
 DEFAULT_SETTINGS = {
-    'accent_color': '#9067C6',
+    'theme': 'violet',        # preset id (see THEMES in app.js / the extension)
+    'ui_mode': 'light',       # 'light' | 'dark'
+    'accent_color': '#aa00ff',  # deprecated - kept in sync with the theme accent
     'font_size': 'medium',
     'default_new_cards_limit': 15,
     'default_learning_steps': '1 10',

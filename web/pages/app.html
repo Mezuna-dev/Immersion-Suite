@@ -860,12 +860,15 @@
                     <div class="card mb-3 settings-card" style="max-width: 560px;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title">Appearance</h2>
-                            <label class="form-label settings-label" for="settings-accent-color">Accent Color</label>
-                            <div class="d-flex align-items-center gap-3 mb-1">
-                                <input type="color" id="settings-accent-color" oninput="previewAccent(this.value)" style="width: 3rem; height: 2.5rem; border: none; border-radius: 6px; cursor: pointer; padding: 2px; background: none;">
-                                <span id="settings-accent-hex" style="font-family: monospace; font-size: 0.95rem; color: var(--text-secondary);">#9067C6</span>
+                            <label class="form-label settings-label">Theme</label>
+                            <div class="theme-swatches" id="settings-theme-swatches"></div>
+                            <small class="settings-hint" style="margin-bottom: 1.5rem;">Colour theme used throughout the app and the browser extension. Preview updates live.</small>
+                            <label class="form-label settings-label mt-4">Mode</label>
+                            <div class="mode-toggle" id="settings-mode-toggle">
+                                <button type="button" class="mode-btn" data-mode="light" onclick="previewMode('light')">☀ Light</button>
+                                <button type="button" class="mode-btn" data-mode="dark" onclick="previewMode('dark')">🌙 Dark</button>
                             </div>
-                            <small class="settings-hint" style="margin-bottom: 1.5rem;">Color used for the sidebar, cards, and buttons throughout the app. Preview updates live.</small>
+                            <small class="settings-hint" style="margin-bottom: 1.5rem;">Light or dark surfaces. The extension follows along.</small>
                             <label class="form-label settings-label mt-4" for="settings-font-size">Review Card Font Size</label>
                             <select class="form-control settings-input settings-select" id="settings-font-size" style="width: 14rem;">
                                 <option value="small">Small</option>

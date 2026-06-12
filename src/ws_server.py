@@ -200,6 +200,9 @@ async def _dispatch(action, msg):
     if action == 'add_card_type_field':
         return await loop.run_in_executor(None, _add_card_type_field, msg)
 
+    if action == 'get_theme':
+        return await loop.run_in_executor(None, _get_theme)
+
     if action == 'get_known_words':
         return await loop.run_in_executor(None, _get_known_words)
 
@@ -262,6 +265,17 @@ def _effective_known() -> tuple[set, set, set]:
     known = (manual | cards) - ignored - learning
     _known_cache = {'known': known, 'ignored': ignored, 'learning': learning, 'sig': sig}
     return known, ignored, learning
+
+
+def _get_theme() -> dict:
+    """The app's appearance settings, so the extension can match its look."""
+    import database
+    s = database.get_app_settings()
+    return {
+        'theme': s.get('theme', 'violet'),
+        'mode': 'dark' if s.get('ui_mode') == 'dark' else 'light',
+        'accent': s.get('accent_color', '#aa00ff'),
+    }
 
 
 def _add_card_type_field(msg: dict) -> dict:

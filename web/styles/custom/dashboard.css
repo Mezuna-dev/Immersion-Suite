@@ -58,6 +58,7 @@
     --text-1:   #1a1133;
     --text-2:   #6b5f8a;
     --text-3:   #a898c8;
+    --text-muted: #8a7fa8;
 
     /* Layout */
     --sidebar-w:    210px;
@@ -74,6 +75,27 @@
     --review-font-size: 2.5rem;
     --ease:   cubic-bezier(0.4, 0, 0.2, 1);
     --spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
+
+/* ── Dark mode ────────────────────────────────────────────────
+   The accent family is set by the chosen THEME (app.js); this block swaps
+   the neutral surfaces/text. Toggled via <html data-mode="dark">. */
+html[data-mode="dark"] {
+    --bg:           #131019;
+    --bg-surface:   #1c1825;
+    --bg-raised:    #241e30;
+    --bg-input:     #17131f;
+    --sidebar-bg:   #1c1825;
+
+    --border:       rgba(255, 255, 255, 0.08);
+    --border-md:    rgba(255, 255, 255, 0.14);
+
+    --text-1:   #f1edfa;
+    --text-2:   #b3a6d4;
+    --text-3:   #7d6fa0;
+    --text-muted: #9486b5;
+
+    --accent-dim: rgba(var(--accent-rgb), 0.16);
 }
 
 /* ── Reset ────────────────────────────────────────────────── */
@@ -461,7 +483,7 @@ code {
 
 /* Secondary - light, squircle, clean; hover picks up the brand accent. */
 .btn.btn-dark:not(.btn-accent):not(.btn-danger) {
-    background: #ffffff !important;
+    background: var(--bg-surface) !important;
     border: 1.5px solid var(--border-md) !important;
     color: var(--text-2) !important;
     border-radius: var(--r-btn) !important;
@@ -471,7 +493,7 @@ code {
     transition: box-shadow 0.18s var(--ease), transform 0.14s var(--spring), border-color 0.15s var(--ease), color 0.15s var(--ease);
 }
 .btn.btn-dark:not(.btn-accent):not(.btn-danger):hover {
-    background: #ffffff !important;
+    background: var(--bg-surface) !important;
     border-color: var(--accent) !important;
     color: var(--accent) !important;
     transform: translateY(-2px);
@@ -566,7 +588,7 @@ code {
     outline: none;
 }
 .settings-input::placeholder { color: var(--text-3) !important; }
-.settings-select option { background: white; color: var(--text-1); }
+.settings-select option { background: var(--bg-surface); color: var(--text-1); }
 
 .settings-hint {
     display: block;
@@ -574,6 +596,61 @@ code {
     font-size: 0.73rem;
     margin-top: 0.4rem;
     line-height: 1.55;
+}
+
+/* ── Theme picker (Settings → Appearance) ─────────────────── */
+.theme-swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-bottom: 0.4rem;
+}
+.theme-swatch {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.85rem 0.45rem 0.5rem;
+    border-radius: var(--r-pill);
+    border: 1.5px solid var(--border-md);
+    background: var(--bg-surface);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s var(--ease), box-shadow 0.18s var(--ease), transform 0.14s var(--spring), color 0.15s var(--ease);
+}
+.theme-swatch:hover { transform: translateY(-1px); border-color: var(--swatch-color); color: var(--text-1); }
+.theme-swatch.is-active {
+    border-color: var(--swatch-color);
+    color: var(--text-1);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--swatch-color) 18%, transparent),
+                0 4px 12px color-mix(in srgb, var(--swatch-color) 25%, transparent);
+}
+.theme-swatch-dot {
+    width: 1.15rem;
+    height: 1.15rem;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--swatch-light), var(--swatch-color));
+    flex: 0 0 auto;
+}
+
+.mode-toggle { display: flex; gap: 0.6rem; }
+.mode-btn {
+    padding: 0.45rem 1.1rem;
+    border-radius: var(--r-pill);
+    border: 1.5px solid var(--border-md);
+    background: var(--bg-surface);
+    color: var(--text-2);
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: border-color 0.15s var(--ease), color 0.15s var(--ease), background 0.15s var(--ease), transform 0.14s var(--spring);
+}
+.mode-btn:hover { transform: translateY(-1px); color: var(--text-1); }
+.mode-btn.is-active {
+    background: linear-gradient(135deg, var(--accent), var(--accent-light));
+    border-color: transparent;
+    color: #fff;
 }
 
 /* ── Card browser ─────────────────────────────────────────── */

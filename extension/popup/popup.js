@@ -7,6 +7,16 @@ const TOKEN_KEY = 'imm_ws_token';       // pairing secret - background.js
 const MINE_KEY  = 'imm_mine_settings';     // { deckId, typeId, fieldMaps } - content.js mining
 const YT_MINE_KEY = 'imm_yt_mine_settings'; // { deckId, typeId, fieldMaps } - youtube.js mining
 const REVIEW_KEY  = 'imm_mine_review';      // { enabled } - pre-add review dialog (both miners)
+const THEME_KEY   = 'imm_theme';            // { theme, mode } - cached desktop appearance
+
+// Accent palettes; ids/values must stay in sync with THEMES in the app's app.js.
+const POPUP_THEMES = {
+  violet:  { accent: '#aa00ff', light: '#cc66ff', rgb: '170, 0, 255', lightRgb: '204, 102, 255' },
+  ocean:   { accent: '#2563eb', light: '#60a5fa', rgb: '37, 99, 235', lightRgb: '96, 165, 250' },
+  emerald: { accent: '#059669', light: '#34d399', rgb: '5, 150, 105', lightRgb: '52, 211, 153' },
+  sunset:  { accent: '#ea580c', light: '#fb923c', rgb: '234, 88, 12', lightRgb: '251, 146, 60' },
+  sakura:  { accent: '#db2777', light: '#f472b6', rgb: '219, 39, 119', lightRgb: '244, 114, 182' },
+};
 
 // Defaults must mirror the content scripts so the form shows the real behaviour
 // before the user has ever changed anything.
@@ -15,7 +25,33 @@ const YT_DEFAULTS = { furigana: true, autoPause: false, knownColoring: true, aud
 
 const $ = (id) => document.getElementById(id);
 
+// Match the desktop app's appearance: cached copy first (no flash of the
+// wrong mode), then the live setting from the app.
+function applyPopupTheme(info) {
+  const t = POPUP_THEMES[info && info.theme] || POPUP_THEMES.violet;
+  const b = document.body;
+  b.classList.toggle('dark', !!(info && info.mode === 'dark'));
+  b.style.setProperty('--accent', t.accent);
+  b.style.setProperty('--accent-2', t.light);
+  b.style.setProperty('--accent-rgb', t.rgb);
+  b.style.setProperty('--accent-2-rgb', t.lightRgb);
+}
+
+function initTheme() {
+  chrome.storage.local.get(THEME_KEY, (d) => {
+    if (d && d[THEME_KEY]) applyPopupTheme(d[THEME_KEY]);
+  });
+  bgRequest({ action: 'get_theme' }).then((r) => {
+    if (r && !r.error && r.theme) {
+      const info = { theme: r.theme, mode: r.mode === 'dark' ? 'dark' : 'light' };
+      applyPopupTheme(info);
+      chrome.storage.local.set({ [THEME_KEY]: info });
+    }
+  });
+}
+
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
   $('version').textContent = 'v' + (chrome.runtime.getManifest().version || '');
   loadSettings();
   loadToken();
