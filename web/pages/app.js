@@ -26,11 +26,11 @@ new QWebChannel(qt.webChannelTransport, function(channel) {
 // migration. Deprecates the old free-form accent_color picker; accent_color is
 // still written (= theme accent) for anything legacy that reads it.
 var THEMES = {
-    violet:  { name: 'Neon Violet', accent: '#aa00ff', dark: '#7f00bf', light: '#cc66ff', rgb: '170, 0, 255' },
-    ocean:   { name: 'Ocean',       accent: '#2563eb', dark: '#1d4ed8', light: '#60a5fa', rgb: '37, 99, 235' },
-    emerald: { name: 'Emerald',     accent: '#059669', dark: '#047857', light: '#34d399', rgb: '5, 150, 105' },
-    sunset:  { name: 'Sunset',      accent: '#ea580c', dark: '#c2410c', light: '#fb923c', rgb: '234, 88, 12' },
-    sakura:  { name: 'Sakura',      accent: '#db2777', dark: '#be185d', light: '#f472b6', rgb: '219, 39, 119' },
+    violet:  { name: 'Neon Violet', accent: '#aa00ff', dark: '#7f00bf', light: '#cc66ff', rgb: '170, 0, 255', lightRgb: '204, 102, 255' },
+    ocean:   { name: 'Ocean',       accent: '#2563eb', dark: '#1d4ed8', light: '#60a5fa', rgb: '37, 99, 235', lightRgb: '96, 165, 250' },
+    emerald: { name: 'Emerald',     accent: '#059669', dark: '#047857', light: '#34d399', rgb: '5, 150, 105', lightRgb: '52, 211, 153' },
+    sunset:  { name: 'Sunset',      accent: '#ea580c', dark: '#c2410c', light: '#fb923c', rgb: '234, 88, 12', lightRgb: '251, 146, 60' },
+    sakura:  { name: 'Sakura',      accent: '#db2777', dark: '#be185d', light: '#f472b6', rgb: '219, 39, 119', lightRgb: '244, 114, 182' },
 };
 var currentTheme = 'violet';
 var currentMode = 'light';
@@ -42,6 +42,7 @@ function applyThemeVars(themeId, mode) {
     root.style.setProperty('--accent-dark', t.dark);
     root.style.setProperty('--accent-light', t.light);
     root.style.setProperty('--accent-rgb', t.rgb);
+    root.style.setProperty('--accent-light-rgb', t.lightRgb);
     root.style.setProperty('--accent-dim', 'rgba(' + t.rgb + (mode === 'dark' ? ', 0.16)' : ', 0.1)'));
     root.setAttribute('data-mode', mode === 'dark' ? 'dark' : 'light');
     currentAccent = t.accent;  // legacy var, still used for chart/badge inline colours

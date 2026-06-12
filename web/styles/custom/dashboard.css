@@ -16,8 +16,9 @@
     --accent:       #aa00ff;
     --accent-dark:  #7f00bf;
     --accent-light: #cc66ff;
-    --accent-dim:   rgba(170, 0, 255, 0.1);
+    --accent-dim:   rgba(var(--accent-rgb), 0.1);
     --accent-rgb:   170, 0, 255;
+    --accent-light-rgb: 204, 102, 255;
 
     /* Semantic palette - each color MEANS something */
     --green:        #16a34a;
@@ -122,7 +123,7 @@ hr { border: none !important; height: 1px; background: var(--border); }
 
 code {
     background: var(--accent-dim);
-    border: 1px solid rgba(170, 0, 255, 0.2);
+    border: 1px solid rgba(var(--accent-rgb), 0.2);
     border-radius: var(--r-sm);
     padding: 0.12rem 0.45rem;
     font-size: 0.8rem;
@@ -352,9 +353,9 @@ code {
 .deck-card-hover {
     box-shadow:
         0 2px 6px rgba(0, 0, 0, 0.08),
-        0 8px 24px rgba(170, 0, 255, 0.1) !important;
+        0 8px 24px rgba(var(--accent-rgb), 0.1) !important;
     transform: translateY(-2px);
-    border-color: rgba(170, 0, 255, 0.2) !important;
+    border-color: rgba(var(--accent-rgb), 0.2) !important;
 }
 
 .card:nth-child(1) { animation-delay: 0.04s; }
@@ -378,7 +379,7 @@ code {
 .dash-stat-cell:last-child { border-right: none; }
 
 /* Each metric gets its own color */
-.dash-stat-cell:nth-child(1) { background: linear-gradient(180deg, rgba(170,0,255,0.04) 0%, transparent 100%); }
+.dash-stat-cell:nth-child(1) { background: linear-gradient(180deg, rgba(var(--accent-rgb),0.04) 0%, transparent 100%); }
 .dash-stat-cell:nth-child(2) { background: linear-gradient(180deg, rgba(37,99,235,0.04) 0%, transparent 100%); }
 .dash-stat-cell:nth-child(3) { background: linear-gradient(180deg, rgba(217,119,6,0.05) 0%, transparent 100%); }
 .dash-stat-cell:nth-child(4) { background: linear-gradient(180deg, rgba(22,163,74,0.04) 0%, transparent 100%); }
@@ -438,7 +439,7 @@ code {
 .dash-select:focus {
     outline: none !important;
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15) !important;
     color: var(--text-1) !important;
 }
 
@@ -584,7 +585,7 @@ code {
 }
 .settings-input:focus {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15) !important;
     outline: none;
 }
 .settings-input::placeholder { color: var(--text-3) !important; }
@@ -668,7 +669,7 @@ code {
     text-transform: uppercase;
     letter-spacing: 0.12em;
     padding: 0.65rem 0.85rem;
-    border-bottom: 1.5px solid rgba(170, 0, 255, 0.25);
+    border-bottom: 1.5px solid rgba(var(--accent-rgb), 0.25);
     position: sticky;
     top: 0;
     z-index: 1;
@@ -708,9 +709,9 @@ code {
     border: 1.5px solid rgba(245, 158, 11, 0.25);
 }
 .browse-badge-young {
-    background: rgba(170, 0, 255, 0.12);
-    color: #cc66ff;
-    border: 1.5px solid rgba(170, 0, 255, 0.25);
+    background: rgba(var(--accent-rgb), 0.12);
+    color: var(--accent-light);
+    border: 1.5px solid rgba(var(--accent-rgb), 0.25);
 }
 .browse-badge-mature {
     background: rgba(52, 211, 153, 0.12);
@@ -742,7 +743,7 @@ code {
     cursor: pointer;
 }
 .browse-row-selected,
-.browse-row-selected:hover { background-color: rgba(170, 0, 255, 0.16); }
+.browse-row-selected:hover { background-color: rgba(var(--accent-rgb), 0.16); }
 .browse-row-selected td { color: var(--text-1); }
 
 /* Due-date urgency */
@@ -759,8 +760,8 @@ code {
     padding: 0.55rem 0.85rem;
     margin-bottom: 0.85rem;
     border-radius: 10px;
-    background: linear-gradient(135deg, rgba(170, 0, 255, 0.16), rgba(204, 102, 255, 0.06));
-    border: 1.5px solid rgba(170, 0, 255, 0.35);
+    background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-light-rgb), 0.06));
+    border: 1.5px solid rgba(var(--accent-rgb), 0.35);
     animation: fadeIn 0.25s ease;
 }
 .browse-bulk-count {
@@ -1045,12 +1046,12 @@ code {
 .formatting-btn:hover {
     background: var(--accent-dim) !important;
     color: var(--accent) !important;
-    border-color: rgba(170, 0, 255, 0.3) !important;
+    border-color: rgba(var(--accent-rgb), 0.3) !important;
 }
 .formatting-btn-active {
     background: var(--accent-dim) !important;
     color: var(--accent) !important;
-    border-color: rgba(170, 0, 255, 0.4) !important;
+    border-color: rgba(var(--accent-rgb), 0.4) !important;
 }
 
 /* ── Form switches ────────────────────────────────────────── */
@@ -1059,7 +1060,7 @@ code {
     border-color: var(--accent) !important;
 }
 .form-check-input:focus {
-    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.2) !important;
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.2) !important;
 }
 
 /* ── Shortcut key ─────────────────────────────────────────── */
@@ -1078,21 +1079,21 @@ code {
 }
 #shortcut-key-btn:hover {
     border-color: var(--accent) !important;
-    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15) !important;
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15) !important;
 }
 
 /* ── Scrollbar - light mode ───────────────────────────────── */
 * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(170, 0, 255, 0.2) transparent;
+    scrollbar-color: rgba(var(--accent-rgb), 0.2) transparent;
 }
 *::-webkit-scrollbar { width: 5px; height: 5px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-    background: rgba(170, 0, 255, 0.18);
+    background: rgba(var(--accent-rgb), 0.18);
     border-radius: 3px;
 }
-*::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.35); }
+*::-webkit-scrollbar-thumb:hover { background: rgba(var(--accent-rgb), 0.35); }
 *::-webkit-scrollbar-corner { background: transparent; }
 
 /* ── Review card accent line ──────────────────────────────── */
@@ -1326,7 +1327,7 @@ code {
 .csel-pill.csel-open .csel-btn {
     border-color: var(--accent);
     color: var(--text-1);
-    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.12);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
 /* Box style - matches old settings-input select */
@@ -1351,7 +1352,7 @@ code {
 .csel-box .csel-btn:hover,
 .csel-box.csel-open .csel-btn {
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(170, 0, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
 }
 
 /* Chevron */
