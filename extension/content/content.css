@@ -214,6 +214,11 @@
   border-radius: 8px;
   min-width: 360px;
   max-width: 520px;
+  /* The whole panel scrolls as one unit (field values can make it tall);
+     overscroll containment keeps the wheel from reaching the page. */
+  max-height: min(60vh, 480px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: auto;
   font-size: 13px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
@@ -267,16 +272,36 @@
 .imm-yt-select option { background: #1a1a22; color: #fff; }
 .imm-yt-select-sm { font-size: 12px; padding: 4px 6px; }
 
-/* Pre-add review: editable field values under the slot mapping. */
+/* Pre-add review: editable field values under the slot mapping. No inner
+   scroller - the card panel itself scrolls. */
 .imm-yt-fieldvals {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding-top: 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
-  max-height: 220px;
-  overflow-y: auto;
 }
+.imm-yt-addfield {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.imm-yt-addfield-btn {
+  appearance: none;
+  border: 1px dashed rgba(170, 0, 255, 0.45);
+  background: transparent;
+  color: #cc66ff;
+  border-radius: 5px;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.imm-yt-addfield-btn:hover { background: rgba(170, 0, 255, 0.15); }
+.imm-yt-addfield-btn:disabled { opacity: .6; cursor: default; }
+.imm-yt-addfield-name { flex: 1; }
 .imm-yt-fieldvals .imm-yt-field { flex: 1 1 100%; }
 .imm-yt-fieldval {
   width: 100%;
@@ -304,8 +329,9 @@
   border: 1px solid rgba(170, 0, 255, 0.30);
 }
 
-/* Subtitle-look settings popover (the ⚙ cog). Reuses .imm-yt-card-panel frame. */
-.imm-yt-settings-panel { min-width: 300px; max-width: 360px; max-height: 62vh; }
+/* Subtitle-look settings popover (the ⚙ cog). Reuses .imm-yt-card-panel frame,
+   but scrolls its BODY (header stays put), so undo the frame-level scroller. */
+.imm-yt-settings-panel { min-width: 300px; max-width: 360px; max-height: 62vh; overflow-y: hidden; }
 
 /* Header stays put; only the row body scrolls, so the × is always reachable even
    when a tall subtitle pushes the toolbar's ⚙ off the top of the player. */

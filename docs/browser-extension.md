@@ -81,9 +81,10 @@ word (expression, reading, definition) plus the **sentence it appeared in**, so 
 can mine while reading anything, not just YouTube. The first time, use the **⚙**
 button to pick the deck, card type, and which fields receive each piece. By default
 **＋** then opens a small **review dialog** — every field of the card prefilled and
-editable, so you can fix a definition or add context before it's saved. Prefer
-instant one-click mining? Turn **Review before adding** off in the extension popup
-(applies to YouTube mining too).
+editable, so you can fix a definition or add context before it's saved, and a
+**＋ Add field** button that adds a brand-new field to the card type on the spot.
+Prefer instant one-click mining? Turn **Review before adding** off in the extension
+popup (applies to YouTube mining too).
 
 **Mark a word's status** — each entry has three status buttons, kept in a list
 separate from your SRS deck: **○ / ✓** marks a word *known*, **学** marks it
@@ -132,8 +133,9 @@ Your known list is separate from the SRS deck.
 screenshot of the frame and an audio clip of the line, then opens a panel to choose
 the deck, card type, and which fields receive the sentence, image, and audio — plus
 an editable input for **every field** of the card type, with the sentence prefilled,
-so you can correct the line or add notes before the card is saved. The card is
-created directly in the desktop app. With **Review before adding** switched off in
+so you can correct the line or add notes before the card is saved — plus a
+**＋ Add field** button to extend the card type with a new field on the spot. The
+card is created directly in the desktop app. With **Review before adding** switched off in
 the extension popup (and a default template saved), ＋ skips the panel and mines in
 one click.
 

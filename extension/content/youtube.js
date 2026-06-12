@@ -1755,10 +1755,19 @@
     return map;
   }
 
+  function collectFieldValues() {
+    const out = {};
+    for (const inp of cardPanelEl.querySelectorAll('#imm-yt-fieldvals [data-field]')) {
+      out[inp.dataset.field] = inp.value;
+    }
+    return out;
+  }
+
   // One editable input per card field. The sentence-mapped field is prefilled
   // with the current line; image/audio-mapped fields are auto-attached on the
-  // desktop side, so they render as inert chips rather than inputs.
-  function renderFieldValues() {
+  // desktop side, so they render as inert chips rather than inputs. `preserve`
+  // keeps typed values across a re-render (used when a field is added).
+  function renderFieldValues(preserve) {
     const wrap = cardPanelEl.querySelector('#imm-yt-fieldvals');
     if (!wrap) return;
     wrap.innerHTML = '';
@@ -1781,9 +1790,68 @@
       ta.className = 'imm-yt-fieldval';
       ta.rows = f === map.sentence ? 2 : 1;
       ta.dataset.field = f;
-      if (f === map.sentence) ta.value = cueText;
+      if (preserve && f in preserve) ta.value = preserve[f];
+      else if (f === map.sentence) ta.value = cueText;
       wrap.appendChild(labeled(f, ta));
     }
+
+    // "＋ Add field" - extends the card type itself via the desktop app, then
+    // re-renders keeping everything already typed.
+    const addRow = document.createElement('div');
+    addRow.className = 'imm-yt-addfield';
+    const addBtn = document.createElement('button');
+    addBtn.type = 'button';
+    addBtn.className = 'imm-yt-addfield-btn';
+    addBtn.textContent = '＋ Add field';
+    addBtn.title = 'Add a new field to this card type';
+    addRow.appendChild(addBtn);
+    wrap.appendChild(addRow);
+
+    addBtn.addEventListener('click', () => {
+      if (addRow.querySelector('input')) return; // already open
+      const name = document.createElement('input');
+      name.type = 'text';
+      name.className = 'imm-yt-fieldval imm-yt-addfield-name';
+      name.placeholder = 'New field name…';
+      const ok = document.createElement('button');
+      ok.type = 'button';
+      ok.className = 'imm-yt-addfield-btn';
+      ok.textContent = '✓';
+      const cancel = document.createElement('button');
+      cancel.type = 'button';
+      cancel.className = 'imm-yt-addfield-btn';
+      cancel.textContent = '×';
+      addRow.appendChild(name);
+      addRow.appendChild(ok);
+      addRow.appendChild(cancel);
+      name.focus();
+      const closeRow = () => { name.remove(); ok.remove(); cancel.remove(); };
+      cancel.addEventListener('click', closeRow);
+      const submit = async () => {
+        const f = name.value.trim();
+        if (!f) { closeRow(); return; }
+        ok.disabled = true;
+        const resp = await sendBackground({
+          action: 'add_card_type_field', card_type_id: Number(t.id), field: f,
+        });
+        ok.disabled = false;
+        if (!resp || resp.error) {
+          setCardStatus((resp && resp.error) || 'Could not add field.', 'error');
+          return;
+        }
+        t.fields = resp.fields;
+        const kept = collectFieldValues();
+        closeRow();
+        renderFieldValues(kept);
+        const inp = wrap.querySelector(`[data-field="${CSS.escape(f)}"]`);
+        if (inp) inp.focus();
+      };
+      ok.addEventListener('click', submit);
+      name.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); closeRow(); }
+      });
+    });
   }
 
   function autoMap(fields) {

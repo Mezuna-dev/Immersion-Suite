@@ -422,7 +422,6 @@
     #popup {
       position: fixed;
       width: 440px;
-      max-height: 320px;
       background: #ffffff;
       border: 1.5px solid rgba(0, 0, 0, 0.11);
       border-top: none;
@@ -449,11 +448,18 @@
       pointer-events: none;
     }
 
-    .list { max-height: 320px; overflow-y: auto; }
-    .list::-webkit-scrollbar       { width: 6px; }
-    .list::-webkit-scrollbar-track { background: transparent; }
-    .list::-webkit-scrollbar-thumb { background: rgba(170, 0, 255, 0.20); border-radius: 3px; }
-    .list::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.35); }
+    /* One scroller for everything inside the popup - lookup list and the
+       mine/review panels alike - so the wheel always has something to move.
+       overscroll-behavior stops the page from scrolling once an edge is hit. */
+    #popup-content {
+      max-height: min(460px, 75vh);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    #popup-content::-webkit-scrollbar       { width: 6px; }
+    #popup-content::-webkit-scrollbar-track { background: transparent; }
+    #popup-content::-webkit-scrollbar-thumb { background: rgba(170, 0, 255, 0.20); border-radius: 3px; }
+    #popup-content::-webkit-scrollbar-thumb:hover { background: rgba(170, 0, 255, 0.35); }
 
     .entry { padding: 14px 20px 16px; border-bottom: 1px solid rgba(0, 0, 0, 0.06); }
     .entry:last-child { border-bottom: none; }
@@ -544,12 +550,27 @@
       display: flex; flex-direction: column; gap: 7px;
       padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
     }
-    /* Pre-add review: one stacked label + editable value per card field. */
+    /* Pre-add review: one stacked label + editable value per card field.
+       No inner scroller - #popup-content scrolls the whole panel. */
     .mine-fieldvals {
       display: flex; flex-direction: column; gap: 8px;
       padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
-      max-height: 300px; overflow-y: auto;
     }
+    .mine-addfield { display: flex; align-items: center; gap: 6px; }
+    .mine-addfield-btn {
+      appearance: none; border: 1px dashed rgba(170, 0, 255, 0.35);
+      background: transparent; color: #aa00ff; border-radius: 7px;
+      padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    }
+    .mine-addfield-btn:hover { background: rgba(170, 0, 255, 0.08); }
+    .mine-addfield-ok, .mine-addfield-cancel {
+      appearance: none; border: 1px solid rgba(170, 0, 255, 0.25);
+      background: rgba(170, 0, 255, 0.08); color: #aa00ff;
+      width: 26px; height: 26px; border-radius: 7px; cursor: pointer;
+      font-size: 13px; line-height: 1; flex: 0 0 auto;
+    }
+    .mine-addfield-ok:hover, .mine-addfield-cancel:hover { background: rgba(170, 0, 255, 0.18); }
+    .mine-addfield-ok:disabled { opacity: .6; cursor: default; }
     .mine-row-stack { flex-direction: column; align-items: stretch; gap: 3px; }
     .mine-row-stack .mine-label { flex: none; }
     .mine-input {
@@ -697,6 +718,18 @@
     contentEl = document.createElement('div');
     contentEl.id = 'popup-content';
     popupEl.appendChild(contentEl);
+
+    // The wheel must never reach the page while the cursor is over the popup:
+    // overscroll-behavior contains scrolls once they start, but a wheel over a
+    // popup whose content FITS (nothing to scroll) would still scroll the page
+    // underneath - and a page scroll dismisses lookups. Consume those here.
+    popupEl.addEventListener('wheel', (e) => {
+      const canScroll = contentEl.scrollHeight > contentEl.clientHeight;
+      if (!canScroll) { e.preventDefault(); return; }
+      const atTop = contentEl.scrollTop <= 0 && e.deltaY < 0;
+      const atBottom = contentEl.scrollTop + contentEl.clientHeight >= contentEl.scrollHeight - 1 && e.deltaY > 0;
+      if (atTop || atBottom) e.preventDefault();
+    }, { passive: false });
 
     // Delegated handling for the per-entry audio (🔊), known (○/✓), mine (＋)
     // and config (⚙) buttons.
@@ -1437,7 +1470,15 @@
     const fieldsWrap = _el('div', 'mine-fieldvals');
     panel.appendChild(fieldsWrap);
 
-    const renderFields = () => {
+    const collectValues = () => {
+      const out = {};
+      for (const inp of fieldsWrap.querySelectorAll('[data-field]')) out[inp.dataset.field] = inp.value;
+      return out;
+    };
+
+    // `preserve` keeps the user's edits across re-renders (type switch keeps
+    // nothing on purpose; adding a field keeps everything already typed).
+    const renderFields = (preserve) => {
       fieldsWrap.replaceChildren();
       const t = cardTypesCache.find(t => String(t.id) === typeSel.value);
       if (!t) return;
@@ -1452,7 +1493,7 @@
         if (f && vals[slot.key]) prefill[f] = vals[slot.key];
       }
       for (const f of fields) {
-        const v = prefill[f] || '';
+        const v = (preserve && f in preserve) ? preserve[f] : (prefill[f] || '');
         const long = v.length > 42 || /sentence|definition|meaning|note|example/i.test(f);
         const input = _el(long ? 'textarea' : 'input', 'mine-input');
         if (long) input.rows = 2; else input.type = 'text';
@@ -1465,7 +1506,7 @@
       }
       reposition();
     };
-    typeSel.addEventListener('change', renderFields);
+    typeSel.addEventListener('change', () => renderFields());
     renderFields();
 
     const status = _el('div', 'mine-status');
@@ -1503,6 +1544,62 @@
       addBtn.textContent = '✓ Added';
       setTimeout(closeMinePanel, 750);
     });
+
+    // "＋ Add field" - appends a brand-new field to the card type itself (via
+    // the desktop app), then re-renders with the user's edits preserved.
+    const addFieldRow = _el('div', 'mine-addfield');
+    const addFieldBtn = _el('button', 'mine-addfield-btn', '＋ Add field');
+    addFieldBtn.title = 'Add a new field to this card type';
+    addFieldRow.appendChild(addFieldBtn);
+    panel.appendChild(addFieldRow);
+
+    addFieldBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (addFieldRow.querySelector('.mine-addfield-name')) return; // already open
+      const name = _el('input', 'mine-input mine-addfield-name');
+      name.type = 'text';
+      name.placeholder = 'New field name…';
+      const ok = _el('button', 'mine-addfield-ok', '✓');
+      ok.title = 'Add field';
+      const cancel = _el('button', 'mine-addfield-cancel', '×');
+      cancel.title = 'Cancel';
+      addFieldRow.appendChild(name);
+      addFieldRow.appendChild(ok);
+      addFieldRow.appendChild(cancel);
+      reposition();
+      name.focus();
+      const closeRow = () => { name.remove(); ok.remove(); cancel.remove(); };
+      cancel.addEventListener('click', (ev) => { ev.stopPropagation(); closeRow(); });
+      const submit = async () => {
+        const f = name.value.trim();
+        if (!f) { closeRow(); return; }
+        const t = cardTypesCache.find(t => String(t.id) === typeSel.value);
+        if (!t) { closeRow(); return; }
+        ok.disabled = true;
+        let resp;
+        try {
+          resp = await chrome.runtime.sendMessage({
+            action: 'add_card_type_field', card_type_id: Number(t.id), field: f,
+          });
+        } catch (_) { resp = null; }
+        ok.disabled = false;
+        if (!resp || resp.error) {
+          _mineStatus(status, (resp && resp.error) || 'Could not add field. Is the app running?', 'err');
+          return;
+        }
+        t.fields = resp.fields;
+        closeRow();
+        renderFields(collectValues());
+        const inp = fieldsWrap.querySelector(`[data-field="${CSS.escape(f)}"]`);
+        if (inp) inp.focus();
+      };
+      ok.addEventListener('click', (ev) => { ev.stopPropagation(); submit(); });
+      name.addEventListener('keydown', (ev) => {
+        if (ev.key === 'Enter') { ev.preventDefault(); submit(); }
+        if (ev.key === 'Escape') { ev.preventDefault(); closeRow(); }
+      });
+    });
+
     const actions = _el('div', 'mine-actions');
     actions.appendChild(status);
     actions.appendChild(addBtn);

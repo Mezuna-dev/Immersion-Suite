@@ -690,6 +690,34 @@ def seed_mining_card_types():
     save_app_settings(settings)
 
 
+def add_field_to_card_type(card_type_id: int, field_name: str):
+    """Append a new field to a card type's field list (no-op if already there).
+    Returns the updated field list, or None if the type doesn't exist.
+    Existing cards of the type simply have no value for the new field."""
+    field_name = (field_name or '').strip()
+    if not field_name:
+        return None
+    con = create_db_connection()
+    cur = con.cursor()
+    try:
+        cur.execute("SELECT Fields FROM CardType WHERE ID = ?", (card_type_id,))
+        row = cur.fetchone()
+        if not row:
+            return None
+        try:
+            fields = json.loads(row[0]) if row[0] else []
+        except (ValueError, TypeError):
+            fields = []
+        if field_name not in fields:
+            fields.append(field_name)
+            cur.execute("UPDATE CardType SET Fields = ? WHERE ID = ?",
+                        (json.dumps(fields), card_type_id))
+            con.commit()
+        return fields
+    finally:
+        con.close()
+
+
 def get_or_create_card_type(name: str, fields: list, front_style: str = '', back_style: str = '', css_style: str = '') -> int:
     """Return the ID of an existing CardType with this name, or create a new one."""
     con = create_db_connection()

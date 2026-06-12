@@ -197,6 +197,9 @@ async def _dispatch(action, msg):
         text = msg.get('text', '')
         return await loop.run_in_executor(None, _analyze, text)
 
+    if action == 'add_card_type_field':
+        return await loop.run_in_executor(None, _add_card_type_field, msg)
+
     if action == 'get_known_words':
         return await loop.run_in_executor(None, _get_known_words)
 
@@ -259,6 +262,19 @@ def _effective_known() -> tuple[set, set, set]:
     known = (manual | cards) - ignored - learning
     _known_cache = {'known': known, 'ignored': ignored, 'learning': learning, 'sig': sig}
     return known, ignored, learning
+
+
+def _add_card_type_field(msg: dict) -> dict:
+    """Append a field to a card type (pre-add review dialog's "+ Add field")."""
+    import database
+    type_id = msg.get('card_type_id')
+    field = (msg.get('field') or '').strip()
+    if not type_id or not field:
+        return {'error': 'card_type_id and field are required'}
+    fields = database.add_field_to_card_type(int(type_id), field)
+    if fields is None:
+        return {'error': f'card type {type_id} not found'}
+    return {'card_type_id': int(type_id), 'fields': fields}
 
 
 def _get_known_words() -> dict:
