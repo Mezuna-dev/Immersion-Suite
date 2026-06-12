@@ -996,41 +996,72 @@
 
                 <!-- ── About View ─────────────────────────────────── -->
                 <div id="about-view" class="view-section view-hidden text-white">
-                    <h1 class="mb-4" style="animation: fadeIn 0.6s ease;">About</h1>
 
-                    <div class="card mb-4 settings-card" style="width: 50%; animation: fadeIn 0.6s ease;">
-                        <div class="card-body text-white">
-                            <h2 class="settings-section-title">Immersion App</h2>
-                            <p style="font-size: 0.95rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
-                                A desktop application for spaced repetition flashcard study, immersion time tracking, and review session management.
-                            </p>
-                            <p id="about-version" style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0;">Version 1.3.1</p>
+                    <!-- Hero -->
+                    <div class="about-hero" style="animation: fadeIn 0.5s ease;">
+                        <div class="about-hero-mark">語</div>
+                        <h1 class="about-hero-title">Immersion Suite</h1>
+                        <p class="about-hero-tagline">Learn Japanese through the content you love — and remember it.</p>
+                        <span id="about-version" class="about-version-pill">Version –</span>
+                    </div>
+
+                    <!-- What you can do -->
+                    <h2 class="about-section-head" style="animation: fadeIn 0.6s ease;">What you can do</h2>
+                    <div class="about-grid" style="animation: fadeIn 0.6s ease;">
+                        <div class="about-tile">
+                            <span class="about-tile-icon">📺</span>
+                            <div class="about-tile-title">Watch &amp; understand</div>
+                            <div class="about-tile-text">YouTube gets interactive subtitles with furigana, a dialogue queue, and replay keys — built for studying, not just watching.</div>
+                        </div>
+                        <div class="about-tile">
+                            <span class="about-tile-icon">🔍</span>
+                            <div class="about-tile-title">Look up anything</div>
+                            <div class="about-tile-text">Hover any Japanese word on any website for an instant dictionary popup with readings, meanings, and pronunciation audio.</div>
+                        </div>
+                        <div class="about-tile">
+                            <span class="about-tile-icon">⚡</span>
+                            <div class="about-tile-title">Mine in one click</div>
+                            <div class="about-tile-text">Turn any word or subtitle line into a flashcard — screenshot and audio clip included — without leaving the video.</div>
+                        </div>
+                        <div class="about-tile">
+                            <span class="about-tile-icon">🧠</span>
+                            <div class="about-tile-title">Remember for good</div>
+                            <div class="about-tile-text">Spaced repetition shows each card right before you'd forget it. Import your existing Anki decks and keep going.</div>
+                        </div>
+                        <div class="about-tile">
+                            <span class="about-tile-icon">📈</span>
+                            <div class="about-tile-title">See yourself improve</div>
+                            <div class="about-tile-text">Every video shows a live comprehension score, and your reviews build streaks, stats, and a year-long activity map.</div>
+                        </div>
+                        <div class="about-tile">
+                            <span class="about-tile-icon">🎨</span>
+                            <div class="about-tile-title">Make it yours</div>
+                            <div class="about-tile-text">Pick a colour theme, switch to dark mode, and shape your own card types — the extension matches the app automatically.</div>
                         </div>
                     </div>
 
-                    <div class="card mb-4 settings-card" style="width: 50%; animation: fadeIn 0.7s ease;">
-                        <div class="card-body text-white">
-                            <h2 class="settings-section-title">Features</h2>
-                            <ul style="font-size: 0.9rem; color: var(--text-secondary); padding-left: 1.25rem; margin-bottom: 0; line-height: 2;">
-                                <li>Spaced repetition system (SRS) with customizable scheduling</li>
-                                <li>Anki deck import (.apkg)</li>
-                                <li>Custom card types and field templates</li>
-                                <li>Review statistics and activity heatmap</li>
-                                <li>Immersion time tracking with categories and stats</li>
-                            </ul>
+                    <!-- Getting started -->
+                    <h2 class="about-section-head" style="animation: fadeIn 0.7s ease;">New here? Three steps</h2>
+                    <div class="about-steps" style="animation: fadeIn 0.7s ease;">
+                        <div class="about-step">
+                            <span class="about-step-num">1</span>
+                            <div>
+                                <div class="about-tile-title">Install the browser extension</div>
+                                <div class="about-tile-text">It brings the dictionary, subtitles, and mining to your browser.</div>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="card mb-4 settings-card" style="width: 50%; animation: fadeIn 0.8s ease;">
-                        <div class="card-body text-white">
-                            <h2 class="settings-section-title">Built With</h2>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem 2rem; font-size: 0.875rem; color: var(--text-secondary);">
-                                <span>Python &amp; PyQt6</span>
-                                <span>Bootstrap 5</span>
-                                <span>SQLite</span>
-                                <span>Plotly.js</span>
-                                <span>Qt WebChannel</span>
-                                <span>Inter Typeface</span>
+                        <div class="about-step">
+                            <span class="about-step-num">2</span>
+                            <div>
+                                <div class="about-tile-title">Pair it with this app</div>
+                                <div class="about-tile-text">Copy the token from <b>Settings → Browser Extension</b> into the extension's popup.</div>
+                            </div>
+                        </div>
+                        <div class="about-step">
+                            <span class="about-step-num">3</span>
+                            <div>
+                                <div class="about-tile-title">Watch, read, and mine</div>
+                                <div class="about-tile-text">Open a video, hover words you don't know, hit ＋ — then review here daily.</div>
                             </div>
                         </div>
                     </div>

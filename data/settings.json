@@ -7,10 +7,12 @@
   "default_learning_steps": "1 10",
   "default_relearning_steps": "10",
   "default_study_order": "new_first",
-  "day_start_hour": 4,
   "review_autoplay_audio": true,
   "review_shortcut_enabled": true,
   "review_shortcut_key": "Space",
   "review_two_button_mode": false,
-  "update_check_enabled": true
+  "day_start_hour": 4,
+  "update_check_enabled": true,
+  "skipped_update_version": "",
+  "mining_card_types_seeded": true
 }
