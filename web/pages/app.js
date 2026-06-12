@@ -621,38 +621,47 @@ function updateHeatmap(data) {
 function renderHeatmapSVG(counts, forecast, today) {
     forecast = forecast || {};
     var CELL = 11, GAP = 3, WEEKS = 53;
-    var DAY_LABEL_W = 26, MONTH_LABEL_H = 18;
+    var DAY_LABEL_W = 26, MONTH_LABEL_H = 18, LEGEND_H = 22;
 
     if (!today) {
         today = new Date();
         today.setHours(0, 0, 0, 0);
     }
-    
+
     // Calculate the start date for the current year
     var startDay = new Date(today.getFullYear(), 0, 1); // January 1 of current year
     startDay.setDate(startDay.getDate() - startDay.getDay()); // rewind to Sunday
 
     var svgW = DAY_LABEL_W + WEEKS * (CELL + GAP);
-    var svgH = MONTH_LABEL_H + 7 * (CELL + GAP);
+    var svgH = MONTH_LABEL_H + 7 * (CELL + GAP) + LEGEND_H;
 
     var svg = document.getElementById('heatmap-svg');
     svg.setAttribute('width', svgW);
     svg.setAttribute('height', svgH);
     svg.innerHTML = '';
 
-    var ac = currentAccent.length === 7 ? currentAccent : '#9067C6';
+    // Mode-aware ramp: empty cells sit just off the card surface and the
+    // intensity blends from there to the theme accent, so the map is readable
+    // on both light and dark surfaces (the old version blended from a fixed
+    // dark navy, which rendered as a near-black slab on the light theme).
+    var isDark = document.documentElement.getAttribute('data-mode') === 'dark';
+    var ac = currentAccent.length === 7 ? currentAccent : '#aa00ff';
     var r0 = parseInt(ac.slice(1,3),16), g0 = parseInt(ac.slice(3,5),16), b0 = parseInt(ac.slice(5,7),16);
-    var bgR = 30, bgG = 27, bgB = 46;
+    var base = isDark ? [42, 36, 56] : [232, 229, 242];
     function blend(t) {
-        return 'rgb('+Math.round(bgR+(r0-bgR)*t)+','+Math.round(bgG+(g0-bgG)*t)+','+Math.round(bgB+(b0-bgB)*t)+')';
+        return 'rgb('+Math.round(base[0]+(r0-base[0])*t)+','+Math.round(base[1]+(g0-base[1])*t)+','+Math.round(base[2]+(b0-base[2])*t)+')';
     }
+    var LEVELS = [0, 0.3, 0.55, 0.78, 1.0];
     function cellColor(n) {
-        if (!n)    return blend(0.15);
-        if (n <= 3) return blend(0.35);
-        if (n <= 7) return blend(0.60);
-        if (n <= 14) return blend(0.80);
-        return blend(1.0);
+        if (!n)     return blend(LEVELS[0]);
+        if (n <= 3) return blend(LEVELS[1]);
+        if (n <= 7) return blend(LEVELS[2]);
+        if (n <= 14) return blend(LEVELS[3]);
+        return blend(LEVELS[4]);
     }
+    var labelCol = isDark ? '#9486b5' : '#8a7fa8';            // --text-muted per mode
+    var todayRing = isDark ? '#f1edfa' : '#1a1133';           // --text-1 per mode
+    var futureStroke = isDark ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.22)';
     function toDateStr(d) {
         return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
     }
@@ -668,8 +677,9 @@ function renderHeatmapSVG(counts, forecast, today) {
         txt.setAttribute('x', DAY_LABEL_W - 3);
         txt.setAttribute('y', MONTH_LABEL_H + pair[0] * (CELL + GAP) + CELL);
         txt.setAttribute('text-anchor', 'end');
-        txt.setAttribute('fill', '#777');
+        txt.setAttribute('fill', labelCol);
         txt.setAttribute('font-size', '9');
+        txt.setAttribute('font-weight', '600');
         txt.textContent = pair[1];
         frag.appendChild(txt);
     });
@@ -689,8 +699,9 @@ function renderHeatmapSVG(counts, forecast, today) {
                 var mTxt = document.createElementNS(ns, 'text');
                 mTxt.setAttribute('x', weekX);
                 mTxt.setAttribute('y', MONTH_LABEL_H - 5);
-                mTxt.setAttribute('fill', '#aaa');
+                mTxt.setAttribute('fill', labelCol);
                 mTxt.setAttribute('font-size', '10');
+                mTxt.setAttribute('font-weight', '600');
                 mTxt.textContent = MONTH_NAMES[probe.getMonth()];
                 frag.appendChild(mTxt);
                 lastMonthW = w;
@@ -714,11 +725,21 @@ function renderHeatmapSVG(counts, forecast, today) {
             rect.setAttribute('rx', 2);
             rect.setAttribute('fill', cellColor(cnt));
             if (isFuture) {
-                rect.setAttribute('opacity', '0.55');
+                // Forecast (cards due): washed out + outlined so it reads as
+                // "planned", clearly apart from solid history cells.
+                rect.setAttribute('opacity', '0.45');
                 if (cnt > 0) {
-                    rect.setAttribute('stroke', 'rgba(255,255,255,0.18)');
+                    rect.setAttribute('stroke', futureStroke);
                     rect.setAttribute('stroke-width', '1');
+                    rect.setAttribute('stroke-dasharray', '2,1.5');
                 }
+            }
+            if (dStr === toDateStr(today)) {
+                // Ring today so the eye finds "now" instantly.
+                rect.setAttribute('stroke', todayRing);
+                rect.setAttribute('stroke-width', '1.6');
+                rect.removeAttribute('stroke-dasharray');
+                rect.setAttribute('opacity', '1');
             }
             rect.dataset.date = dStr;
             rect.dataset.count = cnt;
@@ -727,6 +748,49 @@ function renderHeatmapSVG(counts, forecast, today) {
             frag.appendChild(rect);
         }
     }
+
+    // Legend: intensity ramp bottom-right, forecast key bottom-left.
+    var legendY = MONTH_LABEL_H + 7 * (CELL + GAP) + 8;
+    function legendText(x, label, anchor) {
+        var t = document.createElementNS(ns, 'text');
+        t.setAttribute('x', x);
+        t.setAttribute('y', legendY + CELL - 2);
+        t.setAttribute('fill', labelCol);
+        t.setAttribute('font-size', '9');
+        t.setAttribute('font-weight', '600');
+        if (anchor) t.setAttribute('text-anchor', anchor);
+        t.textContent = label;
+        frag.appendChild(t);
+        return t;
+    }
+    var rampX = svgW - (LEVELS.length * (CELL + GAP)) - 34;
+    legendText(rampX - 6, 'Less', 'end');
+    LEVELS.forEach(function(t, i) {
+        var sq = document.createElementNS(ns, 'rect');
+        sq.setAttribute('x', rampX + i * (CELL + GAP));
+        sq.setAttribute('y', legendY);
+        sq.setAttribute('width', CELL);
+        sq.setAttribute('height', CELL);
+        sq.setAttribute('rx', 2);
+        sq.setAttribute('fill', blend(t));
+        frag.appendChild(sq);
+    });
+    legendText(svgW - 28, 'More');
+    // Forecast key: one washed/dashed sample + caption.
+    var fx = DAY_LABEL_W;
+    var fsq = document.createElementNS(ns, 'rect');
+    fsq.setAttribute('x', fx);
+    fsq.setAttribute('y', legendY);
+    fsq.setAttribute('width', CELL);
+    fsq.setAttribute('height', CELL);
+    fsq.setAttribute('rx', 2);
+    fsq.setAttribute('fill', blend(0.55));
+    fsq.setAttribute('opacity', '0.45');
+    fsq.setAttribute('stroke', futureStroke);
+    fsq.setAttribute('stroke-width', '1');
+    fsq.setAttribute('stroke-dasharray', '2,1.5');
+    frag.appendChild(fsq);
+    legendText(fx + CELL + 6, 'upcoming due cards · outlined cell = today');
 
     svg.appendChild(frag);
 
