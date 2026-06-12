@@ -12,17 +12,52 @@ All notable changes to Immersion Suite are documented here. The format is based 
 Work in progress toward 1.4.0.
 
 ### Added
-- **Known / unknown word tracking.** Mark words as known from the hover dictionary
-  (the ○/✓ button), kept in a separate list independent of your SRS deck. With
-  colouring on (語 button in the YouTube toolbar, or the options page), unknown words
-  in the subtitle bar are highlighted so you can gauge a line's difficulty at a glance;
-  marking a word known updates the colouring instantly. Conjugated forms resolve to
-  their dictionary form, so 食べた counts as 食べる.
+- **Word status tracking: known, learning, and ignored.** Every entry in the hover
+  dictionary has status buttons — **○/✓** known, **学** learning (started studying,
+  still counts as unknown), **⊘** ignored (excluded from scores) — kept in a list
+  independent of your SRS deck. Tracking is per word unit (タイ人 marks タイ and 人
+  separately), conjugated forms resolve to their dictionary form (食べた counts as
+  食べる), and even particles and function words are trackable.
+- **Comprehension scores on YouTube.** With word colouring on (語 toolbar button),
+  unknown words get a purple underline and learning words an amber one (colours and
+  which statuses show are configurable in the ⚙ appearance panel). Each subtitle
+  line shows its **comprehension %** — highlighted when the line has exactly one
+  unknown word (the i+1 sweet spot) — and the queue shows a **whole-video score** so
+  you can judge a video's difficulty before committing. Words you already have
+  cards for count as known automatically.
+- **Whole-page furigana.** A button in the extension popup adds kana readings above
+  the kanji on the page you're reading — any site, not just YouTube. Annotation is
+  lazy (only text near the viewport is processed) and handles dynamically loaded
+  content; toggle it off to restore the page exactly.
+- **Review a card before it's saved.** Mining (＋) now opens an edit dialog first:
+  every field of the card type as an editable input, prefilled where your template
+  maps it, so you can fix a definition or add context before the card lands. A
+  **＋ Add field** button extends the card type with a brand-new field on the spot.
+  Prefer instant mining? Turn **Review before adding** off in the extension popup.
+- **One-click mining with saved defaults.** The extension popup now has card-creation
+  sections for both miners — default deck, card type, and field template for the
+  hover dictionary and for YouTube sentence mining. With defaults saved (and review
+  off), every ＋ creates the card instantly; Shift+click still opens the full panel.
+  Two ready-made card types — **Pop-Dictionary** and **Sentence Mining** — ship with
+  the app with fields matching the miners, so setup is one click.
 - **Mine words from any web page.** The hover dictionary now has a **＋** button on
   each entry that creates a flashcard from the word's expression, reading,
   definition, and the **sentence it appeared in** — no more leaving the page. A **⚙**
-  button picks the deck, card type, and field mapping; after the first setup, **＋**
-  adds a card in one click. (Previously mining only worked on YouTube.)
+  button picks the deck, card type, and field mapping. (Previously mining only
+  worked on YouTube.)
+- **Themes and dark mode.** Pick from five colour themes (Neon Violet — the classic
+  look — plus Ocean, Emerald, Sunset, and Sakura) and a light/dark mode in
+  **Settings → Appearance**, with live preview. The browser extension — hover
+  dictionary, toolbar popup, and YouTube overlay accents — follows the app's
+  appearance automatically. (Replaces the free-form accent colour picker; a custom
+  accent migrates to the closest theme.)
+- **Subtitle appearance panel.** A ⚙ cog on the YouTube subtitle bar: font family,
+  size, weight, text colour, outline strength, and bar opacity, plus per-status
+  underline colours for the word markers.
+- **Card browser overhaul.** Filter by lifecycle status (Due Now / New / Learning /
+  Young / Mature) and card type, select cards with checkboxes for **bulk move or
+  delete**, see status badges and due dates that turn amber today / red overdue,
+  and page through with a proper range indicator and per-page size choice.
 - **Toolbar popup & options page.** Clicking the extension icon now shows whether
   the desktop app is connected and a settings panel: enable/disable the hover
   dictionary, choose the **lookup key** (Shift / Alt / Ctrl / hover-only), and set
@@ -33,6 +68,26 @@ Work in progress toward 1.4.0.
   through the desktop app and cached locally, so each word downloads once and
   replays instantly (and works offline afterwards); words with no recording show
   a muted 🔇 instead.
+
+### Changed
+- **No key needed on subtitles.** Hovering a word in the YouTube subtitle bar or
+  the queue opens the dictionary popup directly — the lookup key is only needed
+  elsewhere on the page.
+- **Better defaults on YouTube.** Furigana, known-word colouring, and the subtitle
+  queue are all on from the first video (each still toggleable).
+- **More readable queue.** Subtitle queue text is larger, brighter, and set in a
+  proper Japanese typeface, with more breathing room between lines.
+- **More accurate word segmentation.** Subtitle colouring now splits text at the
+  level learners actually track vocabulary (共感してくれて → 共感 | して | くれて),
+  keeps a verb's conjugation with its stem (食べました is one unit), and handles
+  prefixes (お元気), counters (三人 vs タイ人 readings), spelling variants
+  (言う↔いう), and stacked conjugations (取り残されている → 取り残す).
+- **Clearer activity heatmap.** The dashboard heatmap now adapts to the active
+  theme and mode (no more near-black cells on the light theme), spreads its
+  intensity levels wider, rings today, renders the due-cards forecast as washed,
+  dash-outlined cells, and includes a Less→More legend.
+- **About page rebuilt** around what you can do with the app — feature tiles and a
+  three-step getting-started guide instead of a tech-stack list.
 
 ### Security
 - **Browser-extension bridge now rejects web origins.** The desktop app's local
@@ -47,6 +102,13 @@ Work in progress toward 1.4.0.
   (**Pairing**) to connect. **Existing installs must pair once after updating.**
 
 ### Fixed
+- **Switching videos no longer leaves the previous video's subtitles in the
+  queue.** YouTube's navigation data could lag behind the page; the extension now
+  reads the fresh state, ignores stale announcements, and clears the bar and queue
+  the moment you navigate.
+- **The mining dialogs scroll properly.** Tall panels in the hover popup and the
+  YouTube card panel scroll within themselves, and the page underneath no longer
+  scrolls while the cursor is over them.
 - **YouTube tabs no longer run a perpetual ~60fps loop.** The subtitle update
   loop now rests while the video is paused/ended and re-arms on play, seek, and
   cue load.
