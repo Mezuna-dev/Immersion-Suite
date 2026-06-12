@@ -267,6 +267,43 @@
 .imm-yt-select option { background: #1a1a22; color: #fff; }
 .imm-yt-select-sm { font-size: 12px; padding: 4px 6px; }
 
+/* Pre-add review: editable field values under the slot mapping. */
+.imm-yt-fieldvals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.imm-yt-fieldvals .imm-yt-field { flex: 1 1 100%; }
+.imm-yt-fieldval {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.imm-yt-fieldval:focus { outline: none; border-color: rgba(170, 0, 255, 0.7); }
+.imm-yt-fieldval-auto {
+  display: inline-block;
+  align-self: flex-start;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(170, 0, 255, 0.18);
+  color: #e0d3ff;
+  border: 1px solid rgba(170, 0, 255, 0.30);
+}
+
 /* Subtitle-look settings popover (the ⚙ cog). Reuses .imm-yt-card-panel frame. */
 .imm-yt-settings-panel { min-width: 300px; max-width: 360px; max-height: 62vh; }
 

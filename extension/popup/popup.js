@@ -6,6 +6,7 @@ const YT_KEY    = 'imm_yt_settings';    // YouTube layer (youtube.js owns most o
 const TOKEN_KEY = 'imm_ws_token';       // pairing secret - background.js
 const MINE_KEY  = 'imm_mine_settings';     // { deckId, typeId, fieldMaps } - content.js mining
 const YT_MINE_KEY = 'imm_yt_mine_settings'; // { deckId, typeId, fieldMaps } - youtube.js mining
+const REVIEW_KEY  = 'imm_mine_review';      // { enabled } - pre-add review dialog (both miners)
 
 // Defaults must mirror the content scripts so the form shows the real behaviour
 // before the user has ever changed anything.
@@ -23,8 +24,21 @@ document.addEventListener('DOMContentLoaded', () => {
   $('saveTokenBtn').addEventListener('click', saveToken);
   wireInputs();
   initPageFurigana();
+  initReviewToggle();
   initCardDefaults();
 });
+
+// Pre-add review dialog toggle. Defaults ON; absent key reads as enabled.
+function initReviewToggle() {
+  const cb = $('mineReview');
+  chrome.storage.local.get(REVIEW_KEY, (data) => {
+    const v = data[REVIEW_KEY];
+    cb.checked = !v || v.enabled !== false;
+  });
+  cb.addEventListener('change', () => {
+    chrome.storage.local.set({ [REVIEW_KEY]: { enabled: cb.checked } }, flashSaved);
+  });
+}
 
 function loadToken() {
   chrome.storage.local.get(TOKEN_KEY, (data) => {

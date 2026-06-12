@@ -32,6 +32,10 @@
   // Remembered mining config: { deckId, typeId, fieldMaps: { typeId: {slot:field} } }
   let mineSettings      = { deckId: null, typeId: null, fieldMaps: {} };
   const MINE_SETTINGS_KEY = 'imm_mine_settings';
+  // Pre-add review dialog: edit the card's fields before it's saved. Shared
+  // with the YouTube layer via the same key; defaults ON.
+  let reviewBeforeAdd   = true;
+  const REVIEW_KEY      = 'imm_mine_review';
 
   // Known-words set (manual marks + SRS card words, lives in the desktop DB).
   let knownSet          = new Set();
@@ -540,6 +544,20 @@
       display: flex; flex-direction: column; gap: 7px;
       padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
     }
+    /* Pre-add review: one stacked label + editable value per card field. */
+    .mine-fieldvals {
+      display: flex; flex-direction: column; gap: 8px;
+      padding-top: 8px; border-top: 1px solid rgba(0, 0, 0, 0.07);
+      max-height: 300px; overflow-y: auto;
+    }
+    .mine-row-stack { flex-direction: column; align-items: stretch; gap: 3px; }
+    .mine-row-stack .mine-label { flex: none; }
+    .mine-input {
+      width: 100%; box-sizing: border-box; appearance: none; resize: vertical;
+      background: #faf8ff; color: #1a1133; border: 1px solid rgba(170, 0, 255, 0.20);
+      border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12.5px; line-height: 1.5;
+    }
+    .mine-input:focus { outline: none; border-color: #aa00ff; }
     .mine-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-top: 8px; }
     .mine-status { font-size: 12px; color: #6b5f8a; }
     .mine-status[data-level="ok"]  { color: #16a34a; font-weight: 600; }
@@ -699,7 +717,9 @@
       else if (knownBtn) toggleKnown(entry, knownBtn);
       else if (learnBtn) toggleLearning(entry, learnBtn);
       else if (ignoreBtn) toggleIgnore(entry, ignoreBtn);
-      else if (cfgBtn || !mineConfigured()) openMinePanel(entry);
+      else if (cfgBtn) openMinePanel(entry);
+      else if (reviewBeforeAdd) openReviewPanel(entry);
+      else if (!mineConfigured()) openMinePanel(entry);
       else quickMine(entry, mineBtn);
     });
 
@@ -873,10 +893,13 @@
   }
 
   try {
-    chrome.storage.local.get([DICT_SETTINGS_KEY, MINE_SETTINGS_KEY], (data) => {
+    chrome.storage.local.get([DICT_SETTINGS_KEY, MINE_SETTINGS_KEY, REVIEW_KEY], (data) => {
       applyDictSettings(data && data[DICT_SETTINGS_KEY]);
       if (data && data[MINE_SETTINGS_KEY]) {
         mineSettings = { fieldMaps: {}, ...data[MINE_SETTINGS_KEY] };
+      }
+      if (data && data[REVIEW_KEY]) {
+        reviewBeforeAdd = data[REVIEW_KEY].enabled !== false;
       }
     });
     chrome.storage.onChanged.addListener((changes, area) => {
@@ -887,6 +910,10 @@
       // The settings page edits the mining template; pick it up without a reload.
       if (changes[MINE_SETTINGS_KEY]) {
         mineSettings = { deckId: null, typeId: null, fieldMaps: {}, ...(changes[MINE_SETTINGS_KEY].newValue || {}) };
+      }
+      if (changes[REVIEW_KEY]) {
+        const v = changes[REVIEW_KEY].newValue;
+        reviewBeforeAdd = !v || v.enabled !== false;
       }
     });
   } catch (_) { /* no storage permission in some contexts */ }
@@ -1348,6 +1375,133 @@
     addBtn.addEventListener('click', (e) => {
       e.stopPropagation();
       submitMine(entry, { deckSel, typeSel, mapWrap, status, addBtn });
+    });
+    const actions = _el('div', 'mine-actions');
+    actions.appendChild(status);
+    actions.appendChild(addBtn);
+    panel.appendChild(actions);
+
+    reposition();
+  }
+
+  // ── Pre-add review panel ────────────────────────────────────────────────
+  // Shows every field of the chosen card type as an editable input, prefilled
+  // from the saved template (or the auto-guess), so the user can fix or extend
+  // the card before it's saved. The ⚙ panel still owns the slot→field mapping.
+  async function openReviewPanel(entry) {
+    miningOpen = true;
+    clearTimeout(hideTimer);
+    const panel = _el('div', 'mine-panel');
+    panel.appendChild(_el('div', 'mine-loading', 'Loading decks…'));
+    contentEl.replaceChildren(panel);
+    reposition();
+
+    try {
+      await ensureDeckData();
+    } catch (e) {
+      panel.replaceChildren(_el('div', 'mine-status', 'Could not reach Immersion Suite. Is it running?'));
+      panel.querySelector('.mine-status').dataset.level = 'err';
+      return;
+    }
+    if (!miningOpen) return;
+    buildReviewPanel(panel, entry);
+  }
+
+  function buildReviewPanel(panel, entry) {
+    const vals = mineValues(entry);
+    panel.replaceChildren();
+
+    const head = _el('div', 'mine-head');
+    const back = _el('button', 'mine-back', '←');
+    back.title = 'Back';
+    back.addEventListener('click', (e) => { e.stopPropagation(); closeMinePanel(); });
+    head.appendChild(back);
+    head.appendChild(_el('span', 'mine-title', vals.expression || 'New card'));
+    panel.appendChild(head);
+
+    const deckSel = _el('select', 'mine-select');
+    for (const d of decksCache) {
+      const o = _el('option', null, d.name); o.value = String(d.id);
+      if (String(mineSettings.deckId) === String(d.id)) o.selected = true;
+      deckSel.appendChild(o);
+    }
+    const typeSel = _el('select', 'mine-select');
+    for (const t of cardTypesCache) {
+      const o = _el('option', null, t.name); o.value = String(t.id);
+      if (String(mineSettings.typeId) === String(t.id)) o.selected = true;
+      typeSel.appendChild(o);
+    }
+    panel.appendChild(_labeledRow('Deck', deckSel));
+    panel.appendChild(_labeledRow('Type', typeSel));
+
+    const fieldsWrap = _el('div', 'mine-fieldvals');
+    panel.appendChild(fieldsWrap);
+
+    const renderFields = () => {
+      fieldsWrap.replaceChildren();
+      const t = cardTypesCache.find(t => String(t.id) === typeSel.value);
+      if (!t) return;
+      const fields = t.fields || [];
+      const slotMap = (mineSettings.fieldMaps
+        && (mineSettings.fieldMaps[t.id] || mineSettings.fieldMaps[String(t.id)]))
+        || autoMapDict(fields);
+      // Invert slot→field into field→prefilled value.
+      const prefill = {};
+      for (const slot of MINE_SLOTS) {
+        const f = slotMap[slot.key];
+        if (f && vals[slot.key]) prefill[f] = vals[slot.key];
+      }
+      for (const f of fields) {
+        const v = prefill[f] || '';
+        const long = v.length > 42 || /sentence|definition|meaning|note|example/i.test(f);
+        const input = _el(long ? 'textarea' : 'input', 'mine-input');
+        if (long) input.rows = 2; else input.type = 'text';
+        input.value = v;
+        input.dataset.field = f;
+        const row = _el('div', 'mine-row mine-row-stack');
+        row.appendChild(_el('label', 'mine-label', f));
+        row.appendChild(input);
+        fieldsWrap.appendChild(row);
+      }
+      reposition();
+    };
+    typeSel.addEventListener('change', renderFields);
+    renderFields();
+
+    const status = _el('div', 'mine-status');
+    const addBtn = _el('button', 'mine-add', '＋ Add card');
+    addBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const deckId = deckSel.value, typeId = typeSel.value;
+      if (!deckId || !typeId) { _mineStatus(status, 'Pick a deck and card type.', 'err'); return; }
+      const fields = {};
+      for (const inp of fieldsWrap.querySelectorAll('[data-field]')) {
+        const v = inp.value.trim();
+        if (v) fields[inp.dataset.field] = v;
+      }
+      if (!Object.keys(fields).length) { _mineStatus(status, 'Fill in at least one field.', 'err'); return; }
+
+      addBtn.disabled = true;
+      _mineStatus(status, 'Adding…');
+      let resp;
+      try {
+        resp = await chrome.runtime.sendMessage({
+          action: 'create_card', deck_id: Number(deckId), card_type_id: Number(typeId), fields,
+        });
+      } catch (_) {
+        addBtn.disabled = false; _mineStatus(status, 'Could not reach Immersion Suite.', 'err'); return;
+      }
+      addBtn.disabled = false;
+      if (!resp || resp.error) { _mineStatus(status, (resp && resp.error) || 'Failed to add.', 'err'); return; }
+
+      // Remember deck/type; the slot mapping stays the ⚙ panel's business.
+      mineSettings.deckId = deckId;
+      mineSettings.typeId = typeId;
+      saveMineSettings();
+
+      _mineStatus(status, '✓ Added', 'ok');
+      addBtn.textContent = '✓ Added';
+      setTimeout(closeMinePanel, 750);
     });
     const actions = _el('div', 'mine-actions');
     actions.appendChild(status);

@@ -69,6 +69,10 @@
   // ＋ buttons mine in one click; Shift+click still opens the panel.
   const MINE_KEY = 'imm_yt_mine_settings';
   let ytMine = { deckId: null, typeId: null, fieldMaps: {} };
+  // Pre-add review: when on (default), ＋ opens the card panel with editable
+  // field values instead of mining instantly. Shared key with the hover dict.
+  const REVIEW_KEY = 'imm_mine_review';
+  let reviewBeforeAdd = true;
 
   // Tokenized text cache: exact sub text → [{text, reading}, ...]. Keyed by
   // the raw string so the same sub never round-trips the backend twice.
@@ -102,9 +106,12 @@
   // ── Settings (chrome.storage.local - Phase 4 will expose UI for these) ──
   function loadSettings() {
     try {
-      chrome.storage.local.get([SETTINGS_KEY, MINE_KEY], (data) => {
+      chrome.storage.local.get([SETTINGS_KEY, MINE_KEY, REVIEW_KEY], (data) => {
         if (data && data[MINE_KEY]) {
           ytMine = { deckId: null, typeId: null, fieldMaps: {}, ...data[MINE_KEY] };
+        }
+        if (data && data[REVIEW_KEY]) {
+          reviewBeforeAdd = data[REVIEW_KEY].enabled !== false;
         }
         const s = data && data[SETTINGS_KEY];
         if (!s) return;
@@ -185,6 +192,10 @@
       // Mining defaults edited from the toolbar popup apply live.
       if (changes[MINE_KEY]) {
         ytMine = { deckId: null, typeId: null, fieldMaps: {}, ...(changes[MINE_KEY].newValue || {}) };
+      }
+      if (changes[REVIEW_KEY]) {
+        const v = changes[REVIEW_KEY].newValue;
+        reviewBeforeAdd = !v || v.enabled !== false;
       }
       if (!changes[SETTINGS_KEY]) return;
       const s = changes[SETTINGS_KEY].newValue;
@@ -1214,6 +1225,13 @@
     fieldMapWrap.id = 'imm-yt-fieldmap';
     wrap.appendChild(fieldMapWrap);
 
+    // Editable field values (pre-add review): every field of the chosen type,
+    // with the mapped sentence prefilled and media slots shown as auto-chips.
+    const fieldValsWrap = document.createElement('div');
+    fieldValsWrap.className = 'imm-yt-fieldvals';
+    fieldValsWrap.id = 'imm-yt-fieldvals';
+    wrap.appendChild(fieldValsWrap);
+
     const row2 = document.createElement('div');
     row2.className = 'imm-yt-card-row imm-yt-card-actions';
 
@@ -1338,7 +1356,8 @@
 
   async function toggleCardPanel(e) {
     if (cardPanelOpen()) { closeCardPanel(); return; }
-    if (!(e && e.shiftKey) && ytMineConfigured()) {
+    // Instant mining only when the user has switched the review dialog off.
+    if (!(e && e.shiftKey) && !reviewBeforeAdd && ytMineConfigured()) {
       const cue = getActiveCue();
       if (cue && cue.text) {
         const btn = toolbarEl && toolbarEl.querySelector('#imm-yt-btn-card');
@@ -1721,8 +1740,49 @@
         if (stored[slot.key] === f) o.selected = true;
         sub.appendChild(o);
       }
-      sub.addEventListener('change', () => persistFieldMap(t.id));
+      sub.addEventListener('change', () => { persistFieldMap(t.id); renderFieldValues(); });
       wrap.appendChild(labeled(slot.label, sub));
+    }
+    renderFieldValues();
+  }
+
+  // Current slot→field mapping as chosen in the panel's selects.
+  function currentFieldMap() {
+    const map = {};
+    for (const sel of cardPanelEl.querySelectorAll('#imm-yt-fieldmap select[data-slot]')) {
+      if (sel.value) map[sel.dataset.slot] = sel.value;
+    }
+    return map;
+  }
+
+  // One editable input per card field. The sentence-mapped field is prefilled
+  // with the current line; image/audio-mapped fields are auto-attached on the
+  // desktop side, so they render as inert chips rather than inputs.
+  function renderFieldValues() {
+    const wrap = cardPanelEl.querySelector('#imm-yt-fieldvals');
+    if (!wrap) return;
+    wrap.innerHTML = '';
+    const typeSel = cardPanelEl.querySelector('#imm-yt-type-select');
+    const t = cardTypesCache && cardTypesCache.find(t => String(t.id) === typeSel.value);
+    if (!t) return;
+    const map = currentFieldMap();
+    const cue = cardOverrideCue || getActiveCue();
+    const cueText = (cue && cue.text) || '';
+
+    for (const f of (t.fields || [])) {
+      if (f === map.image || f === map.audio) {
+        const chip = document.createElement('span');
+        chip.className = 'imm-yt-fieldval-auto';
+        chip.textContent = f === map.image ? 'auto: screenshot' : 'auto: audio clip';
+        wrap.appendChild(labeled(f, chip));
+        continue;
+      }
+      const ta = document.createElement('textarea');
+      ta.className = 'imm-yt-fieldval';
+      ta.rows = f === map.sentence ? 2 : 1;
+      ta.dataset.field = f;
+      if (f === map.sentence) ta.value = cueText;
+      wrap.appendChild(labeled(f, ta));
     }
   }
 
@@ -1764,9 +1824,20 @@
     const cue = cardOverrideCue || getActiveCue();
     if (!cue || !cue.text) { setCardStatus('No active subtitle.', 'error'); return; }
 
-    const fieldMap = {};
-    for (const sel of cardPanelEl.querySelectorAll('#imm-yt-fieldmap select[data-slot]')) {
-      if (sel.value) fieldMap[sel.dataset.slot] = sel.value;
+    const fieldMap = currentFieldMap();
+
+    // Reviewed values: the sentence-mapped field's edit replaces the cue text
+    // (audio timing still follows the cue); other non-empty inputs ride along
+    // as extra fields.
+    let sentence = cue.text;
+    const extraFields = {};
+    for (const inp of cardPanelEl.querySelectorAll('#imm-yt-fieldvals [data-field]')) {
+      const v = inp.value.trim();
+      if (inp.dataset.field === fieldMap.sentence) {
+        if (v) sentence = v;
+      } else if (v) {
+        extraFields[inp.dataset.field] = v;
+      }
     }
 
     let imageB64 = null;
@@ -1786,11 +1857,12 @@
       video_url: location.href.split('&')[0],
       start_ms: startMs,
       end_ms:   endMs,
-      sentence: cue.text,
+      sentence: sentence,
       image_b64: imageB64,
       deck_id: deckId,
       card_type_id: typeId,
       field_map: fieldMap,
+      extra_fields: extraFields,
     };
 
     const resp = await sendBackground(req);
@@ -2200,10 +2272,10 @@
       const cue = cues[idx];
       seekToCueStart(cue);
       setActiveCue(idx);
-      // One-click path: defaults are set, so mine this row straight away.
+      // One-click path: defaults set AND the review dialog switched off.
       // (The pending DOM-mirror row below always uses the panel - its cue
       // hasn't closed yet, so it has no reliable end time.)
-      if (!(e && e.shiftKey) && ytMineConfigured()) {
+      if (!(e && e.shiftKey) && !reviewBeforeAdd && ytMineConfigured()) {
         const row = queueRows[idx];
         const btn = row && row.querySelector('.imm-yt-queue-mine');
         await waitForSeek();

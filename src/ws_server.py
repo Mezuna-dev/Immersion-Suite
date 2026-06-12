@@ -394,6 +394,8 @@ def _create_card_with_media(msg: dict) -> dict:
     deck_id     = msg.get('deck_id')
     type_id     = msg.get('card_type_id')
     field_map   = msg.get('field_map') or {}
+    # Values the user typed into unmapped fields in the pre-add review dialog.
+    extra_fields = msg.get('extra_fields') or {}
     start_ms    = int(msg.get('start_ms') or 0)
     end_ms      = int(msg.get('end_ms') or 0)
 
@@ -442,6 +444,11 @@ def _create_card_with_media(msg: dict) -> dict:
                     audio_skipped = err
 
     fields = _build_fields(field_map, sentence, image_filename, audio_filename)
+    if isinstance(extra_fields, dict):
+        for k, v in extra_fields.items():
+            k, v = str(k), str(v).strip()
+            if v and k not in fields:
+                fields[k] = v
 
     # Match the in-app convention (app_widget.createCard): front = first
     # field's value, back = the rest joined by ' / '. The card type's

@@ -79,8 +79,11 @@ page's own styling.
 **Mine a word** — each entry has a **＋** button that creates a flashcard from the
 word (expression, reading, definition) plus the **sentence it appeared in**, so you
 can mine while reading anything, not just YouTube. The first time, use the **⚙**
-button to pick the deck, card type, and which fields receive each piece; after that
-**＋** adds a card in one click.
+button to pick the deck, card type, and which fields receive each piece. By default
+**＋** then opens a small **review dialog** — every field of the card prefilled and
+editable, so you can fix a definition or add context before it's saved. Prefer
+instant one-click mining? Turn **Review before adding** off in the extension popup
+(applies to YouTube mining too).
 
 **Mark a word's status** — each entry has three status buttons, kept in a list
 separate from your SRS deck: **○ / ✓** marks a word *known*, **学** marks it
@@ -126,9 +129,13 @@ with the ○/✓, 学 and ⊘ buttons in the hover popup; the bar recolours imme
 Your known list is separate from the SRS deck.
 
 **Sentence mining** (＋) turns the current line into a flashcard. It captures a
-screenshot of the frame and an audio clip of the line, then lets you choose the deck,
-card type, and which fields receive the sentence, image, and audio. The card is created
-directly in the desktop app.
+screenshot of the frame and an audio clip of the line, then opens a panel to choose
+the deck, card type, and which fields receive the sentence, image, and audio — plus
+an editable input for **every field** of the card type, with the sentence prefilled,
+so you can correct the line or add notes before the card is saved. The card is
+created directly in the desktop app. With **Review before adding** switched off in
+the extension popup (and a default template saved), ＋ skips the panel and mines in
+one click.
 
 **Subtitle queue** (☰) opens a scrollable list of every line in the video in the right
 column. Click a line to jump to it, or use the per-line ＋ to mine it.
