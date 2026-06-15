@@ -1,4 +1,4 @@
-; Inno Setup Script for Immersion Suite v1.3.1
+; Inno Setup Script for Immersion Suite v1.4.0
 ; Requires Inno Setup 6.x - https://jrsoftware.org/isinfo.php
 ;
 ; Build steps (run on Windows):
