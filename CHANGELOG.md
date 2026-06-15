@@ -12,6 +12,15 @@ All notable changes to Immersion Suite are documented here. The format is based 
 Work in progress toward 1.4.0.
 
 ### Added
+- **FSRS scheduling, switchable per deck.** Each deck can keep the classic SM-2
+  scheduler or switch to **FSRS** — a modern algorithm that models every card's memory
+  as a *stability* and *difficulty* and adapts intervals to a retention target you
+  choose. Pick the algorithm in a deck's **Scheduler** settings; you can switch either
+  way at any time. Turning FSRS on seeds each card's memory from its review history, and
+  your SM-2 progress is preserved if you switch back. Set a **desired retention** (e.g.
+  0.90), and once a deck has a few hundred reviews, **Optimize parameters** trains FSRS's
+  21 weights on that deck's own history in the background. New decks follow the default
+  scheduler and retention you set in Settings.
 - **Word status tracking: known, learning, and ignored.** Every entry in the hover
   dictionary has status buttons — **○/✓** known, **学** learning (started studying,
   still counts as unknown), **⊘** ignored (excluded from scores) — kept in a list
@@ -102,6 +111,14 @@ Work in progress toward 1.4.0.
   (**Pairing**) to connect. **Existing installs must pair once after updating.**
 
 ### Fixed
+- **The review log now records every answer.** Learning and relearning step presses
+  are logged too (previously only introductions, graduations and lapses were), so the
+  review heatmap and counts reflect all of your reviewing — and FSRS has the complete
+  history it needs to seed and optimize accurately.
+- **Three SRS scheduling bugs.** Deleting a card mid-review could re-show the
+  previously answered card and inflate the queue count; the learning queue's delete
+  matched the wrong field; and Anki-imported cards that were mid-learning could jump
+  straight to a multi-day interval on their first graduation.
 - **Switching videos no longer leaves the previous video's subtitles in the
   queue.** YouTube's navigation data could lag behind the page; the extension now
   reads the fresh state, ignores stale announcements, and clears the bar and queue

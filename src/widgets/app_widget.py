@@ -8,8 +8,10 @@ from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkRepl
 from pathlib import Path
 import json
 import urllib.parse
+from datetime import date, timedelta
 import database
 import scheduler
+import fsrs
 import updater
 import version
 
@@ -110,6 +112,9 @@ class AppBridge(QObject):
                 'answer_display': deck.answer_display or 'replace',
                 'parent_id': deck.parent_id,
                 'position': deck.position,
+                'scheduler': deck.scheduler or 'sm2',
+                'desired_retention': deck.desired_retention,
+                'fsrs_params': deck.fsrs_params or '',
             })
         payload = json.dumps(deck_list)
         self.web_view.page().runJavaScript(f'updateDecks({payload});')
@@ -131,6 +136,8 @@ class AppBridge(QObject):
                 relearning_steps=s.get('default_relearning_steps', '10'),
                 study_order=s.get('default_study_order', 'new_first'),
                 parent_id=parent_id if parent_id else None,
+                scheduler=s.get('default_scheduler', 'sm2'),
+                desired_retention=s.get('default_desired_retention', 0.9),
             )
             self.refreshStats()
     
@@ -420,10 +427,44 @@ class AppBridge(QObject):
         settings = json.loads(settings_json)
         database.save_app_settings(settings)
 
-    @pyqtSlot(int, str, str, int, str, str, str, str, int)
-    def saveDeckSettings(self, deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display, parent_id=0):
-        database.update_deck_settings(deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display, parent_id=parent_id if parent_id else None)
+    @pyqtSlot(int, str, str, int, str, str, str, str, int, float, str)
+    def saveDeckSettings(self, deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display, parent_id=0, desired_retention=0.9, fsrs_params=''):
+        database.update_deck_settings(deck_id, name, description, new_cards_limit, learning_steps_str, relearning_steps_str, study_order, answer_display, parent_id=parent_id if parent_id else None, desired_retention=desired_retention, fsrs_params=(fsrs_params or None))
         self.getDecks()
+
+    @pyqtSlot(int, str)
+    def setDeckScheduler(self, deck_id, scheduler_name):
+        """Switch a deck between 'sm2' and 'fsrs'. Turning FSRS on seeds memory
+        state for the deck's cards by replaying their review history."""
+        database.set_deck_scheduler(deck_id, scheduler_name)
+        self.getDecks()
+
+    @pyqtSlot(int)
+    def optimizeDeckParams(self, deck_id):
+        """Train FSRS weights on this deck (+ descendants) in a background thread,
+        streaming progress to the UI and persisting the result on success."""
+        from utils.optimize_thread import OptimizeThread
+        all_ids = database.get_deck_and_descendant_ids(deck_id)
+        thread = OptimizeThread(all_ids)
+        self._opt_thread = thread  # keep a reference so the QThread isn't GC'd
+        thread.progress.connect(
+            lambda i, n, loss: self.web_view.page().runJavaScript(
+                f'fsrsOptimizeProgress({i}, {n}, {loss});'))
+        thread.insufficient.connect(
+            lambda count: self.web_view.page().runJavaScript(
+                f'fsrsOptimizeInsufficient({count});'))
+        thread.error.connect(
+            lambda msg: self.web_view.page().runJavaScript(
+                f'fsrsOptimizeError({json.dumps(msg)});'))
+
+        def _on_done(params, count):
+            database.set_deck_fsrs_params(deck_id, json.dumps(params))
+            self.web_view.page().runJavaScript(
+                f'fsrsOptimizeDone({json.dumps({"params": params, "count": count})});')
+            self.getDecks()
+
+        thread.done.connect(_on_done)
+        thread.start()
 
     @pyqtSlot(int, int)
     def setDeckParent(self, deck_id, parent_id):
@@ -451,9 +492,34 @@ class AppBridge(QObject):
         database.delete_deck(deck_id)
         self.getDecks()
 
-    @pyqtSlot(int, int)
-    def updateCardLearningStep(self, card_id, learning_step):
-        database.update_card_learning_step(card_id, learning_step)
+    def _elapsed_days(self, card):
+        """Whole days since the card was last reviewed (None if never), on the SRS
+        clock. Drives FSRS same-day vs cross-day stability updates."""
+        if not card.last_reviewed:
+            return None
+        try:
+            last = date.fromisoformat(card.last_reviewed)
+        except (ValueError, TypeError):
+            return None
+        return max(0, (database.get_srs_today() - last).days)
+
+    @pyqtSlot(int, int, int)
+    def updateCardLearningStep(self, card_id, rating, learning_step):
+        """Record one learning/relearning step press: advance the step, update the
+        active scheduler's memory state, and log the review (every press)."""
+        card = database.get_card_by_id(card_id)
+        if not card:
+            return
+        deck = database.get_deck_by_id(card.deck_id)
+        if deck and deck.scheduler == 'fsrs':
+            params = database.resolve_fsrs_params(deck)
+            new_s, new_d = fsrs.apply(card.stability, card.difficulty,
+                                      fsrs.to_grade(rating), self._elapsed_days(card), params)
+            database.update_card_learning_step_fsrs(card_id, learning_step, new_s, new_d)
+        else:
+            database.update_card_learning_step(card_id, learning_step)
+        # Learning/relearning steps are sub-day, so log with interval_after=0.
+        database.create_review(card_id, rating, 0, card.ease_factor)
 
     @pyqtSlot(str, result=str)
     def selectMediaFile(self, file_type):
@@ -501,6 +567,9 @@ class AppBridge(QObject):
         relearning_steps = [int(s) for s in relearning_steps_str.split() if s.strip().isdigit()]
         study_order = deck.study_order if deck else 'new_first'
         answer_display = deck.answer_display if deck else 'replace'
+        deck_scheduler = deck.scheduler if deck else 'sm2'
+        desired_retention = deck.desired_retention if deck else 0.9
+        fsrs_params = list(database.resolve_fsrs_params(deck))
 
         # Gather cards subdeck-by-subdeck in tree order (matching Anki):
         # the parent deck's new-card limit is the total budget, and subdecks
@@ -565,6 +634,9 @@ class AppBridge(QObject):
                     'reps': card.reps,
                     'interval': card.interval,
                     'ease_factor': card.ease_factor,
+                    'stability': card.stability,
+                    'difficulty': card.difficulty,
+                    'last_reviewed': card.last_reviewed,
                 })
             return result
 
@@ -580,23 +652,35 @@ class AppBridge(QObject):
             'study_order': study_order,
             'media_base_url': media_base_url,
             'answer_display': answer_display,
+            'scheduler': deck_scheduler,
+            'fsrs_params': fsrs_params,
+            'desired_retention': desired_retention,
+            'srs_today': database.get_srs_today().strftime('%Y-%m-%d'),
         })
         self.web_view.page().runJavaScript(f'updateReviewQueue({payload});')
 
     @pyqtSlot(int, int)
     def logLapse(self, card_id, rating):
-        """A review card was failed (Again) and is entering relearning steps.
-        Reset its strength so relearning rebuilds the interval instead of growing
-        the pre-lapse one: interval -> 1 day, ease -0.20 (floored), reps -> 0.
-        Learning_Step / Due_Date are set separately by updateCardLearningStep,
-        keeping the card in the relearning queue."""
+        """A review card was failed (Again) and is entering relearning steps. This
+        also parks the card in the relearning queue (Learning_Step=0, due today) -
+        the JS no longer calls updateCardLearningStep separately on lapse.
+
+        SM-2: reset strength (interval->1, ease -0.20 floored, reps->0).
+        FSRS: apply the forget-stability update; SM-2 fields are left untouched."""
         card = database.get_card_by_id(card_id)
-        if card:
+        if not card:
+            return
+        deck = database.get_deck_by_id(card.deck_id)
+        if deck and deck.scheduler == 'fsrs':
+            params = database.resolve_fsrs_params(deck)
+            new_s, new_d = fsrs.apply(card.stability, card.difficulty,
+                                      fsrs.to_grade(rating), self._elapsed_days(card), params)
+            database.apply_lapse_fsrs(card_id, new_s, new_d)
+            database.create_review(card_id, rating, 0, card.ease_factor)
+        else:
             new_ease_factor = max(scheduler.EASE_FLOOR, card.ease_factor - scheduler.LAPSE_EASE_PENALTY)
-            new_interval = 1
-            new_reps = 0
-            database.apply_lapse(card_id, new_reps, new_ease_factor, new_interval)
-            database.create_review(card_id, rating, new_interval, new_ease_factor)
+            database.apply_lapse(card_id, 0, new_ease_factor, 1)
+            database.create_review(card_id, rating, 1, new_ease_factor)
 
     @pyqtSlot(str, str, str)
     def browseCards(self, deck_id_str, search_query, sort_by):
@@ -640,8 +724,9 @@ class AppBridge(QObject):
         cur = con.cursor()
         cur.execute("""
             SELECT c.ID, c.Deck_ID, c.Card_Front, c.Card_Back, c.Card_Type_ID, c.Fields,
-                   c.Reps, c.Ease_Factor, c.Interval, c.Due_Date, c.Is_New, c.Date_Created, c.Last_Reviewed
-            FROM Card c WHERE c.ID = ?
+                   c.Reps, c.Ease_Factor, c.Interval, c.Due_Date, c.Is_New, c.Date_Created, c.Last_Reviewed,
+                   c.Stability, c.Difficulty, d.Scheduler
+            FROM Card c LEFT JOIN Deck d ON c.Deck_ID = d.ID WHERE c.ID = ?
         """, (card_id,))
         row = cur.fetchone()
         con.close()
@@ -652,6 +737,9 @@ class AppBridge(QObject):
             'card_type_id': row[4], 'fields': row[5],
             'reps': row[6], 'ease_factor': round(row[7], 2), 'interval': row[8],
             'due_date': row[9], 'is_new': bool(row[10]), 'date_created': row[11], 'last_reviewed': row[12],
+            'stability': round(row[13], 2) if row[13] is not None else None,
+            'difficulty': round(row[14], 2) if row[14] is not None else None,
+            'scheduler': row[15] or 'sm2',
         }
         # Bundle card types to avoid race condition
         card_types = database.get_all_card_types()
@@ -664,8 +752,22 @@ class AppBridge(QObject):
         self.web_view.page().runJavaScript(f'loadCardForEdit({payload});')
 
     def _scheduleReview(self, card_id, rating, adjust_ease):
+        """Graduate a card into (or schedule the next) review. Branches on the
+        deck's scheduler; `adjust_ease` is an SM-2-only knob (ignored by FSRS,
+        whose memory-state update already accounts for the grade)."""
         card = database.get_card_by_id(card_id)
-        if card:
+        if not card:
+            return
+        deck = database.get_deck_by_id(card.deck_id)
+        if deck and deck.scheduler == 'fsrs':
+            params = database.resolve_fsrs_params(deck)
+            new_s, new_d = fsrs.apply(card.stability, card.difficulty,
+                                      fsrs.to_grade(rating), self._elapsed_days(card), params)
+            new_interval = fsrs.next_interval(new_s, deck.desired_retention, params)
+            due_date = (database.get_srs_today() + timedelta(days=new_interval)).strftime('%Y-%m-%d')
+            database.update_card_after_review_fsrs(card_id, new_s, new_d, new_interval, due_date, 0)
+            database.create_review(card_id, rating, new_interval, card.ease_factor)
+        else:
             new_reps, new_ease_factor, new_interval, due_date = scheduler.calculate_next_review(
                 card.reps, card.ease_factor, card.interval, rating,
                 reference_date=database.get_srs_today(), adjust_ease=adjust_ease

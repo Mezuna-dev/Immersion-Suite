@@ -288,6 +288,32 @@
                             <small class="settings-hint">How the answer is shown when you flip a card.</small>
                         </div>
                     </div>
+                    <div class="card mb-4 settings-card" style="max-width: 560px; animation: fadeIn 0.6s ease;">
+                        <div class="card-body text-white">
+                            <h2 class="settings-section-title">Scheduler</h2>
+                            <label class="form-label settings-label" for="settings-scheduler">Algorithm</label>
+                            <select class="form-control settings-input settings-select" id="settings-scheduler" style="width: 20rem;" onchange="onDeckSchedulerChange()">
+                                <option value="sm2">SM-2 (classic)</option>
+                                <option value="fsrs">FSRS (adaptive)</option>
+                            </select>
+                            <small class="settings-hint">FSRS adapts intervals to your memory via per-card stability &amp; difficulty. You can switch at any time; switching to FSRS seeds state from each card's history.</small>
+                            <div id="settings-fsrs-options" style="display:none; margin-top:1.25rem;">
+                                <label class="form-label settings-label" for="settings-desired-retention">Desired retention</label>
+                                <input type="number" class="form-control settings-input" id="settings-desired-retention" min="0.70" max="0.99" step="0.01" style="width: 8rem;">
+                                <small class="settings-hint">Target recall probability (0.80–0.95 typical). Higher means more reviews but better recall.</small>
+                                <div style="margin-top:1.1rem;">
+                                    <button class="btn btn-dark btn-accent" id="settings-fsrs-optimize-btn" onclick="optimizeFsrsParams()">Optimize parameters</button>
+                                    <span id="settings-fsrs-optimize-status" class="settings-hint" style="margin-left:0.6rem;"></span>
+                                </div>
+                                <small class="settings-hint">Trains the 21 FSRS weights on this deck's review history (needs a few hundred reviews).</small>
+                                <details style="margin-top:0.85rem;">
+                                    <summary class="settings-label" style="cursor:pointer; list-style:revert;">Advanced: parameters</summary>
+                                    <textarea class="form-control settings-input" id="settings-fsrs-params" rows="3" placeholder="21 comma-separated weights (blank = defaults)" style="margin-top:0.5rem; font-family:monospace; font-size:0.78rem;"></textarea>
+                                    <small class="settings-hint">Leave blank for defaults, or paste 21 optimized weights.</small>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
                     <div class="card mb-4 settings-card settings-danger-zone" style="max-width: 560px; animation: fadeIn 0.6s ease;">
                         <div class="card-body text-white">
                             <h2 class="settings-section-title" style="color: #e05454;">Danger Zone</h2>
@@ -482,6 +508,10 @@
                                 <div><span style="color:var(--text-muted);">Interval:</span> <span id="edit-card-interval">-</span> days</div>
                                 <div><span style="color:var(--text-muted);">Ease:</span> <span id="edit-card-ease">-</span></div>
                                 <div><span style="color:var(--text-muted);">Due:</span> <span id="edit-card-due">-</span></div>
+                            </div>
+                            <div class="d-flex flex-wrap gap-4 mt-2" id="edit-card-fsrs-row" style="display:none;">
+                                <div><span style="color:var(--text-muted);">Stability:</span> <span id="edit-card-stability">-</span> days</div>
+                                <div><span style="color:var(--text-muted);">Difficulty:</span> <span id="edit-card-difficulty">-</span></div>
                             </div>
                             <div class="d-flex flex-wrap gap-4 mt-2">
                                 <div><span style="color:var(--text-muted);">Created:</span> <span id="edit-card-created">-</span></div>
@@ -907,6 +937,15 @@
                             <label class="form-label settings-label mt-4" for="srs-day-start-hour">Next day starts at</label>
                             <select class="form-control settings-input settings-select" id="srs-day-start-hour" style="width: 14rem;"></select>
                             <small class="settings-hint">Hour when the new review day begins. Reviews done before this hour count toward the previous day.</small>
+                            <label class="form-label settings-label mt-4" for="srs-default-scheduler">Scheduler for new decks</label>
+                            <select class="form-control settings-input settings-select" id="srs-default-scheduler" style="width: 20rem;">
+                                <option value="sm2">SM-2 (classic)</option>
+                                <option value="fsrs">FSRS (adaptive)</option>
+                            </select>
+                            <small class="settings-hint">Default algorithm for newly created decks. Existing decks keep their own setting.</small>
+                            <label class="form-label settings-label mt-4" for="srs-default-retention">Default desired retention</label>
+                            <input type="number" class="form-control settings-input" id="srs-default-retention" min="0.70" max="0.99" step="0.01" style="width: 8rem;">
+                            <small class="settings-hint">FSRS target recall probability for new decks (0.80–0.95 typical).</small>
                         </div>
                     </div>
                     <div class="d-flex mb-5 gap-3">

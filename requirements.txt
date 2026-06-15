@@ -1,5 +1,6 @@
 PyQt6
 zstandard
+numpy
 PyQt6-WebEngine
 websockets>=12.0
 sudachipy>=0.6

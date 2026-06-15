@@ -66,6 +66,7 @@ a = Analysis(
     ],
     hiddenimports=[
         'zstandard',
+        'numpy',  # FSRS optimiser; imported lazily, so pin it for the frozen build
         'PyQt6.QtWebEngineWidgets',
         'PyQt6.QtWebEngineCore',
         'PyQt6.QtWebChannel',

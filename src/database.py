@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 import sqlite3
 import json
 import models
+import fsrs
 
 # ===========================================================
 # Section: Create Database File and Directory
@@ -34,6 +35,8 @@ DEFAULT_SETTINGS = {
     'default_learning_steps': '1 10',
     'default_relearning_steps': '10',
     'default_study_order': 'new_first',
+    'default_scheduler': 'sm2',          # 'sm2' | 'fsrs' - scheduler for new decks
+    'default_desired_retention': 0.9,    # FSRS target recall probability for new decks
     'review_autoplay_audio': True,
     'review_shortcut_enabled': True,
     'review_shortcut_key': 'Space',
@@ -115,6 +118,9 @@ def initialize_database():
                 Answer_Display TEXT DEFAULT 'replace',
                 Parent_ID INTEGER,
                 Position INTEGER NOT NULL DEFAULT 0,
+                Scheduler TEXT DEFAULT 'sm2',
+                FSRS_Params TEXT,
+                Desired_Retention REAL DEFAULT 0.9,
                 FOREIGN KEY (Parent_ID) REFERENCES Deck(ID)
                 )
         """)
@@ -150,6 +156,8 @@ def initialize_database():
                 Card_Type_ID INTEGER,
                 Fields TEXT,
                 Learning_Step INTEGER,
+                Stability REAL,
+                Difficulty REAL,
                 FOREIGN KEY (Deck_ID) REFERENCES Deck(ID),
                 FOREIGN KEY (Card_Type_ID) REFERENCES CardType(ID)
                 )
@@ -262,6 +270,11 @@ def migrate_database():
         "ALTER TABLE Deck ADD COLUMN Answer_Display TEXT DEFAULT 'replace'",
         "ALTER TABLE Deck ADD COLUMN Parent_ID INTEGER REFERENCES Deck(ID)",
         "ALTER TABLE Deck ADD COLUMN Position INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE Deck ADD COLUMN Scheduler TEXT DEFAULT 'sm2'",
+        "ALTER TABLE Deck ADD COLUMN FSRS_Params TEXT",
+        "ALTER TABLE Deck ADD COLUMN Desired_Retention REAL DEFAULT 0.9",
+        "ALTER TABLE Card ADD COLUMN Stability REAL",
+        "ALTER TABLE Card ADD COLUMN Difficulty REAL",
     ]:
         try:
             cur.execute(stmt)
@@ -444,7 +457,8 @@ def get_ordered_subdeck_tree(deck_id):
 
 def create_deck(name: str, description: str = "", new_cards_limit: int = 15,
                 learning_steps: str = '1 10', relearning_steps: str = '10',
-                study_order: str = 'new_first', parent_id: int = None):
+                study_order: str = 'new_first', parent_id: int = None,
+                scheduler: str = 'sm2', desired_retention: float = 0.9):
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
@@ -458,10 +472,12 @@ def create_deck(name: str, description: str = "", new_cards_limit: int = 15,
 
     cur.execute("""
         INSERT INTO Deck (Name, Date_Created, Description, New_Cards_Limit,
-                          Learning_Steps, Relearning_Steps, Study_Order, Parent_ID, Position)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          Learning_Steps, Relearning_Steps, Study_Order, Parent_ID, Position,
+                          Scheduler, Desired_Retention)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (name, creation_date, description, new_cards_limit,
-          learning_steps, relearning_steps, study_order, parent_id, next_pos))
+          learning_steps, relearning_steps, study_order, parent_id, next_pos,
+          scheduler, desired_retention))
 
     con.commit()
     new_deck_id = cur.lastrowid
@@ -476,11 +492,11 @@ def get_all_decks():
 
     decks = []
 
-    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Position FROM Deck""")
+    cur.execute("""SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Position, Scheduler, FSRS_Params, Desired_Retention FROM Deck""")
     rows = cur.fetchall()
 
     for row in rows:
-        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace', parent_id=row[9], position=row[10] or 0)
+        deck = models.Deck(row[0], row[1], row[2], row[3], description=row[4], learning_steps=row[5] or '1 10', relearning_steps=row[6] or '10', study_order=row[7] or 'new_first', answer_display=row[8] or 'replace', parent_id=row[9], position=row[10] or 0, scheduler=row[11] or 'sm2', fsrs_params=row[12], desired_retention=row[13])
         decks.append(deck)
 
     con.close()
@@ -491,7 +507,7 @@ def get_deck_by_id(id):
     cur = con.cursor()
 
     cur.execute("""
-        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Position FROM Deck
+        SELECT ID, Name, Date_Created, New_Cards_Limit, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Position, Scheduler, FSRS_Params, Desired_Retention FROM Deck
         WHERE ID=?
     """, (id,))
 
@@ -501,17 +517,76 @@ def get_deck_by_id(id):
         con.close()
         return None
     else:
-        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace', parent_id=row[8], position=row[9] or 0)
+        deck = models.Deck(row[0], row[1], row[2], row[3], learning_steps=row[4] or '1 10', relearning_steps=row[5] or '10', study_order=row[6] or 'new_first', answer_display=row[7] or 'replace', parent_id=row[8], position=row[9] or 0, scheduler=row[10] or 'sm2', fsrs_params=row[11], desired_retention=row[12])
 
         con.close()
         return deck
 
-def update_deck_settings(deck_id: int, name: str, description: str, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace', parent_id: int = None):
+def update_deck_settings(deck_id: int, name: str, description: str, new_cards_limit: int, learning_steps: str = '1 10', relearning_steps: str = '10', study_order: str = 'new_first', answer_display: str = 'replace', parent_id: int = None, desired_retention: float = 0.9, fsrs_params: str = None):
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
-        UPDATE Deck SET Name = ?, Description = ?, New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ?, Parent_ID = ? WHERE ID = ?
-    """, (name, description, new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, parent_id, deck_id))
+        UPDATE Deck SET Name = ?, Description = ?, New_Cards_Limit = ?, Learning_Steps = ?, Relearning_Steps = ?, Study_Order = ?, Answer_Display = ?, Parent_ID = ?, Desired_Retention = ?, FSRS_Params = ? WHERE ID = ?
+    """, (name, description, new_cards_limit, learning_steps, relearning_steps, study_order, answer_display, parent_id, desired_retention, fsrs_params, deck_id))
+    con.commit()
+    con.close()
+
+# --- FSRS helpers --------------------------------------------------
+
+def resolve_fsrs_params(deck):
+    """A deck's FSRS weights as a 21-float tuple: its saved override, or defaults."""
+    if deck and getattr(deck, 'fsrs_params', None):
+        try:
+            vals = json.loads(deck.fsrs_params)
+            if isinstance(vals, list) and len(vals) == len(fsrs.DEFAULT_PARAMS):
+                return tuple(float(v) for v in vals)
+        except (ValueError, TypeError):
+            pass
+    return fsrs.DEFAULT_PARAMS
+
+def get_card_review_history(card_id):
+    """Ordered (Review_Date, Rating) for a card, excluding legacy rating-0 intro
+    markers. Used for FSRS replay-seeding and optimisation."""
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT Review_Date, Rating FROM Review WHERE Card_ID = ? AND Rating >= 1 ORDER BY Review_Date, ID", (card_id,))
+    rows = cur.fetchall()
+    con.close()
+    return rows
+
+def seed_deck_fsrs(deck_id):
+    """Seed Stability/Difficulty for every card in a deck by replaying its review
+    history through FSRS. Cards with no usable history are left NULL so FSRS state
+    initialises on their next review."""
+    deck = get_deck_by_id(deck_id)
+    params = resolve_fsrs_params(deck)
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("SELECT ID FROM Card WHERE Deck_ID = ?", (deck_id,))
+    card_ids = [r[0] for r in cur.fetchall()]
+    for cid in card_ids:
+        cur.execute("SELECT Review_Date, Rating FROM Review WHERE Card_ID = ? AND Rating >= 1 ORDER BY Review_Date, ID", (cid,))
+        s, d = fsrs.replay(cur.fetchall(), params)
+        cur.execute("UPDATE Card SET Stability = ?, Difficulty = ? WHERE ID = ?", (s, d, cid))
+    con.commit()
+    con.close()
+
+def set_deck_scheduler(deck_id, scheduler):
+    """Switch a deck's active scheduler. Turning FSRS on seeds memory state for all
+    of its cards by replaying their review history."""
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE Deck SET Scheduler = ? WHERE ID = ?", (scheduler, deck_id))
+    con.commit()
+    con.close()
+    if scheduler == 'fsrs':
+        seed_deck_fsrs(deck_id)
+
+def set_deck_fsrs_params(deck_id, params_json):
+    """Persist optimised FSRS weights (JSON string) for a deck."""
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("UPDATE Deck SET FSRS_Params = ? WHERE ID = ?", (params_json, deck_id))
     con.commit()
     con.close()
 
@@ -968,17 +1043,18 @@ def create_card(deck_id: int, front: str, back: str,
                 card_type_id: int = None, fields_json: str = None,
                 reps: int = 0, ease_factor: float = 2.5, interval: int = 0,
                 due_date: str = None, is_new: bool = True,
-                last_reviewed: str = None) -> int:
+                last_reviewed: str = None, stability: float = None,
+                difficulty: float = None) -> int:
     creation_date = date.today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
 
     cur.execute("""
         INSERT INTO Card (Deck_ID, Card_Front, Card_Back, Card_Type_ID, Fields, Date_Created,
-                          Reps, Ease_Factor, Interval, Due_Date, Is_New, Last_Reviewed)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                          Reps, Ease_Factor, Interval, Due_Date, Is_New, Last_Reviewed, Stability, Difficulty)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (deck_id, front, back, card_type_id, fields_json, creation_date,
-          reps, ease_factor, interval, due_date, int(is_new), last_reviewed))
+          reps, ease_factor, interval, due_date, int(is_new), last_reviewed, stability, difficulty))
 
     con.commit()
     new_card_id = cur.lastrowid
@@ -995,14 +1071,14 @@ def get_cards_by_deck(deck_id):
     cur.execute("""
         SELECT ID, Deck_ID, Card_Front, Card_Back, Reps,
         Ease_Factor, Interval, Due_Date, Is_New, Date_Created,
-        Last_Reviewed, Card_Type_ID FROM Card
+        Last_Reviewed, Card_Type_ID, Stability, Difficulty FROM Card
         WHERE Deck_ID=?
         """, (deck_id,))
 
     rows = cur.fetchall()
 
     for row in rows:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], stability=row[12], difficulty=row[13])
         cards.append(card)
 
     con.close()
@@ -1015,7 +1091,7 @@ def get_card_by_id(id):
     cur.execute("""
         SELECT ID, Deck_ID, Card_Front, Card_Back, Reps,
         Ease_Factor, Interval, Due_Date, Is_New, Date_Created,
-        Last_Reviewed, Card_Type_ID FROM Card
+        Last_Reviewed, Card_Type_ID, Stability, Difficulty FROM Card
         WHERE ID=?
         """, (id,))
 
@@ -1025,7 +1101,7 @@ def get_card_by_id(id):
     if row is None:
         return None
     else:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], stability=row[12], difficulty=row[13])
         return card
     
 def get_due_cards(deck_id=None, deck_ids=None):
@@ -1037,7 +1113,7 @@ def get_due_cards(deck_id=None, deck_ids=None):
     cards = []
 
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
-    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step, Stability, Difficulty FROM Card " \
     "WHERE Due_Date <= ? AND Due_Date IS NOT NULL AND Learning_Step IS NULL"
 
     query_params = [todays_date]
@@ -1055,7 +1131,7 @@ def get_due_cards(deck_id=None, deck_ids=None):
     rows = cur.fetchall()
 
     for row in rows:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13], row[14], row[15])
         cards.append(card)
 
     con.close()
@@ -1067,7 +1143,7 @@ def get_learning_cards(deck_ids=None):
     cur = con.cursor()
     cards = []
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
-    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step, Stability, Difficulty FROM Card " \
     "WHERE Learning_Step IS NOT NULL"
     query_params = []
     if deck_ids is not None:
@@ -1076,7 +1152,7 @@ def get_learning_cards(deck_ids=None):
         query_params.extend(deck_ids)
     cur.execute(query_string, query_params)
     for row in cur.fetchall():
-        cards.append(models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13]))
+        cards.append(models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13], row[14], row[15]))
     con.close()
     return cards
 
@@ -1087,7 +1163,7 @@ def get_new_cards(deck_id=None, limit=None, deck_ids=None):
     cards = []
 
     query_string = "SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, " \
-    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card " \
+    "Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step, Stability, Difficulty FROM Card " \
     "WHERE Is_New = 1 AND Due_Date IS NULL"
 
     query_params = []
@@ -1108,7 +1184,7 @@ def get_new_cards(deck_id=None, limit=None, deck_ids=None):
     rows = cur.fetchall()
 
     for row in rows:
-        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13])
+        card = models.Card(row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7], row[8], row[9], row[10], row[11], row[12], row[13], row[14], row[15])
         cards.append(card)
 
     con.close()
@@ -1237,37 +1313,59 @@ def update_card_fields(card_id: int, deck_id: int, card_type_id: int, fields_jso
     con.close()
 
 def update_card_learning_step(card_id: int, learning_step: int):
+    """Move a card to a learning/relearning step (SM-2). Sets the step, parks the
+    card in today's queue and stamps Last_Reviewed. Review logging is handled by
+    the caller (app_widget) so every press is recorded uniformly."""
     today = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
-    cur.execute("SELECT Is_New, Learning_Step FROM Card WHERE ID = ?", (card_id,))
-    row = cur.fetchone()
-    first_introduction = row and row[0] == 1 and row[1] is None
     cur.execute("""
-        UPDATE Card SET Learning_Step = ?, Due_Date = ? WHERE ID = ?
-    """, (learning_step, today, card_id))
-    if first_introduction:
-        cur.execute("""
-            INSERT INTO Review (Card_ID, Review_Date, Rating, Interval_After, Ease_Factor_After)
-            VALUES (?, ?, 0, 0, 2.5)
-        """, (card_id, today))
+        UPDATE Card SET Learning_Step = ?, Due_Date = ?, Last_Reviewed = ? WHERE ID = ?
+    """, (learning_step, today, today, card_id))
+    con.commit()
+    con.close()
+
+def update_card_learning_step_fsrs(card_id: int, learning_step: int, stability, difficulty):
+    """FSRS variant: also persist the updated memory state for this press."""
+    today = get_srs_today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card SET Learning_Step = ?, Due_Date = ?, Last_Reviewed = ?,
+        Stability = ?, Difficulty = ? WHERE ID = ?
+    """, (learning_step, today, today, stability, difficulty, card_id))
     con.commit()
     con.close()
 
 def apply_lapse(card_id, new_reps, new_ease_factor, new_interval):
-    """Reduce a card's SRS strength when it lapses (failed a review) and enters
-    relearning. Unlike update_card_after_review this leaves Learning_Step and
-    Due_Date untouched - those are set by update_card_learning_step so the card
-    stays in the relearning queue. Resetting the interval here means relearning
-    graduation rebuilds the interval instead of growing the pre-lapse one."""
+    """SM-2 lapse: reset strength and drop the card into the relearning queue at
+    step 0 (Learning_Step/Due set here now that the JS no longer calls
+    update_card_learning_step separately on lapse). Resetting the interval means
+    relearning graduation rebuilds the interval instead of growing the pre-lapse one."""
     todays_date = get_srs_today().strftime('%Y-%m-%d')
     con = create_db_connection()
     cur = con.cursor()
     cur.execute("""
         UPDATE Card
-        SET Reps = ?, Ease_Factor = ?, Interval = ?, Last_Reviewed = ?
+        SET Reps = ?, Ease_Factor = ?, Interval = ?, Last_Reviewed = ?,
+        Learning_Step = 0, Due_Date = ?
         WHERE ID = ?
-    """, (new_reps, new_ease_factor, new_interval, todays_date, card_id))
+    """, (new_reps, new_ease_factor, new_interval, todays_date, todays_date, card_id))
+    con.commit()
+    con.close()
+
+def apply_lapse_fsrs(card_id, stability, difficulty):
+    """FSRS lapse: store the post-lapse (forget) memory state and drop the card into
+    the relearning queue at step 0. SM-2 fields are left untouched so switching back
+    to SM-2 stays graceful."""
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card
+        SET Stability = ?, Difficulty = ?, Last_Reviewed = ?, Learning_Step = 0, Due_Date = ?
+        WHERE ID = ?
+    """, (stability, difficulty, todays_date, todays_date, card_id))
     con.commit()
     con.close()
 
@@ -1282,7 +1380,23 @@ def update_card_after_review(card_id, new_reps, new_ease_factor, new_interval, n
         Is_New = ?, Last_Reviewed = ?, Learning_Step = NULL
         WHERE ID=?
         """, (new_reps, new_ease_factor, new_interval, new_due_date, is_new, todays_date, card_id))
-    
+
+    con.commit()
+    con.close()
+
+def update_card_after_review_fsrs(card_id, stability, difficulty, new_interval, new_due_date, is_new):
+    """FSRS graduation / review-state pass: persist memory state, the FSRS interval
+    and due date, graduate out of learning. Reps/Ease are left untouched (preserved
+    for switching back to SM-2)."""
+    todays_date = get_srs_today().strftime('%Y-%m-%d')
+    con = create_db_connection()
+    cur = con.cursor()
+    cur.execute("""
+        UPDATE Card
+        SET Stability = ?, Difficulty = ?, Interval = ?, Due_Date = ?,
+        Is_New = ?, Last_Reviewed = ?, Learning_Step = NULL
+        WHERE ID=?
+    """, (stability, difficulty, new_interval, new_due_date, is_new, todays_date, card_id))
     con.commit()
     con.close()
 
@@ -1451,14 +1565,15 @@ def get_data_info() -> dict:
 def export_all_data() -> dict:
     con = create_db_connection()
     cur = con.cursor()
-    cur.execute("SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID FROM Deck")
+    cur.execute("SELECT ID, Name, Date_Created, New_Cards_Limit, Description, Learning_Steps, Relearning_Steps, Study_Order, Answer_Display, Parent_ID, Scheduler, FSRS_Params, Desired_Retention FROM Deck")
     decks = [{'id': r[0], 'name': r[1], 'date_created': r[2], 'new_cards_limit': r[3], 'description': r[4],
-               'learning_steps': r[5], 'relearning_steps': r[6], 'study_order': r[7], 'answer_display': r[8], 'parent_id': r[9]}
+               'learning_steps': r[5], 'relearning_steps': r[6], 'study_order': r[7], 'answer_display': r[8], 'parent_id': r[9],
+               'scheduler': r[10], 'fsrs_params': r[11], 'desired_retention': r[12]}
              for r in cur.fetchall()]
-    cur.execute("SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step FROM Card")
+    cur.execute("SELECT ID, Deck_ID, Card_Front, Card_Back, Reps, Ease_Factor, Interval, Due_Date, Is_New, Date_Created, Last_Reviewed, Card_Type_ID, Fields, Learning_Step, Stability, Difficulty FROM Card")
     cards = [{'id': r[0], 'deck_id': r[1], 'front': r[2], 'back': r[3], 'reps': r[4], 'ease_factor': r[5],
                'interval': r[6], 'due_date': r[7], 'is_new': r[8], 'date_created': r[9], 'last_reviewed': r[10],
-               'card_type_id': r[11], 'fields': r[12], 'learning_step': r[13]}
+               'card_type_id': r[11], 'fields': r[12], 'learning_step': r[13], 'stability': r[14], 'difficulty': r[15]}
              for r in cur.fetchall()]
     cur.execute("SELECT ID, Name, Fields, Date_Created, Is_Default, Front_Style, Back_Style, CSS_Style FROM CardType")
     card_types = [{'id': r[0], 'name': r[1], 'fields': r[2], 'date_created': r[3], 'is_default': r[4],

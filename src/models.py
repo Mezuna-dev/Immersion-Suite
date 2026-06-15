@@ -1,6 +1,6 @@
 
 class Deck:
-    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10', relearning_steps='10', study_order='new_first', answer_display='replace', parent_id=None, position=0) -> None:
+    def __init__(self, id, name, date_created, new_cards_limit, description=None, learning_steps='1 10', relearning_steps='10', study_order='new_first', answer_display='replace', parent_id=None, position=0, scheduler='sm2', fsrs_params=None, desired_retention=0.9) -> None:
         self.id = id
         self.name = name
         self.date_created = date_created
@@ -12,6 +12,9 @@ class Deck:
         self.answer_display = answer_display or 'replace'
         self.parent_id = parent_id
         self.position = position
+        self.scheduler = scheduler or 'sm2'          # 'sm2' | 'fsrs'
+        self.fsrs_params = fsrs_params               # JSON string of 21 floats, or None for defaults
+        self.desired_retention = desired_retention if desired_retention is not None else 0.9
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nName: {self.name}\nDate Created: {self.date_created}\nNew Cards Limit: {self.new_cards_limit}\nDescription: {self.description}\nLearning Steps: {self.learning_steps}\nRelearning Steps: {self.relearning_steps}\nStudy Order: {self.study_order}\nAnswer Display: {self.answer_display}\nParent ID: {self.parent_id}\n"
     
@@ -31,7 +34,7 @@ class CardType:
 
 class Card:
     def __init__(self, id, deck_id, card_front, card_back, reps,
-            ease_factor, interval, due_date, is_new, date_created, last_reviewed, card_type_id=None, fields_json=None, learning_step=None) -> None:
+            ease_factor, interval, due_date, is_new, date_created, last_reviewed, card_type_id=None, fields_json=None, learning_step=None, stability=None, difficulty=None) -> None:
         self.id = id
         self.deck_id = deck_id
         self.card_front = card_front
@@ -46,6 +49,8 @@ class Card:
         self.card_type_id = card_type_id
         self.fields_json = fields_json
         self.learning_step = learning_step
+        self.stability = stability        # FSRS memory state; None until FSRS-seeded/reviewed
+        self.difficulty = difficulty
 
     def __repr__(self) -> str:
         return f"\nId: {self.id}\nDeck Id: {self.deck_id}\nFront: {self.card_front}\n \

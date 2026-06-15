@@ -71,6 +71,8 @@ function applyAppSettings(settings) {
         relearning_steps: settings.default_relearning_steps || '10',
         study_order: settings.default_study_order || 'new_first',
         day_start_hour: settings.day_start_hour !== undefined ? settings.day_start_hour : 4,
+        scheduler: settings.default_scheduler || 'sm2',
+        desired_retention: settings.default_desired_retention !== undefined ? settings.default_desired_retention : 0.9,
     };
     currentReviewBehavior = {
         autoplay_audio: settings.review_autoplay_audio !== undefined ? settings.review_autoplay_audio : true,
@@ -84,7 +86,7 @@ function applyAppSettings(settings) {
     applyRatingButtonMode();
 }
 
-var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first', day_start_hour: 4 };
+var currentSRSDefaults = { new_cards_limit: 15, learning_steps: '1 10', relearning_steps: '10', study_order: 'new_first', day_start_hour: 4, scheduler: 'sm2', desired_retention: 0.9 };
 var currentReviewBehavior = { autoplay_audio: true, shortcut_enabled: true, shortcut_key: 'Space', two_button_mode: false };
 var currentUpdatePrefs = { check_enabled: true };
 var capturingKey = false;
@@ -180,6 +182,8 @@ function showAppSettings() {
     document.getElementById('srs-default-learning-steps').value = currentSRSDefaults.learning_steps;
     document.getElementById('srs-default-relearning-steps').value = currentSRSDefaults.relearning_steps;
     document.getElementById('srs-default-study-order').value = currentSRSDefaults.study_order;
+    document.getElementById('srs-default-scheduler').value = currentSRSDefaults.scheduler || 'sm2';
+    document.getElementById('srs-default-retention').value = (currentSRSDefaults.desired_retention != null ? currentSRSDefaults.desired_retention : 0.9);
     var hourSelect = document.getElementById('srs-day-start-hour');
     if (hourSelect.options.length === 0) {
         for (var h = 0; h < 24; h++) {
@@ -341,6 +345,8 @@ function buildSettings(overrides) {
         default_relearning_steps: currentSRSDefaults.relearning_steps,
         default_study_order: currentSRSDefaults.study_order,
         day_start_hour: currentSRSDefaults.day_start_hour,
+        default_scheduler: currentSRSDefaults.scheduler,
+        default_desired_retention: currentSRSDefaults.desired_retention,
         review_autoplay_audio: currentReviewBehavior.autoplay_audio,
         review_shortcut_enabled: currentReviewBehavior.shortcut_enabled,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
@@ -361,6 +367,11 @@ function saveAppSettings() {
         default_relearning_steps: document.getElementById('srs-default-relearning-steps').value.trim() || '10',
         default_study_order: document.getElementById('srs-default-study-order').value,
         day_start_hour: parseInt(document.getElementById('srs-day-start-hour').value, 10),
+        default_scheduler: document.getElementById('srs-default-scheduler').value || 'sm2',
+        default_desired_retention: (function () {
+            var r = parseFloat(document.getElementById('srs-default-retention').value);
+            return isNaN(r) ? 0.9 : Math.min(0.99, Math.max(0.7, r));
+        })(),
         review_autoplay_audio: document.getElementById('review-autoplay-audio').checked,
         review_shortcut_enabled: document.getElementById('review-shortcut-enabled').checked,
         review_shortcut_key: currentReviewBehavior.shortcut_key,
@@ -385,6 +396,8 @@ function resetSRSDefaults() {
         default_relearning_steps: '10',
         default_study_order: 'new_first',
         day_start_hour: 4,
+        default_scheduler: 'sm2',
+        default_desired_retention: 0.9,
     });
     applyAppSettings(settings);
     showAppSettings();
@@ -1267,7 +1280,63 @@ function showDeckSettings() {
     document.getElementById('settings-relearning-steps').value = deck.relearning_steps !== undefined ? deck.relearning_steps : '10';
     document.getElementById('settings-study-order').value = deck.study_order !== undefined ? deck.study_order : 'new_first';
     document.getElementById('settings-answer-display').value = deck.answer_display !== undefined ? deck.answer_display : 'replace';
+    var sched = deck.scheduler || 'sm2';
+    document.getElementById('settings-scheduler').value = sched;
+    document.getElementById('settings-desired-retention').value = (deck.desired_retention != null ? deck.desired_retention : 0.9);
+    document.getElementById('settings-fsrs-params').value = deck.fsrs_params || '';
+    document.getElementById('settings-fsrs-options').style.display = sched === 'fsrs' ? 'block' : 'none';
+    var optStatus = document.getElementById('settings-fsrs-optimize-status');
+    if (optStatus) optStatus.textContent = '';
     showView('deck-settings');
+}
+
+// Switching the algorithm takes effect immediately (and seeds FSRS state from
+// history when turning FSRS on); retention/params persist on Save.
+function onDeckSchedulerChange() {
+    var sched = document.getElementById('settings-scheduler').value;
+    document.getElementById('settings-fsrs-options').style.display = sched === 'fsrs' ? 'block' : 'none';
+    if (currentDeckForDetails && bridge) {
+        bridge.setDeckScheduler(currentDeckForDetails.id, sched);
+        currentDeckForDetails.scheduler = sched;
+    }
+}
+
+function optimizeFsrsParams() {
+    if (!currentDeckForDetails || !bridge) return;
+    var btn = document.getElementById('settings-fsrs-optimize-btn');
+    var status = document.getElementById('settings-fsrs-optimize-status');
+    if (btn) btn.disabled = true;
+    if (status) status.textContent = 'Starting…';
+    bridge.optimizeDeckParams(currentDeckForDetails.id);
+}
+
+function fsrsOptimizeProgress(i, n, loss) {
+    var status = document.getElementById('settings-fsrs-optimize-status');
+    if (status) status.textContent = 'Optimizing… ' + Math.round(i / n * 100) + '% (loss ' + loss.toFixed(4) + ')';
+}
+
+function fsrsOptimizeDone(data) {
+    var btn = document.getElementById('settings-fsrs-optimize-btn');
+    var status = document.getElementById('settings-fsrs-optimize-status');
+    if (btn) btn.disabled = false;
+    if (status) status.textContent = 'Done — trained on ' + data.count + ' reviews.';
+    var ta = document.getElementById('settings-fsrs-params');
+    if (ta) ta.value = data.params.join(', ');
+    if (currentDeckForDetails) currentDeckForDetails.fsrs_params = JSON.stringify(data.params);
+}
+
+function fsrsOptimizeInsufficient(count) {
+    var btn = document.getElementById('settings-fsrs-optimize-btn');
+    var status = document.getElementById('settings-fsrs-optimize-status');
+    if (btn) btn.disabled = false;
+    if (status) status.textContent = 'Need ~400+ reviews to optimize (have ' + count + '). Keeping current parameters.';
+}
+
+function fsrsOptimizeError(msg) {
+    var btn = document.getElementById('settings-fsrs-optimize-btn');
+    var status = document.getElementById('settings-fsrs-optimize-status');
+    if (btn) btn.disabled = false;
+    if (status) status.textContent = 'Optimize failed: ' + msg;
 }
 
 function saveDeckSettings() {
@@ -1282,7 +1351,22 @@ function saveDeckSettings() {
     var relearningSteps = document.getElementById('settings-relearning-steps').value.trim();
     var studyOrder = document.getElementById('settings-study-order').value || 'new_first';
     var answerDisplay = document.getElementById('settings-answer-display').value || 'replace';
-    bridge.saveDeckSettings(currentDeckForDetails.id, name, description, limit, learningSteps, relearningSteps, studyOrder, answerDisplay, parentId);
+    var desiredRetention = parseFloat(document.getElementById('settings-desired-retention').value);
+    if (isNaN(desiredRetention)) desiredRetention = 0.9;
+    desiredRetention = Math.min(0.99, Math.max(0.7, desiredRetention));
+    // Params textarea accepts comma/space separated numbers; stored as a JSON array
+    // (or '' for defaults). Kept in sync with the deck so Save never wipes optimized weights.
+    var fsrsRaw = document.getElementById('settings-fsrs-params').value.trim();
+    var fsrsParamsJson = '';
+    if (fsrsRaw) {
+        var nums = fsrsRaw.split(/[\s,]+/).filter(function(x) { return x !== ''; }).map(Number);
+        if (nums.length !== 21 || nums.some(function(n) { return isNaN(n); })) {
+            showAlert('FSRS parameters must be exactly 21 numbers (or leave blank for defaults).');
+            return;
+        }
+        fsrsParamsJson = JSON.stringify(nums);
+    }
+    bridge.saveDeckSettings(currentDeckForDetails.id, name, description, limit, learningSteps, relearningSteps, studyOrder, answerDisplay, parentId, desiredRetention, fsrsParamsJson);
     currentDeckForDetails.name = name;
     currentDeckForDetails.description = description;
     currentDeckForDetails.new_cards_limit = limit;
@@ -1291,6 +1375,8 @@ function saveDeckSettings() {
     currentDeckForDetails.study_order = studyOrder;
     currentDeckForDetails.answer_display = answerDisplay;
     currentDeckForDetails.parent_id = parentId || null;
+    currentDeckForDetails.desired_retention = desiredRetention;
+    currentDeckForDetails.fsrs_params = fsrsParamsJson;
     showDeckDetails(currentDeckForDetails);
 }
 
@@ -1304,6 +1390,11 @@ var currentCardSource = null; // 'new', 'due', or 'learning'
 var currentDeckIdForReview = null;
 var currentDeckLearningSteps = [];
 var currentDeckRelearnSteps = [];
+// FSRS context for the active review session (set by updateReviewQueue).
+var currentDeckScheduler = 'sm2';
+var currentFsrsParams = null;       // 21-float array, or null for SM-2
+var currentDesiredRetention = 0.9;
+var srsToday = null;                // 'YYYY-MM-DD' SRS day, for elapsed-day math
 var currentDeckAnswerDisplay = 'replace';
 var studyOrder = 'mix';
 var interspersionRatio = 1;
@@ -1348,6 +1439,10 @@ function updateReviewQueue(data) {
     currentDeckLearningSteps = data.learning_steps || [];
     currentDeckRelearnSteps = data.relearning_steps || [];
     currentDeckAnswerDisplay = data.answer_display || 'replace';
+    currentDeckScheduler = data.scheduler || 'sm2';
+    currentFsrsParams = data.fsrs_params || null;
+    currentDesiredRetention = data.desired_retention || 0.9;
+    srsToday = data.srs_today || null;
     mediaBaseUrl = data.media_base_url || '';
     studyOrder = data.study_order || 'mix';
     newQueue = data.new_cards || [];
@@ -1554,6 +1649,88 @@ function sm2Interval(reps, easeFactor, currentInterval, rating) {
     return Math.max(ivl + 1, next);
 }
 
+// ── FSRS-6 preview mirror (keep in sync with src/fsrs.py) ──────────────────
+// Display/preview only - the Python side is authoritative for actual scheduling.
+var RATING_TO_GRADE = { 1: 1, 3: 2, 4: 3, 5: 4 };
+function fsrsDecayFactor(p) {
+    var decay = -p[20];
+    return [decay, Math.pow(0.9, 1.0 / decay) - 1.0];
+}
+function fsrsRetrievability(elapsed, S, p) {
+    if (!S || S <= 0) return 0.0;
+    var df = fsrsDecayFactor(p);
+    return Math.pow(1.0 + df[1] * Math.max(0, elapsed) / S, df[0]);
+}
+function fsrsNextInterval(S, retention, p) {
+    var df = fsrsDecayFactor(p);
+    var ivl = (S / df[1]) * (Math.pow(retention, 1.0 / df[0]) - 1.0);
+    return Math.min(Math.max(Math.round(ivl), 1), 36500);
+}
+function fsrsInitialStability(g, p) { return Math.max(p[g - 1], 0.001); }
+function fsrsInitialDifficulty(g, p, clamp) {
+    var d = p[4] - Math.exp(p[5] * (g - 1)) + 1.0;
+    return clamp ? Math.min(Math.max(d, 1.0), 10.0) : d;
+}
+function fsrsNextDifficulty(D, g, p) {
+    var target = fsrsInitialDifficulty(4, p, false);
+    var damped = D + (10.0 - D) * (-(p[6] * (g - 3))) / 9.0;
+    return Math.min(Math.max(p[7] * target + (1.0 - p[7]) * damped, 1.0), 10.0);
+}
+function fsrsShortTermStability(S, g, p) {
+    var inc = Math.exp(p[17] * (g - 3 + p[18])) * Math.pow(S, -p[19]);
+    if (g >= 3) inc = Math.max(inc, 1.0);
+    return Math.max(S * inc, 0.001);
+}
+function fsrsNextStability(D, S, r, g, p) {
+    var s;
+    if (g === 1) {
+        var lt = p[11] * Math.pow(D, -p[12]) * (Math.pow(S + 1.0, p[13]) - 1.0) * Math.exp((1.0 - r) * p[14]);
+        s = Math.min(lt, S / Math.exp(p[17] * p[18]));
+    } else {
+        var hard = g === 2 ? p[15] : 1.0, easy = g === 4 ? p[16] : 1.0;
+        s = S * (1.0 + Math.exp(p[8]) * (11.0 - D) * Math.pow(S, -p[9]) * (Math.exp((1.0 - r) * p[10]) - 1.0) * hard * easy);
+    }
+    return Math.max(s, 0.001);
+}
+// Returns [stability, difficulty] after one press.
+function fsrsApply(S, D, g, elapsed, p) {
+    if (S === null || S === undefined || D === null || D === undefined)
+        return [fsrsInitialStability(g, p), fsrsInitialDifficulty(g, p, true)];
+    if (elapsed !== null && elapsed !== undefined && elapsed < 1)
+        return [fsrsShortTermStability(S, g, p), fsrsNextDifficulty(D, g, p)];
+    var r = (elapsed !== null && elapsed !== undefined) ? fsrsRetrievability(elapsed, S, p) : 0.0;
+    return [fsrsNextStability(D, S, r, g, p), fsrsNextDifficulty(D, g, p)];
+}
+function fsrsElapsedForCard(card) {
+    if (!card.last_reviewed || !srsToday) return null;
+    var a = new Date(card.last_reviewed + 'T00:00:00'), b = new Date(srsToday + 'T00:00:00');
+    return Math.max(0, Math.round((b - a) / 86400000));
+}
+// FSRS memory state [S, D] after pressing `rating` on this card.
+function fsrsApplyToCard(card, rating) {
+    return fsrsApply(card.stability, card.difficulty, RATING_TO_GRADE[rating] || 3,
+                     fsrsElapsedForCard(card), currentFsrsParams);
+}
+// Graduated/review interval label for a rating, honouring the active scheduler.
+function gradInterval(card, rating) {
+    if (currentDeckScheduler === 'fsrs' && currentFsrsParams) {
+        return formatDays(fsrsNextInterval(fsrsApplyToCard(card, rating)[0], currentDesiredRetention, currentFsrsParams));
+    }
+    return formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, rating));
+}
+
+// Merge updated FSRS memory state into a requeued learning/relearning card so its
+// next button-label preview reflects this press (no-op under SM-2).
+function fsrsRequeueOverlay(card, rating, extra) {
+    if (currentDeckScheduler === 'fsrs' && currentFsrsParams) {
+        var sd = fsrsApplyToCard(card, rating);
+        extra.stability = sd[0];
+        extra.difficulty = sd[1];
+        extra.last_reviewed = srsToday;
+    }
+    return extra;
+}
+
 function formatIntervalLabel(minutes) {
     if (!minutes || minutes < 1) return '1m';
     if (minutes < 60) return minutes + 'm';
@@ -1583,9 +1760,9 @@ function updateRatingButtonLabels() {
         hard = formatIntervalLabel(steps[Math.max(0, curStep)]);
         var goodStep = curStep + 1;
         good = goodStep >= steps.length
-            ? formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4))
+            ? gradInterval(card, 4)
             : formatIntervalLabel(steps[goodStep]);
-        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+        easy = gradInterval(card, 5);
     } else if (card.is_relearning && relearnSteps.length > 0) {
         var curStep = (card.learning_step !== null && card.learning_step !== undefined)
             ? card.learning_step : 0;
@@ -1593,14 +1770,14 @@ function updateRatingButtonLabels() {
         hard = formatIntervalLabel(relearnSteps[Math.min(curStep, relearnSteps.length - 1)]);
         var goodStep = curStep + 1;
         good = goodStep >= relearnSteps.length
-            ? formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4))
+            ? gradInterval(card, 4)
             : formatIntervalLabel(relearnSteps[goodStep]);
-        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+        easy = gradInterval(card, 5);
     } else {
-        again = relearnSteps.length > 0 ? formatIntervalLabel(relearnSteps[0]) : '1d';
-        hard = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 3));
-        good = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 4));
-        easy = formatDays(sm2Interval(card.reps, card.ease_factor, card.interval, 5));
+        again = relearnSteps.length > 0 ? formatIntervalLabel(relearnSteps[0]) : gradInterval(card, 1);
+        hard = gradInterval(card, 3);
+        good = gradInterval(card, 4);
+        easy = gradInterval(card, 5);
     }
 
     function setBtn(id, name, interval) {
@@ -1675,12 +1852,12 @@ function rateCard(rating) {
         }
 
         if (newStep >= steps.length) {
-            // Graduate: run through SM-2
+            // Graduate: run through the active scheduler (SM-2 or FSRS)
             bridge.submitRating(currentCard.id, rating);
         } else {
             // Schedule card to return after the step's real-time delay
-            bridge.updateCardLearningStep(currentCard.id, newStep);
-            var requeueCard = Object.assign({}, currentCard, { learning_step: newStep });
+            bridge.updateCardLearningStep(currentCard.id, rating, newStep);
+            var requeueCard = Object.assign({}, currentCard, fsrsRequeueOverlay(currentCard, rating, { learning_step: newStep }));
             learningQueue.push({ card: requeueCard, showAfter: Date.now() + steps[newStep] * 60 * 1000 });
         }
     } else if (currentCard.is_relearning && currentDeckRelearnSteps.length > 0) {
@@ -1700,25 +1877,33 @@ function rateCard(rating) {
         }
 
         if (newStep >= relearnSteps.length) {
-            // Graduated from relearning - ease was already dropped at lapse, so
-            // graduateRelearning freezes it instead of adjusting it again.
+            // Graduated from relearning. Under SM-2 ease was already dropped at
+            // lapse, so graduateRelearning freezes it; under FSRS the memory-state
+            // update on each press already accounts for the grade.
             bridge.graduateRelearning(currentCard.id, rating);
         } else {
             // Schedule card to return after the relearn step's real-time delay
-            bridge.updateCardLearningStep(currentCard.id, newStep);
-            var requeueCard = Object.assign({}, currentCard, { learning_step: newStep, is_relearning: true });
+            bridge.updateCardLearningStep(currentCard.id, rating, newStep);
+            var requeueCard = Object.assign({}, currentCard, fsrsRequeueOverlay(currentCard, rating, { learning_step: newStep, is_relearning: true }));
             learningQueue.push({ card: requeueCard, showAfter: Date.now() + relearnSteps[newStep] * 60 * 1000 });
         }
     } else if (!currentCard.is_new && rating === 1 && currentDeckRelearnSteps.length > 0) {
-        // Card lapsed - record the failure then start relearning steps.
-        // Mirror the backend lapse reset (logLapse) so the graduation button
-        // labels reflect the reduced interval/ease, not the pre-lapse values.
+        // Card lapsed - record the failure; logLapse now also parks the card in the
+        // relearning queue (step 0, due today), so no separate step call is needed.
+        // Mirror the backend lapse state so the graduation labels use post-lapse values.
         bridge.logLapse(currentCard.id, rating);
-        bridge.updateCardLearningStep(currentCard.id, 0);
-        var lapsedEase = Math.max(1.3, (currentCard.ease_factor || 2.5) - 0.20);
-        var requeueCard = Object.assign({}, currentCard, {
-            learning_step: 0, is_relearning: true, reps: 0, interval: 1, ease_factor: lapsedEase
-        });
+        var overlay = { learning_step: 0, is_relearning: true };
+        if (currentDeckScheduler === 'fsrs' && currentFsrsParams) {
+            var sd = fsrsApplyToCard(currentCard, rating);  // rating 1 → forget-stability
+            overlay.stability = sd[0];
+            overlay.difficulty = sd[1];
+            overlay.last_reviewed = srsToday;
+        } else {
+            overlay.reps = 0;
+            overlay.interval = 1;
+            overlay.ease_factor = Math.max(1.3, (currentCard.ease_factor || 2.5) - 0.20);
+        }
+        var requeueCard = Object.assign({}, currentCard, overlay);
         learningQueue.push({ card: requeueCard, showAfter: Date.now() + currentDeckRelearnSteps[0] * 60 * 1000 });
     } else {
         bridge.submitRating(currentCard.id, rating);
@@ -1773,13 +1958,15 @@ function deleteReviewCard() {
     showConfirm('Delete this card? This cannot be undone.', function() {
         if (bridge) bridge.deleteCardFromBrowser(cardId);
         if (currentCardSource === 'new') {
+            // The index points AT the current card; after splicing it out the next
+            // card shifts into this slot, so the index must stay put. (Decrementing
+            // would re-show the previously-reviewed card and inflate the count.)
             newQueue.splice(newCardIndex, 1);
-            if (newCardIndex > 0) newCardIndex--;
         } else if (currentCardSource === 'due') {
             dueQueue.splice(dueCardIndex, 1);
-            if (dueCardIndex > 0) dueCardIndex--;
         } else if (currentCardSource === 'learning') {
-            var idx = learningQueue.findIndex(function(e) { return e.id === cardId; });
+            // learningQueue holds {card, showAfter} wrappers, so match on e.card.id.
+            var idx = learningQueue.findIndex(function(e) { return e.card.id === cardId; });
             if (idx !== -1) learningQueue.splice(idx, 1);
         }
         currentCard = null;
@@ -2418,6 +2605,16 @@ function loadCardForEdit(data) {
     document.getElementById('edit-card-due').textContent = card.due_date || '-';
     document.getElementById('edit-card-created').textContent = card.date_created || '-';
     document.getElementById('edit-card-last-reviewed').textContent = card.last_reviewed || '-';
+    var fsrsRow = document.getElementById('edit-card-fsrs-row');
+    if (fsrsRow) {
+        if (card.scheduler === 'fsrs') {
+            fsrsRow.style.display = 'flex';
+            document.getElementById('edit-card-stability').textContent = card.stability != null ? card.stability : '-';
+            document.getElementById('edit-card-difficulty').textContent = card.difficulty != null ? card.difficulty : '-';
+        } else {
+            fsrsRow.style.display = 'none';
+        }
+    }
 
     // Parse existing field data
     var fields = {};

@@ -547,8 +547,11 @@ def _anki_scheduling(anki_type, anki_queue, due, ivl, factor, reps, crt_date):
                     interval=interval, due_date=due_date, last_reviewed=last_reviewed)
 
     if anki_type in (1, 3):
-        # In learning or relearning - treat as new so it surfaces immediately
-        return dict(is_new=True, reps=reps, ease_factor=2.5,
+        # In learning or relearning - restart as a fresh new card so it surfaces
+        # immediately. reps must be 0 (not Anki's count): a card with interval 0 but
+        # reps>=1 would otherwise hit the graduating-interval shortcuts in the
+        # scheduler (reps==1 -> 6 days) and jump far out on its first graduation.
+        return dict(is_new=True, reps=0, ease_factor=2.5,
                     interval=0, due_date=None, last_reviewed=None)
 
     # New card (type 0) - default state
