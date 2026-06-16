@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Build script for Immersion Suite v1.4.0 Linux installer
+# Build script for Immersion Suite v1.4.1 Linux installer
 # Run this from the repository root on a Linux machine.
 # Requirements:
 #   pip install pyinstaller pillow
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 APP_NAME="ImmersionSuite"
-APP_VERSION="1.4.0"
+APP_VERSION="1.4.1"
 OUTPUT_DIR="installer/output"
 INSTALLER_NAME="${APP_NAME}_v${APP_VERSION}_Linux_x86_64.run"
 

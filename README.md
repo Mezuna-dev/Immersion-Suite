@@ -9,7 +9,7 @@
 Flashcards · Immersion tracking · Statistics · Popup dictionary · YouTube mining
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-aa00ff.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.4.0-aa00ff)](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest)
+[![Version](https://img.shields.io/badge/version-1.4.1-aa00ff)](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest)
 [![Status](https://img.shields.io/badge/status-open%20beta-aa00ff)](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux-aa00ff)](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest)
 [![Python](https://img.shields.io/badge/python-3.10%2B-aa00ff)](https://www.python.org/)
@@ -82,7 +82,7 @@ No subscriptions. No cloud. Everything runs on your machine.
 Download and run the installer from the [latest release](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest):
 
 ```
-ImmersionSuite_v1.4.0_Setup.exe
+ImmersionSuite_v1.4.1_Setup.exe
 ```
 
 ### Linux
@@ -90,7 +90,7 @@ ImmersionSuite_v1.4.0_Setup.exe
 Download the installer from the [latest release](https://github.com/Mezuna-dev/Immersion-Suite/releases/latest) and run:
 
 ```bash
-bash ImmersionSuite_v1.4.0_Linux_x86_64.run
+bash ImmersionSuite_v1.4.1_Linux_x86_64.run
 ```
 
 ---

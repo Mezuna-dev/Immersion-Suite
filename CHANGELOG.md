@@ -7,6 +7,14 @@ All notable changes to Immersion Suite are documented here. The format is based 
 > Immersion Suite is currently in **open beta** - usable day to day, but still under
 > active development. Bug reports and feedback are very welcome.
 
+## [1.4.1] - 2026-06-16
+
+### Fixed
+- **Settings dropdowns closed when you scrolled them.** Long dropdown menus — such
+  as **Next day starts at** — dismissed themselves the moment you scrolled through
+  their list, leaving the lower entries unreachable. Scrolling inside an open
+  dropdown now works normally; it still closes when you scroll the page behind it.
+
 ## [1.4.0] - 2026-06-15
 
 ### Added
