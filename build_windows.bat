@@ -1,6 +1,6 @@
 @echo off
 :: ============================================================
-:: Build script for Immersion Suite v1.3.0 Windows installer
+:: Build script for Immersion Suite v1.4.0 Windows installer
 :: Run this from the repository root on a Windows machine.
 :: Requirements:
 ::   pip install pyinstaller
@@ -10,7 +10,7 @@
 setlocal
 
 set APP_NAME=ImmersionSuite
-set APP_VERSION=1.3.0
+set APP_VERSION=1.4.0
 set ISCC="C:\Program Files (x86)\Inno Setup 6\iscc.exe"
 
 echo === Immersion Suite v%APP_VERSION% Windows Build ===

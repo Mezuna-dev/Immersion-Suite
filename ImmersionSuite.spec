@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for Immersion Suite v1.3.1
+# PyInstaller spec for Immersion Suite v1.4.0
 
 import sys as _sys
 from pathlib import Path as _Path
@@ -40,13 +40,18 @@ for _pkg in ('sudachipy', 'sudachidict_core'):
 _pkg_hidden += collect_submodules('websockets')
 
 # Prebuilt dictionary databases. jitendex.sqlite is REQUIRED for the popup
-# dictionary; build it with scripts/build_jitendex.py. The 37MB build-source zip
-# (jitendex-yomitan.zip) is not needed at runtime, so it is excluded.
+# dictionary; build it with scripts/build_jitendex.py. Some files in data/dicts
+# are not needed at runtime and are excluded:
+#   - jitendex-yomitan.zip: the 37MB build-source for jitendex.sqlite.
+#   - KANJIDIC_english.zip: not loaded by any backend (the freq loader only reads
+#     term_meta_bank zips like JPDB); shipping it would only add an unused file
+#     and a third-party attribution obligation.
+_DICT_EXCLUDE = {'jitendex-yomitan.zip', 'KANJIDIC_english.zip'}
 _dict_src = _Path('data') / 'dicts'
 _dict_datas = []
 if _dict_src.is_dir():
     for _p in sorted(_dict_src.glob('*.sqlite')) + sorted(_dict_src.glob('*.zip')):
-        if _p.name == 'jitendex-yomitan.zip':
+        if _p.name in _DICT_EXCLUDE:
             continue
         _dict_datas.append((str(_p), str(_dict_src)))
 if not any(_p[0].endswith('jitendex.sqlite') for _p in _dict_datas):

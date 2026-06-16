@@ -231,8 +231,67 @@ Issues and pull requests are welcome. If you're reporting a bug, please include 
 
 ---
 
+## Acknowledgements
+
+Immersion Suite stands on a lot of excellent open-source work. Huge thanks to the
+projects, datasets, and tools below — none of this would exist without them.
+
+### Dictionary & Japanese language data
+
+| Resource | Used for | License |
+|---|---|---|
+| [Jitendex](https://jitendex.org/) (Stephen Kraus) | Popup dictionary data (~295k entries) | CC BY-SA 4.0 |
+| [JMdict / EDICT](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project) (EDRDG) | Upstream source Jitendex is derived from | CC BY-SA 4.0 |
+| [Tatoeba](https://tatoeba.org/) | Example sentences embedded in Jitendex | CC BY 2.0 FR |
+| [JPDB v2.2 Frequency](https://jpdb.io/) (jpdb, Kuuube, Gecko) | Word-frequency ranking of lookups | Community-compiled |
+| [SudachiPy](https://github.com/WorksApplications/SudachiPy) + [SudachiDict](https://github.com/WorksApplications/SudachiDict) (Works Applications) | Tokenization and furigana readings | Apache-2.0 |
+
+### Spaced-repetition algorithms
+
+| Resource | Used for | License |
+|---|---|---|
+| [FSRS](https://github.com/open-spaced-repetition) / [py-fsrs](https://github.com/open-spaced-repetition/py-fsrs) (Open Spaced Repetition) | The FSRS-6 scheduler is a 1:1 port of the reference implementation | MIT |
+| SM-2 (SuperMemo, Piotr Woźniak) | The classic scheduling algorithm | Algorithm description, public |
+
+### Application libraries
+
+| Resource | Used for | License |
+|---|---|---|
+| [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) + PyQt6-WebEngine (Riverbank Computing) | Desktop UI / embedded web frontend | GPL-3.0 / commercial |
+| [NumPy](https://numpy.org/) | FSRS parameter optimizer | BSD-3-Clause |
+| [websockets](https://github.com/python-websockets/websockets) | App ↔ browser-extension bridge | BSD-3-Clause |
+| [python-zstandard](https://github.com/indygreg/python-zstandard) | Reading new (zstd-compressed) `.apkg` files | BSD |
+
+### Media tooling (YouTube mining)
+
+| Resource | Used for | License |
+|---|---|---|
+| [yt-dlp](https://github.com/yt-dlp/yt-dlp) | Fetching subtitles and audio | Unlicense |
+| [FFmpeg](https://ffmpeg.org/) | Audio clip extraction | GPL-3.0 (Windows build) / LGPL-2.1+ (Linux build) |
+
+### Frontend & fonts
+
+| Resource | Used for | License |
+|---|---|---|
+| [Bootstrap](https://getbootstrap.com/) 5.3 | UI layout and components | MIT |
+| [Plotly.js](https://plotly.com/javascript/) 2.35 | Statistics charts | MIT |
+| [Inter](https://rsms.me/inter/) | Primary UI typeface | SIL Open Font License 1.1 |
+| [Archivo Black](https://fonts.google.com/specimen/Archivo+Black) | Display typeface | SIL Open Font License 1.1 |
+
+### Build & packaging
+
+| Resource | Used for | License |
+|---|---|---|
+| [PyInstaller](https://pyinstaller.org/) | Freezing the app into a standalone bundle | GPL-2.0 (with bootloader exception) |
+| [Inno Setup](https://jrsoftware.org/isinfo.php) | Windows installer | Custom permissive |
+| [makeself](https://makeself.io/) | Linux self-extracting installer | GPL-2.0+ |
+
+---
+
 ## License
 
 GPL-3.0 - see [LICENSE](LICENSE).
 
-Dictionary data: [Jitendex](https://jitendex.org/) (CC BY-SA 4.0), derived from [JMdict](https://www.edrdg.org/wiki/index.php/JMdict-EDICT_Dictionary_Project) (CC BY-SA 4.0).
+Bundled third-party components remain under their own licenses, as listed in
+[Acknowledgements](#acknowledgements) above. Full license texts ship with the app
+in [`THIRD_PARTY_LICENSES.txt`](THIRD_PARTY_LICENSES.txt).

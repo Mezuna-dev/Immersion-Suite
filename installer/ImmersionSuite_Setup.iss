@@ -52,6 +52,8 @@ Name: "quicklaunchicon"; Description: "{cm:CreateQuickLaunchIcon}"; GroupDescrip
 Source: "{#BuildDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Browser extension source, so users can load it unpacked in Chrome / Firefox
 Source: "..\extension\*"; DestDir: "{app}\extension"; Excludes: "web-ext-artifacts\*"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Third-party license notices
+Source: "..\THIRD_PARTY_LICENSES.txt"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExeName}"; IconFilename: "{app}\{#AppExeName}"
