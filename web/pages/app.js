@@ -3979,7 +3979,16 @@ function _cselShowBackdrop() {
     if (!_cselBackdrop.parentNode) document.body.appendChild(_cselBackdrop);
 }
 
-document.addEventListener('scroll', _cselCloseAll, true);
+document.addEventListener('scroll', function(e) {
+    // Scrolling INSIDE the open dropdown's own overflowing list must not
+    // dismiss it; only an outside/page scroll should. e.target is the element
+    // that actually scrolled (Node.contains is true for the node itself).
+    if (_cselActiveMenu && e.target && e.target.nodeType === 1 &&
+        _cselActiveMenu.contains(e.target)) {
+        return;
+    }
+    _cselCloseAll();
+}, true);
 
 function wrapSelect(sel) {
     if (sel._cselDone) return;
