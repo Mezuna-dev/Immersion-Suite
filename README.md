@@ -219,6 +219,12 @@ Immersion-Suite/
 
 ---
 
+## Contact
+
+If you would like to contact me you can reach me at keith.hounschell@gmail.com
+
+---
+
 ## Contributing
 
 Issues and pull requests are welcome. If you're reporting a bug, please include your OS, app version, and steps to reproduce.
