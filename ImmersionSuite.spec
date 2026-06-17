@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# PyInstaller spec for Immersion Suite v1.4.1
+# PyInstaller spec for Immersion Suite v1.4.2
 
 import sys as _sys
 from pathlib import Path as _Path

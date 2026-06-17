@@ -1,4 +1,4 @@
-; Inno Setup Script for Immersion Suite v1.4.1
+; Inno Setup Script for Immersion Suite v1.4.2
 ; Requires Inno Setup 6.x - https://jrsoftware.org/isinfo.php
 ;
 ; Build steps (run on Windows):
@@ -8,7 +8,7 @@
 ;      OR run: iscc installer\ImmersionSuite_Setup.iss
 
 #define AppName      "Immersion Suite"
-#define AppVersion   "1.4.1"
+#define AppVersion   "1.4.2"
 #define AppPublisher "Mezuna"
 #define AppURL       "https://github.com/mezuna-dev/immersion-app"
 #define AppExeName   "ImmersionSuite.exe"

@@ -2,6 +2,7 @@ name: Build Linux Installer
 
 on:
   workflow_dispatch:
+  workflow_call:        # lets release.yml reuse this build to attach the .run
 
 jobs:
   build:

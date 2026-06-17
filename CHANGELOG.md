@@ -7,6 +7,15 @@ All notable changes to Immersion Suite are documented here. The format is based 
 > Immersion Suite is currently in **open beta** - usable day to day, but still under
 > active development. Bug reports and feedback are very welcome.
 
+## [1.4.2] - 2026-06-17
+
+### Fixed
+- **Furigana rendered after a word instead of above it on card answers.** On cards
+  whose furigana wraps the highlighted word in bold — most visibly the **Kaishi 1.5k**
+  deck — the reading for that word dropped inline after the kanji instead of sitting
+  above it. Readings now position correctly above every word, and the stray gaps that
+  sometimes appeared between space-delimited words are gone too.
+
 ## [1.4.1] - 2026-06-16
 
 ### Fixed

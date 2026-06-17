@@ -1,0 +1,93 @@
+name: Publish Release
+
+# Pushing a vX.Y.Z tag builds both installers and publishes a GitHub Release with
+# them attached, using release-notes/<tag>.md as the body. The in-app updater reads
+# the latest Release, so this is the single step that ships an update to users.
+#
+# To cut a release: bump the version files, add release-notes/vX.Y.Z.md, commit to
+# main, then `git tag vX.Y.Z && git push origin vX.Y.Z`. Nothing else is manual.
+#
+# workflow_dispatch is a fallback to (re)publish an existing tag from the UI.
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to (re)publish, e.g. v1.4.2'
+        required: true
+
+permissions:
+  contents: write          # needed to create the Release and upload assets
+
+jobs:
+  windows:
+    uses: ./.github/workflows/build-windows.yml
+
+  linux:
+    uses: ./.github/workflows/build-linux.yml
+
+  publish:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "name=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "name=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true   # flatten both build artifacts into artifacts/
+
+      - name: Assemble release notes
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          if [ -f "release-notes/${TAG}.md" ]; then
+            cp "release-notes/${TAG}.md" notes.md
+          else
+            # Fallback: pull the matching section out of CHANGELOG.md.
+            VER="${TAG#v}"
+            awk -v ver="$VER" '
+              $0 ~ "^## \\[" ver "\\]" {f=1; next}
+              f && /^## \[/ {exit}
+              f {print}
+            ' CHANGELOG.md > notes.md
+          fi
+          [ -s notes.md ] || echo "Release ${TAG}" > notes.md
+          echo "----- release body -----"; cat notes.md
+
+      - name: Verify both installers are present
+        run: |
+          ls -la artifacts
+          test -n "$(ls artifacts/*.exe 2>/dev/null)" || { echo "::error::missing .exe installer"; exit 1; }
+          test -n "$(ls artifacts/*.run 2>/dev/null)" || { echo "::error::missing .run installer"; exit 1; }
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.name }}"
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG exists - updating notes and (re)uploading assets."
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "Immersion Suite $TAG" --notes-file notes.md
+            gh release upload "$TAG" artifacts/*.exe artifacts/*.run \
+              --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" artifacts/*.exe artifacts/*.run \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Immersion Suite $TAG" \
+              --notes-file notes.md
+          fi

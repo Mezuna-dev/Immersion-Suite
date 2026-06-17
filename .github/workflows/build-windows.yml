@@ -2,6 +2,7 @@ name: Build Windows Installer
 
 on:
   workflow_dispatch:
+  workflow_call:        # lets release.yml reuse this build to attach the .exe
 
 jobs:
   build:

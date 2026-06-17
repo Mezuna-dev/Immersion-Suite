@@ -1468,8 +1468,15 @@ function updateReviewQueue(data) {
 }
 
 function applyFuriganaFilter(text, filter) {
-    // Parses "漢字[かんじ]" segments into ruby HTML (or kanji/kana only)
-    return text.replace(/([^\s\[）」』]+)\[([^\]]+)\]/g, function(match, word, reading) {
+    // Parses Anki's "漢字[かんじ]" furigana format into ruby HTML (or kanji/kana
+    // only). The reading annotates just the run immediately before "[",
+    // delimited by whitespace OR an HTML tag boundary. Excluding < and > from
+    // the base is critical: fields wrap the target word in <b>…</b>, and if the
+    // tag is swallowed into the base the <b> straddles the <ruby> boundary,
+    // which breaks ruby layout so the reading renders inline after the kanji
+    // instead of above it. A leading delimiter space is consumed (matching
+    // Anki) so space-separated words like "日本[にほん] 語[ご]" don't leave a gap.
+    return text.replace(/\s?([^\s\[\]<>）」』]+)\[([^\]]+)\]/g, function(match, word, reading) {
         if (filter === 'kanji') return word;
         if (filter === 'kana')  return reading;
         return '<ruby>' + word + '<rt>' + reading + '</rt></ruby>';
